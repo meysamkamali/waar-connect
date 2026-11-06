@@ -319,3 +319,44 @@ body.stage {
 [dir='rtl'] .pip { right: auto; left: 12px; }
 [dir='rtl'] .tiles { left: auto; right: 12px; }
 [dir='rtl'] .panel { left: auto; right: 12px; }
+
+/* ---- staff screens -------------------------------------------------------------------------- */
+.screen.page { padding: 20px 16px 80px; display: grid; gap: 20px; align-content: start; }
+.screen.page h2 { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 8px; }
+.list { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.list li { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.link { background: none; border: 0; color: var(--blue-2); cursor: pointer; font: inherit; padding: 0; }
+.link.bad { color: var(--bad); }
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 0.75rem; background: #2c3648; }
+.badge.live { background: var(--bad); color: #fff; }
+.badge.ended { background: #444; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+.slot-box { border: 2px solid #2c3648; border-radius: 12px; padding: 8px; }
+.slot-box.standby { border-color: var(--warn); }
+.slot-box.onair { border-color: var(--bad); }
+.slot-head { font-size: 0.8rem; color: var(--muted); margin-bottom: 6px; }
+.slate-mini { aspect-ratio: 16/9; display: grid; place-content: center; background: #0d1117; border-radius: 8px; color: var(--muted); }
+.guest-card { background: var(--bg-2); border-radius: 12px; overflow: hidden; display: grid; gap: 8px; }
+.guest-card.offline { opacity: 0.6; }
+.guest-video { position: relative; aspect-ratio: 16/9; background: #000; }
+.guest-video video { width: 100%; height: 100%; object-fit: contain; }
+.guest-novideo { position: absolute; inset: 0; display: grid; place-content: center; color: var(--muted); font-size: 0.85rem; }
+.guest-overlay { position: absolute; left: 8px; right: 8px; bottom: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.guest-overlay .name { padding: 2px 8px; border-radius: 6px; background: var(--panel); font-weight: 600; }
+.guest-overlay .slot, .guest-overlay .ok, .guest-overlay .flag { padding: 2px 8px; border-radius: 6px; background: var(--panel); font-size: 0.8rem; }
+.guest-overlay .ok { color: var(--ok); }
+.guest-overlay .flag { background: var(--warn); color: #000; border: 0; font: inherit; font-size: 0.8rem; }
+.guest-overlay .flag.bad { background: var(--bad); color: #fff; cursor: pointer; }
+.guest-card .stats { margin: 0 8px; padding: 6px 8px; border-radius: 6px; background: #0d1117; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.guest-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0 8px 10px; }
+.guest-controls .inline { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--muted); }
+.guest-controls input.short { width: 70px; padding: 6px 8px; }
+.guest-controls select { padding: 6px 8px; }
+.btn.live { background: var(--ok); color: #000; }
+.btn.warn { background: var(--warn); color: #000; }
+.btn.small { padding: 6px 10px; font-size: 0.85rem; }
+.chip { font: inherit; font-size: 0.8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid #3a4557; background: #121720; color: var(--fg); cursor: pointer; }
+.cues { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: center; }
+.help.bad { color: var(--bad); cursor: pointer; }
+.staff .pip { bottom: 16px; width: 160px; }
