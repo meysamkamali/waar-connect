@@ -1,0 +1,4 @@
+# Keep LF everywhere: shell scripts and configs are copied to Linux servers as they are.
+* text=auto eol=lf
+*.png binary
+*.ttf binary

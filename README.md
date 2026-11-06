@@ -13,11 +13,13 @@ has been on air yet.
 - `APPROACH.md` — why LiveKit, why TypeScript, why AGPL, components, phases, risks.
 - `SYSTEM-PLAN.md` — the places (Lobby, Green Room, Studio), roles, who hears whom, hand-off, hosting.
 - `docs/phase0-test-sheet.md` — what to measure in phase 0 and where to write it down.
+- `docs/phase1-build-plan.md` — stack, data model, API surface and milestones for the product build.
 - `brand/` — logo files and the generator that makes them.
 
 ## Layout
 
 ```
+packages/shared/ domain model (places, roles, identities, attributes) and the routing engine, with tests
 apps/phase0/     proof app: token server (Node, Express) and six bare pages (Vite, TypeScript)
 deploy/vm/       the waar Connect VM: installer, Nginx on 8443, services, certificate sync
 deploy/media/    LiveKit + embedded TURN + Redis, docker compose (used by deploy/vm)
