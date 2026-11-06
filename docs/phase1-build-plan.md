@@ -13,7 +13,7 @@ whom. NDI output is designed separately once the VM's CPU-only decoding has been
 | API | `apps/api`: Node 24, Fastify, Drizzle ORM, Postgres 16 in Docker on the VM | Typed routes and schemas, cheap to run, one process. Postgres because episodes, guests, events and stats grow for years. |
 | Realtime | LiveKit server SDK: tokens, `UpdateParticipant` (attributes, permissions), `UpdateSubscriptions`, webhooks | The server decides routing; clients only render what they are allowed to receive. |
 | Web apps | `apps/web`: Vite + Preact + TypeScript, one app with routes `/g/:token`, `/producer`, `/engineer`, `/out/:slot`, `/multiview` | Small, React-like, easy for a PHP team to read. The phase 0 modules (room setup, stats, clock) move into it. |
-| Auth | Producer/engineer: email + password with sessions (phase 1), station SSO later. Guests: invite token in the link. Outputs: long-lived kiosk token per slot. | Matches SYSTEM-PLAN open point 5 until answered. |
+| Auth | **Test phase (decided 2026-11-06): no passwords.** `OPEN_ACCESS=1` serves `/app/producer` and `/app/engineer` as a fixed producer or engineer account; the screen tells the API which one (`x-wc-role`). Final phase: `OPEN_ACCESS=0`, email + password with sessions (built, kept), station SSO later. Guests: invite token in the link. Outputs: long-lived kiosk token per slot. | The user asked for no user/password until the final phase, as with the phase 0 PIN. Matches SYSTEM-PLAN open point 5 until answered. |
 | Languages | Kurdish (Kurmanji and Sorani), Arabic, English; RTL from day one for the guest page | Guests choose nothing; the producer picks the language on the invite. |
 
 ## Repository layout after phase 1

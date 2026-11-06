@@ -43,6 +43,8 @@ if [ ! -f "$ENV" ]; then
     echo "PUBLIC_URL=https://connect.waar.work:8443"
     echo "SESSION_TTL_HOURS=12"
     echo "COOKIE_SECURE=1"
+    echo "# test phase: no passwords on the staff screens; set 0 for the final phase"
+    echo "OPEN_ACCESS=1"
     echo "DEFAULT_SLOTS=4"
   } > "$ENV"
   chown "$APP_USER:$APP_USER" "$ENV"

@@ -15,10 +15,13 @@ async function readJson<T>(res: Response): Promise<T> {
   return data;
 }
 
+// Test phase without passwords: the API serves the screen as producer or engineer by this header.
+const roleHeader = (): string => (location.pathname.startsWith('/app/engineer') ? 'engineer' : 'producer');
+
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   return fetch(`/api/v1${path}`, {
     method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    headers: { 'x-wc-role': roleHeader(), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then((r) => readJson<T>(r));
 }
@@ -148,7 +151,7 @@ export type RoomAction =
 
 export const login = (email: string, password: string) => call<{ user: User }>('POST', '/auth/login', { email, password });
 export const logout = () => call<{ ok: true }>('POST', '/auth/logout');
-export const me = () => call<{ user: User }>('GET', '/me');
+export const me = () => call<{ user: User; open?: boolean }>('GET', '/me');
 export const listPrograms = () => call<{ programs: Program[] }>('GET', '/programs');
 export const getProgram = (id: string) => call<{ program: Program; episodes: Episode[] }>('GET', `/programs/${id}`);
 export const createProgram = (name: string) => call<{ program: Program }>('POST', '/programs', { name });

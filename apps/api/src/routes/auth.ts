@@ -32,13 +32,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post('/auth/logout', { preHandler: app.requireUser }, async (req, reply) => {
-    await deleteSession(db, req.user!.sessionId);
+    if (req.user!.sessionId) await deleteSession(db, req.user!.sessionId);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return { ok: true };
   });
 
   app.get('/me', { preHandler: app.requireUser }, async (req) => {
-    const { sessionId: _omit, ...user } = req.user!;
-    return { user };
+    const { sessionId, ...user } = req.user!;
+    // open: served by OPEN_ACCESS without a session (test phase), so there is nothing to sign out of.
+    return { user, open: sessionId === '' };
   });
 }

@@ -13,7 +13,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file=.env dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test src/auth/password.test.ts src/auth/sessions.test.ts src/livekit/tokens.test.ts src/routes/invite.test.ts src/rooms/tracks.test.ts src/rooms/controller.test.ts",
+    "test": "node --test src/auth/password.test.ts src/auth/sessions.test.ts src/auth/open.test.ts src/livekit/tokens.test.ts src/routes/invite.test.ts src/rooms/tracks.test.ts src/rooms/controller.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env src/db/migrate.ts",
     "user:add": "node --env-file=.env src/cli/add-user.ts"

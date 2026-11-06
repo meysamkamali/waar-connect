@@ -3,7 +3,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { ApiError, createEpisode, createProgram, getProgram, listPrograms, logout, type Episode, type Program, type User } from '../api.ts';
 
-export function Episodes({ user, onLogout }: { user: User; onLogout: () => void }) {
+export function Episodes({ user, open = false, onLogout }: { user: User; open?: boolean; onLogout: () => void }) {
   const { route } = useLocation();
   const [programs, setPrograms] = useState<Program[]>([]);
   const [episodes, setEpisodes] = useState<Record<string, Episode[]>>({});
@@ -36,15 +36,18 @@ export function Episodes({ user, onLogout }: { user: User; onLogout: () => void 
         <div class="row" style={{ alignItems: 'center' }}>
           <span class="muted">
             {user.name} · {user.role}
+            {open && ' · test phase, no sign-in'}
           </span>
-          <button
-            class="btn secondary small"
-            onClick={() => {
-              void logout().finally(onLogout);
-            }}
-          >
-            Sign out
-          </button>
+          {!open && (
+            <button
+              class="btn secondary small"
+              onClick={() => {
+                void logout().finally(onLogout);
+              }}
+            >
+              Sign out
+            </button>
+          )}
         </div>
       </header>
       {error && <p class="help bad">{error}</p>}

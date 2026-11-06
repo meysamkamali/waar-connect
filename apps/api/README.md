@@ -21,7 +21,7 @@ Sessions are a cookie set by login. Roles: `admin`, `producer`, `engineer`.
 
 | Method and path | Who | What |
 |---|---|---|
-| `POST /auth/login` `{email,password}` | anyone | sets the session cookie |
+| `POST /auth/login` `{email,password}` | anyone | sets the session cookie (final phase; with `OPEN_ACCESS=1` the staff screens need none, see `src/auth/open.ts`) |
 | `POST /auth/logout`, `GET /me` | signed in | |
 | `GET /programs`, `GET /programs/:id` | signed in | list; program with its latest episodes |
 | `POST /programs`, `PATCH /programs/:id`, `POST /programs/:id/archive` | admin, producer | settings: slots, readyRequired, ifbAllowed, languages |

@@ -7,15 +7,19 @@ import { RoomScreen } from './RoomScreen.tsx';
 
 export function StaffApp({ id, engineer = false }: { id?: string; engineer?: boolean }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
+  const [open, setOpen] = useState(false); // test phase: served without a password
 
   useEffect(() => {
     me()
-      .then((r) => setUser(r.user))
+      .then((r) => {
+        setOpen(r.open === true);
+        setUser(r.user);
+      })
       .catch(() => setUser(null));
   }, []);
 
   if (user === undefined) return <div class="screen center">Loading…</div>;
   if (user === null) return <Login onLogin={setUser} />;
   if (id) return <RoomScreen id={id} user={user} engineer={engineer || user.role === 'engineer'} />;
-  return <Episodes user={user} onLogout={() => setUser(null)} />;
+  return <Episodes user={user} open={open} onLogout={() => setUser(null)} />;
 }

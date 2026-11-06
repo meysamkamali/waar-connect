@@ -3,6 +3,7 @@
 
 import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import { ensureOpenUsers, OPEN_ROLE_HEADER, openRoleFrom } from './auth/open.ts';
 import { SESSION_COOKIE, userForSession, type SessionUser } from './auth/sessions.ts';
 import type { Config } from './config.ts';
 import type { Db } from './db/client.ts';
@@ -51,9 +52,14 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
     done(null, body);
   });
 
+  // Test phase without passwords: requests with no session run as the open producer or engineer.
+  const openUsers = ctx.cfg.openAccess ? await ensureOpenUsers(ctx.db) : null;
+  if (openUsers) app.log.warn('OPEN_ACCESS=1: staff screens need no password (test phase)');
+
   app.addHook('onRequest', async (req) => {
     const sid = req.cookies[SESSION_COOKIE];
     req.user = sid ? await userForSession(ctx.db, sid) : null;
+    if (!req.user && openUsers) req.user = openUsers[openRoleFrom(req.headers[OPEN_ROLE_HEADER])];
   });
 
   app.decorate('requireUser', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -70,7 +76,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
     };
   });
 
-  app.get('/api/v1/health', async () => ({ ok: true, livekitUrl: ctx.cfg.LIVEKIT_URL }));
+  app.get('/api/v1/health', async () => ({ ok: true, livekitUrl: ctx.cfg.LIVEKIT_URL, openAccess: ctx.cfg.openAccess }));
 
   await app.register(authRoutes, { prefix: '/api/v1' });
   await app.register(programRoutes, { prefix: '/api/v1' });
