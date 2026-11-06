@@ -1,0 +1,20 @@
+[Unit]
+Description=waar Connect API
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=waarconnect
+Group=waarconnect
+WorkingDirectory=/opt/waar-connect/apps/api
+ExecStart=/usr/bin/node --env-file=/opt/waar-connect/apps/api/.env /opt/waar-connect/apps/api/dist/index.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/waar-connect
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,35 @@
+{
+  "name": "@waar-connect/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "waar Connect API: programs, episodes, guests, invite links, LiveKit tokens and room control.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file=.env dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test src/auth/password.test.ts src/auth/sessions.test.ts src/livekit/tokens.test.ts src/routes/invite.test.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file=.env src/db/migrate.ts",
+    "user:add": "node --env-file=.env src/cli/add-user.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@waar-connect/shared": "*",
+    "drizzle-orm": "^0.45.0",
+    "fastify": "^5.3.0",
+    "livekit-server-sdk": "^2.14.0",
+    "postgres": "^3.4.7",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "drizzle-kit": "^0.31.0",
+    "typescript": "^5.9.2"
+  }
+}

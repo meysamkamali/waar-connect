@@ -15,8 +15,8 @@
     "phase0:dev": "npm --workspace apps/phase0 run dev",
     "phase0:build": "npm --workspace apps/phase0 run build",
     "phase0:start": "npm --workspace apps/phase0 run start",
-    "typecheck": "npm --workspaces --if-present run typecheck",
+    "typecheck": "npm -w packages/shared run build && npm --workspaces --if-present run typecheck",
     "test": "npm --workspaces --if-present run test",
-    "build": "npm --workspaces --if-present run build"
+    "build": "npm -w packages/shared run build && npm -w apps/api run build && npm -w apps/phase0 run build"
   }
 }

@@ -1,0 +1,25 @@
+# Postgres for the waar Connect API, local to the VM only.
+# Install: copy this folder to /opt/waar-connect-db, create .env with POSTGRES_PASSWORD, then
+#   docker compose up -d
+# Backup:  docker compose exec -T db pg_dump -U waarconnect waarconnect | gzip > backup.sql.gz
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: waarconnect
+      POSTGRES_USER: waarconnect
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U waarconnect -d waarconnect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
