@@ -36,13 +36,34 @@ Sessions are a cookie set by login. Roles: `admin`, `producer`, `engineer`.
 | `POST /episodes/:id/monitor` | staff | hidden receive-only token |
 | `POST /episodes/:id/outputs/:slot/token` | staff | 7-day token as `out:slot-<n>` for the output page |
 | `POST /episodes/:id/studio-token` | staff | 7-day token as `studio` for the return publisher |
-| `POST /livekit/webhook` | LiveKit | signed room events, stored in `events` |
+| `GET /episodes/:id/room` | staff | live snapshot: guests with place/tally/slot, staff, outputs, connected identities, tracks |
+| `POST /episodes/:id/room/actions` | staff | one action, returns the new snapshot (see below) |
+| `POST /livekit/webhook` | LiveKit | signed room events, stored in `events` and fed to the room controller |
 | `GET /health` | anyone | |
 
 Every endpoint is under `/api/v1`. Errors are `{ "error": "message" }` with 400, 401, 403, 404, 409, 410 or 429.
 
-## What M3 adds
+## Room actions (M3)
 
-The room controller: in-memory `RoomState` per live episode fed by the webhooks, the green-room actions
-(admit, talk, face, table, studio sound, program, slot, ready, hand-off, tally, bring back, cue, kick), and
-after each action `UpdateParticipant` (attributes) plus `UpdateSubscriptions` from the shared routing engine.
+Body is `{ "type": …, … }`. Guests are addressed by identity (`guest:<id>`, shown in the episode view).
+
+| type | fields | notes |
+|---|---|---|
+| `admit` | guest | lobby → green room |
+| `talk` | to: `none` / `all` / [identities] | the caller's own talk track; the server lists the allowed guests in `wc.talk_allowed` and the staff page applies them as track permissions |
+| `face` | guest or null | the caller's camera to one guest |
+| `table` | guest, table or null | guests at the same table hear and see each other |
+| `studioSound`, `program`, `ready` | guest, on | ready: engineer or admin only |
+| `slot` | guest, slot or null | exclusive; refused while the guest is on the studio side |
+| `handoff` | guest | green → studio, tally standby; needs a slot and, if the program says so, the ready mark |
+| `tally` | guest, `standby` / `onair` | |
+| `bringBack` | guest | studio → green, tally off |
+| `ifb` | guest, on | engineer or admin; only when the program allows it |
+| `cue` | to: identity or `all`, text | data message, topic `wc.cue` |
+| `command` | guest, command | data message to the guest page, topic `wc.cmd` |
+| `kick` | guest | removes the participant |
+
+After every action and every webhook the controller pushes participant attributes (`wc.*`) and calls
+`UpdateSubscriptions` for every connected participant from the shared routing engine, so the wire
+matches the matrix. A guest who drops keeps place, slot and tally for 15 minutes for a reconnect; on a
+restart the controller rebuilds its state from the attributes LiveKit still holds.

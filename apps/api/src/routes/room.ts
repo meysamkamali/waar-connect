@@ -1,0 +1,74 @@
+// Live room: snapshot for the producer and engineer screens, and the green-room actions.
+import { eq } from 'drizzle-orm';
+import type { FastifyInstance } from 'fastify';
+import { identityFor } from '@waar-connect/shared';
+import { z } from 'zod';
+import { episodes } from '../db/schema.ts';
+import { notFound, parseOr400 } from '../http.ts';
+import { ActionError, type RoomAction } from '../rooms/controller.ts';
+
+const Id = z.object({ id: z.uuid() });
+const Identity = z.string().min(3).max(120);
+
+const Action = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('admit'), guest: Identity }),
+  z.object({ type: z.literal('table'), guest: Identity, table: z.string().max(40).nullable() }),
+  z.object({ type: z.literal('studioSound'), guest: Identity, on: z.boolean() }),
+  z.object({ type: z.literal('program'), guest: Identity, on: z.boolean() }),
+  z.object({ type: z.literal('slot'), guest: Identity, slot: z.int().min(1).max(16).nullable() }),
+  z.object({ type: z.literal('ready'), guest: Identity, on: z.boolean() }),
+  z.object({ type: z.literal('handoff'), guest: Identity }),
+  z.object({ type: z.literal('tally'), guest: Identity, tally: z.enum(['standby', 'onair']) }),
+  z.object({ type: z.literal('bringBack'), guest: Identity }),
+  z.object({ type: z.literal('kick'), guest: Identity }),
+  z.object({ type: z.literal('ifb'), guest: Identity, on: z.boolean() }),
+  z.object({ type: z.literal('talk'), to: z.union([z.literal('none'), z.literal('all'), z.array(Identity).max(32)]) }),
+  z.object({ type: z.literal('face'), guest: Identity.nullable() }),
+  z.object({ type: z.literal('cue'), to: z.union([z.literal('all'), Identity]), text: z.string().max(200) }),
+  z.object({ type: z.literal('command'), guest: Identity, command: z.record(z.string(), z.unknown()) }),
+]);
+
+export async function roomRoutes(app: FastifyInstance): Promise<void> {
+  const { db, rooms } = app.ctx;
+  const staff = app.requireRole('admin', 'producer', 'engineer');
+
+  async function controllerFor(episodeId: string) {
+    const [episode] = await db.select().from(episodes).where(eq(episodes.id, episodeId)).limit(1);
+    if (!episode) return { episode: undefined, controller: null };
+    return { episode, controller: await rooms.get(episode.livekitRoom) };
+  }
+
+  app.get('/episodes/:id/room', { preHandler: staff }, async (req, reply) => {
+    const params = parseOr400(Id, req.params, reply);
+    if (!params) return;
+    const { episode, controller } = await controllerFor(params.id);
+    if (!episode) return notFound(reply, 'Episode');
+    if (!controller) return reply.code(409).send({ error: 'This episode has ended; its room is closed.' });
+    return { snapshot: controller.snapshot() };
+  });
+
+  app.post('/episodes/:id/room/actions', { preHandler: staff }, async (req, reply) => {
+    const params = parseOr400(Id, req.params, reply);
+    const body = params && parseOr400(Action, req.body, reply);
+    if (!params || !body) return;
+    const { episode, controller } = await controllerFor(params.id);
+    if (!episode) return notFound(reply, 'Episode');
+    if (!controller) return reply.code(409).send({ error: 'This episode has ended; its room is closed.' });
+
+    const user = req.user!;
+    if (body.type === 'ready' && user.role === 'producer') return reply.code(403).send({ error: 'Only an engineer marks a guest ready.' });
+    if (body.type === 'ifb' && user.role === 'producer') return reply.code(403).send({ error: 'Only an engineer uses the IFB override.' });
+
+    const staffIdentity = identityFor(user.role === 'engineer' ? 'engineer' : 'producer', user.id);
+    const action: RoomAction =
+      body.type === 'talk' ? { type: 'talk', staff: staffIdentity, to: body.to } : body.type === 'face' ? { type: 'face', staff: staffIdentity, guest: body.guest } : body;
+
+    try {
+      const snapshot = await controller.act(action, staffIdentity);
+      return { snapshot };
+    } catch (err) {
+      if (err instanceof ActionError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+}

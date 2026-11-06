@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { defaultGuestState, guestAttributes, guestFromAttributes, identityFor, outputIdentity, roleOf, slotOfOutput } from './model.ts';
+import { defaultGuestState, guestAttributes, guestFromAttributes, identityFor, outputIdentity, roleOf, slotOfOutput, staffAttributes, staffFromAttributes } from './model.ts';
+
+describe('staff attributes', () => {
+  it('round trip talkTo in its three forms', () => {
+    for (const talkTo of ['none', 'all', ['guest:a', 'guest:b']] as const) {
+      const s = { identity: 'producer:x', role: 'producer' as const, talkTo, faceTo: 'guest:a' };
+      const attrs = staffAttributes(s, ['guest:a']);
+      assert.equal(attrs['wc.talk_allowed'], 'guest:a');
+      assert.deepEqual(staffFromAttributes('producer:x', 'producer', attrs), s);
+    }
+  });
+});
 
 describe('identities', () => {
   it('build and parse round trip', () => {

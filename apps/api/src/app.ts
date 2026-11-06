@@ -12,10 +12,13 @@ import { guestRoutes } from './routes/guests.ts';
 import { inviteRoutes } from './routes/invite.ts';
 import { livekitRoutes } from './routes/livekit.ts';
 import { programRoutes } from './routes/programs.ts';
+import { roomRoutes } from './routes/room.ts';
+import type { RoomRegistry } from './rooms/controller.ts';
 
 export interface AppContext {
   cfg: Config;
   db: Db;
+  rooms: RoomRegistry;
 }
 
 export type UserRole = SessionUser['role'];
@@ -74,6 +77,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(episodeRoutes, { prefix: '/api/v1' });
   await app.register(guestRoutes, { prefix: '/api/v1' });
   await app.register(inviteRoutes, { prefix: '/api/v1' });
+  await app.register(roomRoutes, { prefix: '/api/v1' });
   await app.register(livekitRoutes, { prefix: '/api/v1' });
 
   app.setNotFoundHandler(async (_req, reply) => reply.code(404).send({ error: 'Not found.' }));

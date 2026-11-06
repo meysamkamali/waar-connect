@@ -128,6 +128,32 @@ export function guestAttributes(g: GuestState): Record<string, string> {
   };
 }
 
+/** Set on a guest while an engineer may talk to them in the studio (IFB override). */
+export const GUEST_IFB_ATTR = 'wc.ifb';
+
+/** Staff attribute keys; `talkAllowed` is computed by the server and applied by the staff client. */
+export const STAFF_ATTR = {
+  role: 'wc.role',
+  talkTo: 'wc.talk_to',
+  faceTo: 'wc.face_to',
+  talkAllowed: 'wc.talk_allowed',
+} as const;
+
+export function staffAttributes(s: StaffState, talkAllowed: readonly string[]): Record<string, string> {
+  return {
+    [STAFF_ATTR.role]: s.role,
+    [STAFF_ATTR.talkTo]: s.talkTo === 'none' || s.talkTo === 'all' ? s.talkTo : s.talkTo.join(','),
+    [STAFF_ATTR.faceTo]: s.faceTo ?? '',
+    [STAFF_ATTR.talkAllowed]: talkAllowed.join(','),
+  };
+}
+
+export function staffFromAttributes(identity: string, role: StaffRole, attrs: Readonly<Record<string, string>>): StaffState {
+  const raw = attrs[STAFF_ATTR.talkTo] ?? 'none';
+  const talkTo: StaffState['talkTo'] = raw === 'none' || raw === 'all' ? raw : raw.split(',').filter((x) => x.length > 0);
+  return { identity, role, talkTo, faceTo: attrs[STAFF_ATTR.faceTo] || null };
+}
+
 export function guestFromAttributes(identity: string, attrs: Readonly<Record<string, string>>): GuestState {
   const d = defaultGuestState(identity);
   const place = attrs[ATTR.place];

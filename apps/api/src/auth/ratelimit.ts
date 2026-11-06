@@ -7,11 +7,13 @@ interface Bucket {
 
 export class RateLimiter {
   readonly #buckets = new Map<string, Bucket>();
+  private readonly max: number;
+  private readonly windowMs: number;
 
-  constructor(
-    private readonly max: number,
-    private readonly windowMs: number,
-  ) {}
+  constructor(max: number, windowMs: number) {
+    this.max = max;
+    this.windowMs = windowMs;
+  }
 
   /** True when the key is currently blocked. */
   blocked(key: string, now: number = Date.now()): boolean {

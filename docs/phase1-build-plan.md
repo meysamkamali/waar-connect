@@ -77,9 +77,9 @@ at, actor, type, payload json) · `stats_samples` (episode_id, identity, at, rtt
 
 | # | Milestone | Done when |
 |---|---|---|
-| M1 | Shared model + routing engine with tests | `npm test` green; the invariants above hold |
-| M2 | API skeleton: Postgres, auth, programs, episodes, guests, invites, tokens | A producer can create an episode and a guest link from an HTTP client |
-| M3 | Routing applied live: webhooks, attributes, UpdateSubscriptions, talkback permissions | Two phones + a producer page: talk, table, hand-off, bring-back work and the matrix holds |
+| M1 ✅ 2026-11-06 | Shared model + routing engine with tests | `npm test` green; the invariants above hold |
+| M2 ✅ 2026-11-06 | API skeleton: Postgres, auth, programs, episodes, guests, invites, tokens | A producer can create an episode and a guest link from an HTTP client |
+| M3 ✅ 2026-11-06 | Routing applied live: webhooks, attributes, UpdateSubscriptions, talkback permissions | Controller tests cover admit, talk, table, hand-off, tally, bring back, IFB, reconnect and restart; live check on the VM: a guest joined through the webhook, admit → slot → ready → hand-off moved it to the studio and LiveKit holds the attributes. The two-phone run with a producer page waits for M5. |
 | M4 | Guest app: check, lobby, green, studio, exit, cues, tally, three languages | A guest goes through all places without touching settings |
 | M5 | Producer and engineer screens: door, grid, per-guest controls, stats, tests, ready | A show can be run from the screens alone |
 | M6 | Output slot pages, multiview, manual tally, ISO recording per studio segment | Slot 1 shows the right guest with a slate otherwise; recordings land on disk |
