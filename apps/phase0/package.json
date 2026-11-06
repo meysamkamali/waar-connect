@@ -1,0 +1,29 @@
+{
+  "name": "@waar-connect/phase0",
+  "version": "0.0.1",
+  "private": true,
+  "description": "waar Connect phase 0: token server and bare test pages.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev:server": "node --watch --env-file=.env server/index.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "build": "vite build --config web/vite.config.ts && tsc -p server/tsconfig.json",
+    "start": "node --env-file=.env dist/server/index.js",
+    "typecheck": "tsc -p web/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "livekit-server-sdk": "^2.14.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.0",
+    "livekit-client": "^2.15.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0"
+  }
+}

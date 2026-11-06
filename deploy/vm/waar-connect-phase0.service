@@ -1,0 +1,20 @@
+[Unit]
+Description=waar Connect phase 0 (token server and pages)
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=waarconnect
+Group=waarconnect
+WorkingDirectory=/opt/waar-connect/apps/phase0
+ExecStart=/usr/bin/node --env-file=/opt/waar-connect/apps/phase0/.env /opt/waar-connect/apps/phase0/dist/server/index.js
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/waar-connect
+
+[Install]
+WantedBy=multi-user.target

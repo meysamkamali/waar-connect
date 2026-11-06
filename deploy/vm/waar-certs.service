@@ -1,0 +1,6 @@
+[Unit]
+Description=Apply waar Connect certificates (enable site, test and reload Nginx)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/waar-certs-apply

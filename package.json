@@ -1,0 +1,20 @@
+{
+  "name": "waar-connect",
+  "version": "0.0.1",
+  "private": true,
+  "description": "waar Connect: remote guests into the WAAR TV studio for live programs.",
+  "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "phase0:dev": "npm --workspace apps/phase0 run dev",
+    "phase0:build": "npm --workspace apps/phase0 run build",
+    "phase0:start": "npm --workspace apps/phase0 run start",
+    "typecheck": "npm --workspaces --if-present run typecheck"
+  }
+}

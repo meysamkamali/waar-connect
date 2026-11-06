@@ -1,0 +1,66 @@
+# waar Connect media server, single-machine layout (LiveKit next to aaPanel).
+# install.sh copies this to livekit.yaml and fills in the secret. Reference:
+# https://github.com/livekit/livekit/blob/master/config-sample.yaml
+
+# Signaling and API. Bound to 127.0.0.1 by the --bind flag in docker-compose.yml;
+# the aaPanel Nginx terminates TLS on media.connect.waar.work and proxies here.
+port: 7880
+
+redis:
+  address: 127.0.0.1:6380
+
+rtc:
+  # One UDP port for all media instead of a range: one firewall rule, same performance.
+  udp_port: 7882
+  # Fallback for networks that block UDP.
+  tcp_port: 7881
+  # Discover the public IP through STUN (the machine only sees its LAN address).
+  use_external_ip: true
+  # Behind the station NAT: advertise the LAN address too (phones on the station Wi-Fi) and skip
+  # the self-ping, which cannot work without hairpin NAT.
+  advertise_internal_ip: true
+  skip_external_ip_validation: true
+  # When UDP turns lossy, let clients move to TCP (and TURN if configured).
+  allow_tcp_fallback: true
+  # Only the LAN interface; Docker bridges must not be advertised as candidates.
+  interfaces:
+    includes:
+      - ens34
+
+turn:
+  enabled: true
+  # Advertised to clients as turn:turn.connect.waar.work:3478?transport=udp. DNS A record to this machine.
+  domain: turn.connect.waar.work
+  # Standard STUN/TURN port. 443 (TCP and UDP) belongs to Nginx on this machine (HTTP/3 is on),
+  # and TURN over TLS on another port adds little over the ICE/TCP fallback on 7881.
+  # If a second public IP is ever added, set tls_port: 443 with a certificate and bind TURN to that IP.
+  udp_port: 3478
+
+room:
+  # Rooms are created by connect-api in phase 1; phase 0 lets the first participant create them.
+  auto_create: true
+  empty_timeout: 300
+  departure_timeout: 20
+  # Standardise on Opus and H.264 with VP8 fallback; keeps phones on hardware encoders.
+  enabled_codecs:
+    - mime: audio/opus
+    - mime: audio/red
+    - mime: video/h264
+    - mime: video/vp8
+
+audio:
+  # Redundant audio frames: survives single packet loss on the guest's uplink.
+  active_red_encoding: true
+
+keys:
+  waarconnect: REPLACE_WITH_A_LONG_RANDOM_SECRET
+
+logging:
+  level: info
+  json: false
+
+# Phase 1: connect-api receives room events here.
+# webhook:
+#   api_key: waarconnect
+#   urls:
+#     - https://connect.waar.work/api/livekit/webhook

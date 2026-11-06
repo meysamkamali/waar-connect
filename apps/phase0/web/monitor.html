@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>waar Connect · monitor</title>
+    <link rel="icon" href="/favicon.png" />
+  </head>
+  <body class="page">
+    <header class="row" style="align-items: center; gap: 16px">
+      <img class="logo" src="/logo.svg" alt="waar Connect" />
+      <h1>Monitor</h1>
+      <span data-status>idle</span>
+      <span class="spacer" style="flex: 1"></span>
+      <button id="sound" class="btn secondary" type="button">Enable sound</button>
+    </header>
+
+    <div id="grid" class="grid"></div>
+    <p class="help" id="empty">Nobody in the room yet.</p>
+
+    <footer data-footer></footer>
+    <script type="module" src="/src/pages/monitor.ts"></script>
+  </body>
+</html>

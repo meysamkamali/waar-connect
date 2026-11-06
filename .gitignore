@@ -1,0 +1,21 @@
+# dependencies and builds
+node_modules/
+dist/
+*.tsbuildinfo
+
+# local configuration and secrets
+.env
+.env.*
+!.env.example
+deploy/media/livekit.yaml
+deploy/media/credentials.env
+
+# editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# scratch
+*.log
+tmp/

@@ -1,0 +1,27 @@
+# waar Connect media server on the aaPanel machine: LiveKit + embedded TURN + its own Redis.
+# Host networking is required: WebRTC advertises the host's ports directly.
+# TLS for the signaling WebSocket is done by the aaPanel Nginx (site media.connect.waar.work),
+# which proxies to 127.0.0.1:7880. --bind keeps 7880 off the public interface.
+#
+# Files next to this one:
+#   livekit.yaml   from livekit.yaml.example (keys, ports); install.sh writes it
+#   redis.conf     Redis on 127.0.0.1:6380 so it never clashes with a Redis from the aaPanel App Store
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.11
+    command: --config /etc/livekit.yaml --bind 127.0.0.1
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server /etc/redis.conf
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./redis.conf:/etc/redis.conf:ro

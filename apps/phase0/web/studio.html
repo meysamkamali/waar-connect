@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>waar Connect · studio return</title>
+    <link rel="icon" href="/favicon.png" />
+  </head>
+  <body class="page">
+    <header class="row" style="align-items: center; gap: 16px">
+      <img class="logo" src="/logo.svg" alt="waar Connect" />
+      <h1>Studio return</h1>
+      <span data-status>idle</span>
+    </header>
+
+    <div class="row" style="align-items: flex-start; gap: 20px">
+      <form class="card" id="form">
+        <label>
+          Video input (program)
+          <select id="video"></select>
+        </label>
+        <label>
+          Audio input (studio mix-minus)
+          <select id="audio"></select>
+        </label>
+        <div class="row">
+          <label>
+            Size
+            <select id="res">
+              <option value="720" selected>1280×720</option>
+              <option value="1080">1920×1080</option>
+            </select>
+          </label>
+          <label>
+            Frame rate
+            <select id="fps">
+              <option value="25" selected>25</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
+            </select>
+          </label>
+          <label>
+            Max kbps
+            <input id="kbps" type="number" min="500" max="8000" step="100" value="2000" />
+          </label>
+        </div>
+        <div class="row">
+          <button class="btn" type="submit" id="start">Start publishing</button>
+          <button class="btn danger" type="button" id="stop" disabled>Stop</button>
+          <button class="btn secondary" type="button" id="refresh">Refresh devices</button>
+        </div>
+        <p class="help">
+          Publishes as participant <code>studio</code>. Guests subscribe to exactly this identity. Audio processing
+          is off: feed a clean mix-minus from the console, never a mix that contains the guests.
+        </p>
+        <p class="help" id="message"></p>
+      </form>
+
+      <div style="display: grid; gap: 10px; flex: 1; min-width: 320px">
+        <div class="tile" style="max-width: 640px">
+          <video id="preview" autoplay playsinline muted></video>
+          <pre id="stats" class="stats">—</pre>
+        </div>
+        <div class="help">In the room: <span id="present">nobody yet</span></div>
+      </div>
+    </div>
+
+    <footer data-footer></footer>
+    <script type="module" src="/src/pages/studio.ts"></script>
+  </body>
+</html>

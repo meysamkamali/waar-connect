@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>waar Connect · out</title>
+    <link rel="icon" href="/favicon.png" />
+  </head>
+  <body class="stage">
+    <video id="main" class="stage-video" autoplay playsinline></video>
+    <audio id="audio" autoplay></audio>
+
+    <div id="slate" class="slate">
+      <img class="logo" src="/logo.svg" alt="waar Connect" style="margin: 0 auto; height: 64px" />
+      <div class="big" id="slate-title">Slot</div>
+      <div id="slate-text" data-status>connecting…</div>
+    </div>
+
+    <pre id="stats" class="panel hidden"></pre>
+    <div id="clock" class="clock-overlay clock hidden"></div>
+
+    <div id="tap" class="overlay-tap hidden">
+      <button id="sound" class="btn" style="font-size: 1.2rem; padding: 16px 28px">Click for sound</button>
+    </div>
+
+    <script type="module" src="/src/pages/out.ts"></script>
+  </body>
+</html>

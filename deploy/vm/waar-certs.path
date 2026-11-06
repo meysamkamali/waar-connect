@@ -1,0 +1,10 @@
+[Unit]
+Description=Reload Nginx when waar Connect certificates change
+
+[Path]
+PathChanged=/etc/waar-connect/certs/connect.waar.work
+PathChanged=/etc/waar-connect/certs/media.connect.waar.work
+Unit=waar-certs.service
+
+[Install]
+WantedBy=multi-user.target

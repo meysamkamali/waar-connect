@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="robots" content="noindex" />
+    <title>waar Connect · guest</title>
+    <link rel="icon" href="/favicon.png" />
+  </head>
+  <body class="stage">
+    <video id="main" class="stage-video" autoplay playsinline></video>
+    <audio id="audio" autoplay></audio>
+    <video id="self" class="pip" autoplay playsinline muted></video>
+
+    <div id="slate" class="slate">
+      <img class="logo" src="/logo.svg" alt="waar Connect" style="margin: 0 auto" />
+      <div id="slate-text">Waiting for the studio picture…</div>
+    </div>
+
+    <pre id="stats" class="panel hidden"></pre>
+
+    <div id="tap" class="overlay-tap">
+      <button id="join" class="btn" style="font-size: 1.2rem; padding: 16px 28px">Tap to join</button>
+    </div>
+
+    <div class="bar">
+      <span data-status>idle</span>
+      <span id="who"></span>
+      <span class="spacer"></span>
+      <button id="mute" class="btn secondary" type="button">Mute</button>
+      <button id="toggle-stats" class="btn secondary" type="button">Stats</button>
+      <button id="leave" class="btn danger" type="button">Leave</button>
+    </div>
+
+    <footer data-footer class="hidden"></footer>
+    <script type="module" src="/src/pages/guest.ts"></script>
+  </body>
+</html>
