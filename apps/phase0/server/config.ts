@@ -36,6 +36,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     apiKey: required(env, 'LIVEKIT_API_KEY'),
     apiSecret,
     pin: pin || null,
-    sourceUrl: env['SOURCE_URL']?.trim() || 'https://github.com/waarmedia/waar-connect',
+    sourceUrl: env['SOURCE_URL']?.trim() || 'https://github.com/meysamkamali/waar-connect',
   };
 }

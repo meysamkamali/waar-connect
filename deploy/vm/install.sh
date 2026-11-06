@@ -75,7 +75,7 @@ if [ ! -f "$ENV" ]; then
     echo "PORT=8787"
     sed "s|^LIVEKIT_URL=.*|LIVEKIT_URL=wss://media.connect.waar.work:$WEB_PORT|" /opt/waar-connect-media/credentials.env
     echo "PHASE0_PIN=$PIN"
-    echo "SOURCE_URL=https://github.com/waarmedia/waar-connect"
+    echo "SOURCE_URL=https://github.com/meysamkamali/waar-connect"
   } > "$ENV"
   chown "$APP_USER:$APP_USER" "$ENV"
   chmod 600 "$ENV"
