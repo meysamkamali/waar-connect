@@ -63,7 +63,7 @@ export async function episodeRoutes(app: FastifyInstance): Promise<void> {
       guests: guestRows.map((g) => ({
         ...g,
         identity: identityFor('guest', g.id),
-        invites: inviteRows.filter((i) => i.guestId === g.id).map((i) => ({ ...i, url: `${cfg.PUBLIC_URL}/g/${i.token}` })),
+        invites: inviteRows.filter((i) => i.guestId === g.id).map((i) => ({ ...i, url: `${cfg.PUBLIC_URL}/app/g/${i.token}` })),
       })),
       slots: slotRows,
     };

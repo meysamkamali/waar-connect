@@ -1,0 +1,27 @@
+{
+  "name": "@waar-connect/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "waar Connect web app: guest, producer, engineer, output and multiview pages.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@preact/signals": "^2.0.0",
+    "@waar-connect/shared": "*",
+    "livekit-client": "^2.15.0",
+    "preact": "^10.27.0",
+    "preact-iso": "^2.9.0"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.0",
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0"
+  }
+}

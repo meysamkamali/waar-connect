@@ -66,7 +66,7 @@ export async function guestRoutes(app: FastifyInstance): Promise<void> {
     const expiresAt = new Date(Date.now() + body.expiresInHours * 3_600_000);
     await db.insert(invites).values({ token, guestId: guest.id, expiresAt, maxUses: body.maxUses });
     await db.insert(events).values({ episodeId: guest.episodeId, actor: req.user!.id, type: 'invite.created', payload: { guestId: guest.id, expiresAt: expiresAt.toISOString() } });
-    return reply.code(201).send({ token, url: `${cfg.PUBLIC_URL}/g/${token}`, expiresAt, maxUses: body.maxUses });
+    return reply.code(201).send({ token, url: `${cfg.PUBLIC_URL}/app/g/${token}`, expiresAt, maxUses: body.maxUses });
   });
 
   app.post('/invites/:token/revoke', { preHandler: staff }, async (req, reply) => {
