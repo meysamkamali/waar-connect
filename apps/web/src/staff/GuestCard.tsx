@@ -305,6 +305,15 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
             </button>
           </div>
           <div class="row settings">
+            <span class="muted small">copies</span>
+            <button class={`chip ${r && r.small !== false ? 'on' : ''}`} title="full size plus 360p and 180p copies: small tiles and weak viewers take a small copy" onClick={() => cmd({ small: true })}>
+              full + small
+            </button>
+            <button class={`chip ${r?.small === false ? 'on' : ''}`} title="only the full-size copy: for a phone whose encoder ignores the small copies' caps" onClick={() => cmd({ small: false })}>
+              full only
+            </button>
+          </div>
+          <div class="row settings">
             <span class="muted small">camera</span>
             <button class={`chip ${r?.facing === 'user' ? 'on' : ''}`} onClick={() => cmd({ facing: 'user' })}>
               front

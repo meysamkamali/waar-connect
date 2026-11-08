@@ -38,7 +38,15 @@ export interface GuestOverride {
   degrade?: Degrade;
   /** Codecs the browser accepted and then dropped after publishing; never offered again in this tab. */
   failedCodecs?: CodecName[];
+  /** False: send only the full-size copy (no 360p / 180p simulcast copies). */
+  small?: boolean;
 }
+
+// Ceilings of the small simulcast copies (see lib/room.ts) and their share of the cap at low caps.
+const SMALL_COPIES: Record<string, { own: number; share: number }> = {
+  q: { own: 150_000, share: 0.12 },
+  h: { own: 500_000, share: 0.35 },
+};
 const DEGRADES: readonly Degrade[] = ['resolution', 'framerate', 'balanced'];
 const toPreference = (d: Degrade): RTCDegradationPreference => (d === 'resolution' ? 'maintain-resolution' : d === 'framerate' ? 'maintain-framerate' : 'balanced');
 function loadOverride(): GuestOverride {
@@ -127,6 +135,7 @@ export class GuestSession {
   #codecs: Partial<Record<CodecName, CodecSupport>> | undefined;
   #mismatch = 0;
   #connectedAt = 0;
+  #over = 0;
 
   constructor() {
     const params = new URLSearchParams(location.search);
@@ -189,6 +198,7 @@ export class GuestSession {
     this.localVideo.value = cam;
     this.#upStats = cam ? new TrackStats(cam, 'send') : undefined;
     if (o.kbps) await this.#setMaxBitrate(o.kbps).catch(() => undefined);
+    if (o.small === false) await this.#setSmallCopies(false).catch(() => undefined);
     await cam?.setDegradationPreference(toPreference(o.degrade ?? DEGRADE_DEFAULT)).catch(() => undefined);
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
@@ -310,6 +320,11 @@ export class GuestSession {
         location.reload();
         return;
       }
+      if (typeof cmd['small'] === 'boolean') {
+        this.#override = saveOverride({ small: cmd['small'] });
+        this.#over = 0;
+        await this.#setSmallCopies(cmd['small']);
+      }
       if (cmd['facing'] === 'user' || cmd['facing'] === 'environment') {
         this.#override = saveOverride({ facing: cmd['facing'] });
         await this.localVideo.value?.restartTrack({ facingMode: cmd['facing'] });
@@ -385,14 +400,55 @@ export class GuestSession {
   }
 
   /** Scales every simulcast layer so the top one sends at most `kbps`. */
+  /**
+   * The cap is for the full-size copy. The small copies keep their own ceilings, but never more than a
+   * share of the cap: at 400 kbit/s the old scaling left the 360p copy the biggest sender.
+   */
   async #setMaxBitrate(kbps: number): Promise<void> {
     const sender = this.localVideo.value?.sender;
     if (!sender) return;
     const params = sender.getParameters();
     if (!params.encodings?.length) return;
-    const top = Math.max(...params.encodings.map((e) => e.maxBitrate ?? 0)) || kbps * 1000;
-    for (const e of params.encodings) e.maxBitrate = Math.round(((e.maxBitrate ?? top) / top) * kbps * 1000);
+    for (const e of params.encodings) {
+      const small = e.rid ? SMALL_COPIES[e.rid] : undefined;
+      e.maxBitrate = small ? Math.round(Math.min(small.own, kbps * 1000 * small.share)) : kbps * 1000;
+    }
     await sender.setParameters(params);
+  }
+
+  /** Switches the 360p and 180p copies on or off; viewers that asked for a small copy then get the full one. */
+  async #setSmallCopies(on: boolean): Promise<void> {
+    const sender = this.localVideo.value?.sender;
+    if (!sender) return;
+    const params = sender.getParameters();
+    if (!params.encodings?.length) return;
+    for (const e of params.encodings) if (e.rid && SMALL_COPIES[e.rid]) e.active = on;
+    await sender.setParameters(params);
+  }
+
+  /**
+   * Some hardware encoders ignore the caps of the small copies (seen 2026-11-08: an Android H.265
+   * encoder sent the 360p copy at 3.7 Mbit/s against a 500 kbit/s cap, more than the 1080p copy). When a
+   * small copy runs far above its cap for three samples in a row, switch the small copies off and say so.
+   */
+  async #checkCopies(up: StatsSummary | undefined): Promise<void> {
+    if (this.#override.small === false || !up?.layers) return;
+    const sender = this.localVideo.value?.sender;
+    const caps = new Map((sender?.getParameters().encodings ?? []).map((e) => [e.rid, e.maxBitrate]));
+    const hot = up.layers.find((l) => {
+      const cap = l.rid ? caps.get(l.rid) : undefined;
+      return l.rid !== undefined && SMALL_COPIES[l.rid] !== undefined && cap !== undefined && l.kbps * 1000 > Math.max(2 * cap, cap + 300_000);
+    });
+    if (!hot) {
+      this.#over = 0;
+      return;
+    }
+    if (++this.#over < 3) return;
+    const cap = Math.round((caps.get(hot.rid) ?? 0) / 1000);
+    this.#override = saveOverride({ small: false });
+    this.#lastError = `small copies switched off: this encoder ignores their caps (${hot.height ?? hot.rid}p sent ${hot.kbps} kbit/s against ${cap})`;
+    await this.#setSmallCopies(false).catch(() => undefined);
+    await this.#report();
   }
 
   /** What this phone is doing, for the producer's connection check (topic wc.report). */
@@ -421,6 +477,7 @@ export class GuestSession {
       wire: this.up.value?.codec,
       kbps: this.#profile.maxKbps,
       relay: this.#relay,
+      small: this.#override.small ?? true,
       facing: settings?.facingMode,
       camera: cam?.mediaStreamTrack.label,
       mic: mic?.mediaStreamTrack.label,
@@ -448,6 +505,7 @@ export class GuestSession {
       this.up.value = undefined;
     }
     await this.#checkCodec(this.up.value?.codec);
+    await this.#checkCopies(this.up.value).catch(() => undefined);
   }
 
   /**

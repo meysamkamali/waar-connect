@@ -68,6 +68,8 @@ export interface GuestReport {
   /** Bitrate cap in use, kbit/s. */
   kbps: number;
   relay: boolean;
+  /** False when only the full-size copy is sent (small simulcast copies switched off). */
+  small?: boolean | undefined;
   facing?: string | undefined;
   camera?: string | undefined;
   mic?: string | undefined;
@@ -89,6 +91,7 @@ export function describeReport(r: GuestReport): string {
     r.wire && r.wire !== r.codec ? `${r.codec} asked, ${r.wire} on the wire` : r.codec,
     `cap ${r.kbps} kbit/s`,
     r.relay ? 'via relay' : 'direct allowed',
+    r.small === false ? 'full copy only' : null,
     r.net ? `net ${r.net}` : null,
     r.battery !== undefined ? `battery ${r.battery}%` : null,
     r.facing ? `camera ${r.facing === 'environment' ? 'back' : 'front'}` : null,
