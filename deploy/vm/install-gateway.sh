@@ -69,19 +69,38 @@ else
   fi
 fi
 
+echo "== ndi runtime dependencies"
+# libndi links against Avahi (mDNS discovery on the VM's own subnet); senders elsewhere are reached
+# through NDI_EXTRA_IPS. The daemon needs UDP 5353 from the LAN.
+if ! dpkg -s libavahi-client3 >/dev/null 2>&1 || ! dpkg -s avahi-daemon >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends avahi-daemon libavahi-client3 libavahi-common3 >/dev/null
+  echo "avahi installed"
+else
+  echo "avahi present"
+fi
+systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
+if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  ufw allow from 10.0.0.0/24 to any port 5353 proto udp comment 'mDNS for NDI discovery' >/dev/null 2>&1 || true
+fi
+
 echo "== ndi runtime"
 if ldconfig -p | grep -q 'libndi\.so\.6'; then
   echo "present: $(ldconfig -p | grep -m1 'libndi\.so\.6' | awk '{print $NF}')"
 elif [ "$ACCEPT" = 1 ]; then
+  CACHE=/var/cache/waar-ndi
+  mkdir -p "$CACHE"
+  if [ ! -s "$CACHE/sdk.tar.gz" ]; then
+    echo "downloading $NDI_URL"
+    curl -fsSL "$NDI_URL" -o "$CACHE/sdk.tar.gz"
+  fi
   TMP=$(mktemp -d)
   trap 'rm -rf "$TMP"' EXIT
-  echo "downloading $NDI_URL"
-  curl -fsSL "$NDI_URL" -o "$TMP/sdk.tar.gz"
-  tar -xzf "$TMP/sdk.tar.gz" -C "$TMP"
+  tar -xzf "$CACHE/sdk.tar.gz" -C "$TMP"
   INSTALLER=$(find "$TMP" -maxdepth 1 -name 'Install_NDI_SDK*.sh' | head -1)
   [ -n "$INSTALLER" ] || { echo "installer script not found in the archive" >&2; exit 1; }
-  # The installer shows the licence and asks for a y; --accept-ndi-license is that y.
-  (cd "$TMP" && yes y | PAGER=cat sh "$INSTALLER" >/dev/null)
+  # The installer prints the licence through $PAGER and reads one answer ("Type y or Y to agree");
+  # --accept-ndi-license is that y. (Not `yes |`: with pipefail its SIGPIPE exit would abort us.)
+  (cd "$TMP" && PAGER=cat sh "$INSTALLER" >/dev/null <<< "y")
   LIB=$(find "$TMP" -path '*x86_64-linux-gnu*' -name 'libndi.so.6.*' -type f | head -1)
   [ -n "$LIB" ] || { echo "libndi.so.6.* not found after extraction" >&2; exit 1; }
   install -m 644 "$LIB" /usr/local/lib/

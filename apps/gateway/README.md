@@ -39,7 +39,7 @@ cp .env.example .env          # API_URL, GATEWAY_TOKEN
 npm run -w apps/gateway dev   # needs the NDI runtime on this machine
 ```
 
-The NDI runtime is not in npm. On the VM `deploy/vm/install-gateway.sh` installs it from the NDI
+The NDI runtime is not in npm. On the VM `deploy/vm/install-gateway.sh` installs Avahi (libndi needs it) and the runtime from the NDI
 SDK (you accept the NDI SDK licence when it asks), writes `.env` with a token shared with the API,
 and installs the `waar-connect-gateway` systemd unit. On Windows the runtime that comes with NDI
 Tools is found automatically.
