@@ -52,6 +52,8 @@ export class StaffSession {
   readonly facing = signal(false);
   readonly listening = signal(true);
   readonly talkAllowed = signal<string[]>([]);
+  /** The guest shown full screen: their picture is asked for in the highest layer, the rest medium. */
+  readonly focus = signal<string | null>(null);
   readonly localVideo = signal<LocalVideoTrack | null>(null);
   identity = '';
 
@@ -146,6 +148,13 @@ export class StaffSession {
     this.listening.value = on;
   }
 
+  setFocus(identity: string | null): void {
+    this.focus.value = identity;
+    for (const p of this.room.remoteParticipants.values()) {
+      for (const pub of p.videoTrackPublications.values()) pub.setVideoQuality(p.identity === identity ? VideoQuality.HIGH : VideoQuality.MEDIUM);
+    }
+  }
+
   clearHelp(identity: string): void {
     const { [identity]: _gone, ...rest } = this.helps.value;
     this.helps.value = rest;
@@ -190,7 +199,7 @@ export class StaffSession {
   #onTrack(track: RemoteTrack, pub: RemoteTrackPublication, p: RemoteParticipant): void {
     this.#ensureTile(p);
     if (track.kind === Track.Kind.Video) {
-      pub.setVideoQuality(VideoQuality.MEDIUM);
+      pub.setVideoQuality(p.identity === this.focus.value ? VideoQuality.HIGH : VideoQuality.MEDIUM);
       this.#patch(p.identity, { video: track as RemoteVideoTrack });
       this.#trackers.set(p.identity, new TrackStats(track as RemoteVideoTrack, 'recv'));
     } else if (track.kind === Track.Kind.Audio) {

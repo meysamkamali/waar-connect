@@ -22,7 +22,8 @@ import {
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { describeStation, loadStation } from '../lib/station.ts';
 import { LANGUAGES } from './Contacts.tsx';
-import { GuestCard, type Sees } from './GuestCard.tsx';
+import { GuestCard, type GuestCardProps, type Sees } from './GuestCard.tsx';
+import { GuestFocus } from './GuestFocus.tsx';
 import { StaffSession } from './session.ts';
 
 export function RoomScreen({ id, user }: { id: string; user: User }) {
@@ -36,6 +37,8 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   const [found, setFound] = useState<Contact[]>([]);
   const [newGuest, setNewGuest] = useState('');
   const [newLang, setNewLang] = useState('ku');
+  const [focused, setFocused] = useState<string | null>(null);
+  const [solo, setSolo] = useState(true);
   const myIdentity = useRef('');
   const station = useMemo(() => describeStation(loadStation()), []);
 
@@ -69,6 +72,7 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   }, [query]);
 
   useEffect(() => () => void session.leave(), [session]);
+  useEffect(() => session.setFocus(focused), [focused, session]);
 
   async function join(): Promise<void> {
     try {
@@ -137,30 +141,35 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   const guestsByPlace = (place: GuestState['place']) => (snap?.guests ?? []).filter((g) => g.place === place);
   const recordFor = (identity: string) => view.guests.find((g) => g.identity === identity);
   const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
-  const audible = session.listening.value ? session.tiles.value.map((t) => t.audio).filter((a): a is NonNullable<typeof a> => a !== null) : [];
+  const audible = session.listening.value
+    ? session.tiles.value
+        .filter((t) => !(focused && solo) || t.identity === focused)
+        .map((t) => t.audio)
+        .filter((a): a is NonNullable<typeof a> => a !== null)
+    : [];
+  const focusedGuest = focused ? (snap?.guests ?? []).find((g) => g.identity === focused) : undefined;
   const seatedIds = new Set(view.guests.map((g) => g.contactId).filter((c): c is string => c !== null));
 
-  const card = (g: GuestState) => (
-    <GuestCard
-      key={g.identity}
-      state={g}
-      record={recordFor(g.identity)}
-      tile={tileFor(g.identity)}
-      report={session.reports.value[g.identity]}
-      connected={snap?.connected.includes(g.identity) ?? false}
-      outputNames={settings.outputNames}
-      ifbAllowed={settings.ifbAllowed}
-      ifb={snap?.ifbOverride.includes(g.identity) ?? false}
-      hearsMe={talkList === null || talkList.includes(g.identity)}
-      sees={me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none'}
-      hand={session.hands.value[g.identity] === true}
-      help={session.helps.value[g.identity] !== undefined}
-      onAction={doAction}
-      onHearMe={(on) => hearMe(g.identity, on)}
-      onSee={(mode) => see(g, mode)}
-      onClearHelp={() => session.clearHelp(g.identity)}
-    />
-  );
+  const cardProps = (g: GuestState): GuestCardProps => ({
+    state: g,
+    record: recordFor(g.identity),
+    tile: tileFor(g.identity),
+    report: session.reports.value[g.identity],
+    connected: snap?.connected.includes(g.identity) ?? false,
+    outputNames: settings.outputNames,
+    ifbAllowed: settings.ifbAllowed,
+    ifb: snap?.ifbOverride.includes(g.identity) ?? false,
+    hearsMe: talkList === null || talkList.includes(g.identity),
+    sees: me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none',
+    hand: session.hands.value[g.identity] === true,
+    help: session.helps.value[g.identity] !== undefined,
+    onAction: doAction,
+    onHearMe: (on) => hearMe(g.identity, on),
+    onSee: (mode) => see(g, mode),
+    onClearHelp: () => session.clearHelp(g.identity),
+    onFocus: () => setFocused(g.identity),
+  });
+  const card = (g: GuestState) => <GuestCard key={g.identity} {...cardProps(g)} />;
 
   return (
     <div class="screen page staff">
@@ -317,6 +326,7 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
         {user.name}: this PC uses {station}. Output pages for this studio run on the studio PC; the admin has the links.
       </p>
 
+      {focusedGuest && <GuestFocus {...cardProps(focusedGuest)} solo={solo} onSolo={setSolo} onClose={() => setFocused(null)} />}
       {session.localVideo.value && <VideoView track={session.localVideo.value} className="pip" mirror />}
       <AudioSinks tracks={audible} />
     </div>
