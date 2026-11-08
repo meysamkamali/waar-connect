@@ -19,7 +19,7 @@ import {
   type Room,
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
-import type { GuestReport } from '../lib/report.ts';
+import { SWEEP_STEPS, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 
@@ -52,6 +52,21 @@ function saveOverride(patch: GuestOverride): GuestOverride {
 }
 const HEIGHTS = [360, 540, 720, 1080];
 const RATES = [25, 30];
+
+function summarizeStep(target: number, samples: StatsSummary[]): TestStep {
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+  const kbps = Math.round(avg(samples.map((s) => s.kbps)));
+  const rtts = samples.map((s) => s.rttMs).filter((x): x is number => x !== undefined);
+  const rttMs = rtts.length ? Math.round(avg(rtts)) : undefined;
+  const rttMaxMs = rtts.length ? Math.max(...rtts) : undefined;
+  const lossPct = Math.round(avg(samples.map((s) => s.lossPct)) * 10) / 10;
+  const fpsList = samples.map((s) => s.fps).filter((x): x is number => x !== undefined);
+  const fps = fpsList.length ? Math.round(avg(fpsList)) : undefined;
+  const reasons = samples.map((s) => s.limited).filter((x): x is string => x !== undefined);
+  const limited = reasons.length ? reasons.sort((a, b) => reasons.filter((r) => r === b).length - reasons.filter((r) => r === a).length)[0] : undefined;
+  const ok = samples.length > 0 && lossPct < 2 && (rttMs ?? 0) < 400 && kbps >= target * 0.7;
+  return { target, kbps, rttMs, rttMaxMs, lossPct, fps, limited, ok };
+}
 
 export type Status = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'disconnected' | 'removed';
 
@@ -100,6 +115,8 @@ export class GuestSession {
   #relay: boolean;
   #override: GuestOverride;
   #lastError: string | undefined;
+  #sweep: SweepResult | undefined;
+  #sweeping = false;
 
   constructor() {
     const params = new URLSearchParams(location.search);
@@ -251,7 +268,7 @@ export class GuestSession {
         await this.localVideo.value?.restartTrack({ resolution: { width: Math.round((height * 16) / 9), height, frameRate: rate } });
       }
       const kbps = cmd['kbps'];
-      if (typeof kbps === 'number' && kbps >= 200 && kbps <= 8000) {
+      if (typeof kbps === 'number' && kbps >= 400 && kbps <= 8000) {
         this.#profile = { ...this.#profile, maxKbps: kbps };
         this.#override = saveOverride({ kbps });
         await this.#setMaxBitrate(kbps);
@@ -282,11 +299,57 @@ export class GuestSession {
         location.reload();
         return;
       }
+      if (cmd['test'] !== undefined) {
+        const spec = (cmd['test'] && typeof cmd['test'] === 'object' ? cmd['test'] : {}) as { steps?: unknown; seconds?: unknown };
+        const steps = Array.isArray(spec.steps) ? spec.steps.filter((n): n is number => typeof n === 'number' && n >= 400 && n <= 8000) : SWEEP_STEPS;
+        const seconds = typeof spec.seconds === 'number' ? Math.min(20, Math.max(6, spec.seconds)) : 8;
+        void this.#runSweep(steps.length ? steps : SWEEP_STEPS, seconds);
+      }
       this.#lastError = undefined;
     } catch (err) {
       this.#lastError = err instanceof Error ? err.message : String(err);
     }
     if (cmd['check'] === true || this.#lastError) await this.#report();
+  }
+
+  /**
+   * Bandwidth sweep asked by the producer: cap the uplink at each step for `seconds`, measure what
+   * really goes out, the round trip and the loss, report after every step, then restore the cap.
+   */
+  async #runSweep(steps: number[], seconds: number): Promise<void> {
+    if (this.#sweeping || !this.#upStats) return;
+    this.#sweeping = true;
+    const before = this.#profile.maxKbps;
+    const sweep: SweepResult = { running: true, step: 0, steps, results: [], at: Date.now() };
+    this.#sweep = sweep;
+    const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
+    try {
+      await this.#report();
+      for (let i = 0; i < steps.length; i++) {
+        const target = steps[i]!;
+        sweep.step = i;
+        await this.#setMaxBitrate(target);
+        await sleep(2000); // let the encoder settle
+        await this.#upStats.sample(); // fresh interval baseline
+        const samples: StatsSummary[] = [];
+        const until = Date.now() + Math.max(2, seconds - 2) * 1000;
+        while (Date.now() < until) {
+          await sleep(2000);
+          const s = await this.#upStats.sample().catch(() => undefined);
+          if (s && s.kbps > 0) samples.push(s);
+        }
+        sweep.results.push(summarizeStep(target, samples));
+        await this.#report();
+      }
+    } catch (err) {
+      this.#lastError = err instanceof Error ? err.message : String(err);
+    } finally {
+      await this.#setMaxBitrate(before).catch(() => undefined);
+      sweep.running = false;
+      sweep.at = Date.now();
+      this.#sweeping = false;
+      await this.#report();
+    }
   }
 
   /** Scales every simulcast layer so the top one sends at most `kbps`. */
@@ -315,6 +378,7 @@ export class GuestSession {
     }
     const report: GuestReport = {
       at: Date.now(),
+      test: this.#sweep,
       quality: this.quality.value,
       up: this.up.value,
       height: settings?.height,
@@ -340,7 +404,7 @@ export class GuestSession {
   }
 
   async #sample(): Promise<void> {
-    if (this.room.state !== ConnectionState.Connected) return;
+    if (this.room.state !== ConnectionState.Connected || this.#sweeping) return; // the sweep owns the stats meanwhile
     try {
       this.up.value = await this.#upStats?.sample();
     } catch {

@@ -34,7 +34,7 @@ export function profileFromParams(p: URLSearchParams): PublishProfile {
   return {
     height,
     fps,
-    maxKbps: Number.isFinite(kbps) && kbps >= 200 ? kbps : defaultKbps,
+    maxKbps: Number.isFinite(kbps) && kbps >= 400 ? kbps : defaultKbps,
     codec: p.get('codec') === 'vp8' ? 'vp8' : 'h264',
   };
 }

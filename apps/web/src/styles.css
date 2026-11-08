@@ -405,3 +405,8 @@ body.stage {
   .focus .focus-video { height: auto; min-height: 40dvh; }
   .focus-panel { max-height: 55dvh; border-inline-start: 0; border-top: 1px solid #2c3648; }
 }
+.table.sweep { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin: 4px 0; }
+.table.sweep th, .table.sweep td { text-align: start; padding: 3px 6px; border-bottom: 1px solid #2c3648; }
+.table.sweep tr.ok td:last-child { color: var(--ok); }
+.table.sweep tr.bad td:last-child { color: var(--bad); }
+.small.bad { color: var(--bad); }

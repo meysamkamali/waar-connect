@@ -2,8 +2,47 @@
 // producer's card shows it in one line.
 import type { StatsSummary } from './stats.ts';
 
+/** One step of the bandwidth sweep, measured on the phone. */
+export interface TestStep {
+  /** Cap the phone was given, kbit/s. */
+  target: number;
+  /** What it really sent on average, kbit/s. */
+  kbps: number;
+  rttMs: number | undefined;
+  rttMaxMs: number | undefined;
+  lossPct: number;
+  fps: number | undefined;
+  limited: string | undefined;
+  /** Loss under 2 %, round trip under 400 ms and at least 70 % of the target sent. */
+  ok: boolean;
+}
+
+export interface SweepResult {
+  running: boolean;
+  /** Index of the step being measured while running. */
+  step: number;
+  steps: number[];
+  results: TestStep[];
+  at: number;
+}
+
+export const SWEEP_STEPS = [400, 800, 1500, 2500, 4000];
+
+/** The highest cap that passed, as long as every lower step passed too. */
+export function recommendedCap(sweep: SweepResult | undefined): number | undefined {
+  if (!sweep || sweep.running || sweep.results.length === 0) return undefined;
+  let best: number | undefined;
+  for (const r of sweep.results) {
+    if (!r.ok) break;
+    best = r.target;
+  }
+  return best;
+}
+
 export interface GuestReport {
   at: number;
+  /** The last or running bandwidth sweep. */
+  test?: SweepResult | undefined;
   quality: string;
   /** Send-side numbers measured on the phone. */
   up?: StatsSummary | undefined;

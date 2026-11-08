@@ -7,7 +7,7 @@ import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
-import { describeReport, phoneModel, type GuestReport } from '../lib/report.ts';
+import { describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
 import type { StaffTile } from './session.ts';
 
@@ -84,6 +84,8 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
   const cmd = (command: Record<string, unknown>) => p.onAction({ type: 'command', guest: g.identity, command });
   const r = p.report;
   const processing = r ? r.audio.ec || r.audio.ns || r.audio.agc : true;
+  const sweep = r?.test;
+  const recommended = recommendedCap(sweep);
 
   return (
     <div class="guest-controls">
@@ -193,8 +195,53 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
             <button class="btn secondary small" onClick={() => cmd({ check: true })}>
               Check now
             </button>
+            <button class="btn small" onClick={() => cmd({ test: { steps: SWEEP_STEPS, seconds: 8 } })} disabled={sweep?.running === true}>
+              {sweep?.running ? `Testing… step ${sweep.step + 1} of ${sweep.steps.length}` : `Run bandwidth test (${SWEEP_STEPS[0]} → ${SWEEP_STEPS[SWEEP_STEPS.length - 1]} kbit/s, about ${SWEEP_STEPS.length * 8} s)`}
+            </button>
             <span class="muted small">{r ? `report ${Math.round((Date.now() - r.at) / 1000)} s ago` : ''}</span>
           </div>
+          {sweep && sweep.results.length > 0 && (
+            <table class="table sweep">
+              <thead>
+                <tr>
+                  <th>cap</th>
+                  <th>sent</th>
+                  <th>rtt</th>
+                  <th>loss</th>
+                  <th>fps</th>
+                  <th>limit</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {sweep.results.map((s) => (
+                  <tr key={s.target} class={s.ok ? 'ok' : 'bad'}>
+                    <td>{s.target}</td>
+                    <td>{s.kbps} kbit/s</td>
+                    <td>{s.rttMs !== undefined ? `${s.rttMs} ms${s.rttMaxMs !== undefined && s.rttMaxMs > s.rttMs ? ` (max ${s.rttMaxMs})` : ''}` : '—'}</td>
+                    <td>{s.lossPct}%</td>
+                    <td>{s.fps ?? '—'}</td>
+                    <td>{s.limited ?? '—'}</td>
+                    <td>{s.ok ? '✓' : '✗'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {sweep && !sweep.running && sweep.results.length > 0 && (
+            <div class="row">
+              {recommended !== undefined ? (
+                <>
+                  <span class="small">Recommended cap: {recommended} kbit/s</span>
+                  <button class={`chip ${r?.kbps === recommended ? 'on' : ''}`} onClick={() => cmd({ kbps: recommended })}>
+                    apply {recommended} kbit/s
+                  </button>
+                </>
+              ) : (
+                <span class="small bad">Even {sweep.steps[0]} kbit/s did not pass: try force relay, or a better network.</span>
+              )}
+            </div>
+          )}
           <div class="row settings">
             <span class="muted small">picture</span>
             {[1080, 720, 540, 360].map((h) => (
@@ -210,7 +257,7 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
           </div>
           <div class="row settings">
             <span class="muted small">bitrate cap</span>
-            {[800, 1500, 2500, 4000].map((k) => (
+            {SWEEP_STEPS.map((k) => (
               <button class={`chip ${r?.kbps === k ? 'on' : ''}`} key={k} onClick={() => cmd({ kbps: k })}>
                 {k} kbit/s
               </button>
