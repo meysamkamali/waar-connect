@@ -154,6 +154,21 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf(OUT1), ['a-cam2', 'a-mic2']);
   });
 
+  it('a returning guest whose slot was given away waits in the green room', async () => {
+    const { c } = await roomWithEveryone();
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await c.act({ type: 'handoff', guest: A }, PROD); // first free slot: 1
+    await c.onParticipantLeft(A);
+    await c.act({ type: 'admit', guest: B }, PROD);
+    await c.act({ type: 'handoff', guest: B }, PROD); // slot 1 is free while A is away
+    assert.equal(c.snapshot().guests.find((g) => g.identity === B)?.slot, 1);
+    await c.onParticipantJoined(join(A, [track('a-cam2', TrackSource.CAMERA), track('a-mic2', TrackSource.MICROPHONE)]));
+    const a = c.snapshot().guests.find((g) => g.identity === A)!;
+    assert.equal(a.place, 'green');
+    assert.equal(a.slot, null);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === B)?.slot, 1);
+  });
+
   it('rebuilds from attributes after a restart', async () => {
     const fake = new FakeControl();
     fake.participants = [

@@ -193,7 +193,13 @@ export class RoomController {
         const hasAttrs = Object.keys(p.attributes).some((k) => k.startsWith('wc.'));
         let state: GuestState;
         if (hasAttrs) state = guestFromAttributes(p.identity, p.attributes);
-        else if (departed && Date.now() - departed.at < DEPARTED_GRACE_MS) state = departed.state;
+        else if (departed && Date.now() - departed.at < DEPARTED_GRACE_MS) {
+          state = departed.state;
+          // Their slot may have gone to someone else while they were away: then they wait in the green room.
+          if (state.place === 'studio' && [...this.#guests.values()].some((o) => o.slot === state.slot)) {
+            state = { ...state, place: 'green', slot: null, tally: 'off' };
+          }
+        }
         else state = defaultGuestState(p.identity);
         this.#guests.set(p.identity, state);
         if (departed?.ifb || p.attributes[GUEST_IFB_ATTR] === '1') this.#ifb.add(p.identity);
