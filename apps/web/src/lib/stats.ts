@@ -13,6 +13,8 @@ export interface LayerStats {
   fps: number | undefined;
   kbps: number;
   codec: string | undefined;
+  /** VP9 and AV1 send one layered stream (SVC); this names its layer structure, e.g. L3T3_KEY. */
+  mode: string | undefined;
 }
 
 export interface StatsSummary {
@@ -108,7 +110,7 @@ export class TrackStats {
           const p = this.#prevLayers.get(id);
           this.#prevLayers.set(id, { ts: now, bytes });
           const kbps = p && now > p.ts ? Math.max(0, Math.round(((bytes - p.bytes) * 8) / (now - p.ts))) : 0;
-          const layer: LayerStats = { rid: str(s, 'rid'), width: num(s, 'frameWidth'), height: num(s, 'frameHeight'), fps: num(s, 'framesPerSecond'), kbps, codec: codecName(byId.get(String(s['codecId']))) };
+          const layer: LayerStats = { rid: str(s, 'rid'), width: num(s, 'frameWidth'), height: num(s, 'frameHeight'), fps: num(s, 'framesPerSecond'), kbps, codec: codecName(byId.get(String(s['codecId']))), mode: str(s, 'scalabilityMode') };
           return { s, layer };
         })
         .sort((a, b) => (b.layer.height ?? 0) - (a.layer.height ?? 0));
@@ -188,7 +190,14 @@ export function formatSummary(label: string, s: StatsSummary | undefined): strin
   const parts: string[] = [];
   if (s.width && s.height) parts.push(`${s.width}x${s.height}${s.fps ? `@${Math.round(s.fps)}` : ''}`);
   if (s.codec) parts.push(s.codec);
-  parts.push(s.layers && s.layers.length > 1 ? `${s.kbps} kbps (${s.layers.map(describeLayer).join(' · ')})` : `${s.kbps} kbps`);
+  const one = s.layers?.length === 1 ? s.layers[0] : undefined;
+  parts.push(
+    s.layers && s.layers.length > 1
+      ? `${s.kbps} kbps (${s.layers.map(describeLayer).join(' · ')})`
+      : one?.mode && one.mode !== 'L1T1'
+        ? `${s.kbps} kbps (one layered stream ${one.mode}: the sizes are inside it)`
+        : `${s.kbps} kbps`,
+  );
   parts.push(`loss ${s.lossPct}%`);
   if (s.rttMs !== undefined) parts.push(`rtt ${s.rttMs} ms`);
   if (s.jitterMs !== undefined) parts.push(`jitter ${s.jitterMs} ms`);
