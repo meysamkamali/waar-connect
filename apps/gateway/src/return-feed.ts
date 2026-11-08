@@ -38,6 +38,12 @@ export interface ReturnTarget {
 }
 
 const CAPTURE_WAIT_MS = 100;
+/**
+ * A capture call that does not come back within this time means the NDI runtime is stuck (seen
+ * 2026-11-08 on Windows with a sender on the same machine: the call ignores its timeout for good).
+ * Nothing in this process can free it, so the gateway exits and systemd starts it again.
+ */
+const CAPTURE_STUCK_MS = 10_000;
 /** No video for this long: black goes out and the state says so. */
 const NO_SIGNAL_MS = 2_000;
 /** No video for this long: the source may have moved (sender restarted); find it again. */
@@ -88,8 +94,14 @@ export class ReturnFeed {
 
   start(): void {
     this.#loop = this.#run().catch((err: unknown) => {
-      this.#set('error', err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      this.#set('error', message);
       log('error', 'return feed failed', { pcr: this.target.pcrName, err });
+      if (message.startsWith('NDI receive stuck')) {
+        // The runtime holds a thread for good; only a fresh process gets the feed back.
+        log('error', 'exiting so systemd restarts the gateway', { pcr: this.target.pcrName });
+        setTimeout(() => process.exit(70), 500);
+      }
     });
   }
 
@@ -114,8 +126,9 @@ export class ReturnFeed {
       connected: this.#connected,
       video: this.#size ? { ...this.#size, fps: this.#fps } : null,
       audio: this.#audioInfo,
+      // The mime type is empty until the server has confirmed the publication; H.264 is what we ask for.
       publish: this.#videoPub
-        ? { codec: this.#videoPub.mimeType?.replace(/^video\//i, '').toLowerCase() ?? 'h264', maxKbps: this.cfg.RETURN_MAX_KBPS, maxFps: this.#targetFps() }
+        ? { codec: this.#videoPub.mimeType?.replace(/^video\//i, '').toLowerCase() || 'h264', maxKbps: this.cfg.RETURN_MAX_KBPS, maxFps: this.#targetFps() }
         : null,
       since: this.#since,
     };
@@ -171,7 +184,13 @@ export class ReturnFeed {
     this.#lastVideoAt = 0;
     let lastBlackAt = 0;
     while (!this.#stopped) {
-      const got = await receiver.capture(CAPTURE_WAIT_MS);
+      let stuck: ReturnType<typeof setTimeout> | undefined;
+      const got = await Promise.race([
+        receiver.capture(CAPTURE_WAIT_MS),
+        new Promise<never>((_, reject) => {
+          stuck = setTimeout(() => reject(new Error(`NDI receive stuck for ${CAPTURE_STUCK_MS / 1000} s`)), CAPTURE_STUCK_MS);
+        }),
+      ]).finally(() => clearTimeout(stuck));
       const now = Date.now();
       if (got.kind === 'video') {
         this.#lastVideoAt = now;
