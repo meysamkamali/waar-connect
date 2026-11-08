@@ -12,7 +12,7 @@ test('mergeSettings keeps output names in step with the slot count', () => {
 
   const more = mergeSettings(fewer, { slots: 3, outputNames: ['SDI 5', ''] });
   assert.deepEqual(more.outputNames, ['SDI 5', 'Guest 2', 'Guest 3']);
-  assert.equal(more.readyRequired, false); // default since 2026-11-08: the producer decides
+  assert.equal(more.ifbAllowed, true);
 
   const untouched = mergeSettings(base, undefined);
   assert.deepEqual(untouched, base);

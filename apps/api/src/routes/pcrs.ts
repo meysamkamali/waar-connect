@@ -13,7 +13,6 @@ import { mintToken } from '../livekit/tokens.ts';
 
 const Settings = z.object({
   slots: z.int().min(1).max(16),
-  readyRequired: z.boolean(),
   ifbAllowed: z.boolean(),
   languages: z.array(z.string().min(2).max(8)).min(1).max(8),
   outputNames: z.array(z.string().trim().max(40)).max(16),
@@ -30,7 +29,6 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
   const out: PcrSettings = { ...base, outputNames: [...base.outputNames] };
   if (patch) {
     if (patch.slots !== undefined) out.slots = patch.slots;
-    if (patch.readyRequired !== undefined) out.readyRequired = patch.readyRequired;
     if (patch.ifbAllowed !== undefined) out.ifbAllowed = patch.ifbAllowed;
     if (patch.languages !== undefined) out.languages = patch.languages;
     if (patch.outputNames !== undefined) out.outputNames = [...patch.outputNames];

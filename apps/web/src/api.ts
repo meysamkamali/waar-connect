@@ -71,7 +71,6 @@ export interface User {
 
 export interface PcrSettings {
   slots: number;
-  readyRequired: boolean;
   ifbAllowed: boolean;
   languages: string[];
   outputNames: string[];

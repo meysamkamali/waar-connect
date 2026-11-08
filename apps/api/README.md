@@ -24,7 +24,7 @@ Sessions are a cookie set by login. Roles: `admin`, `producer`, `engineer`.
 | `POST /auth/login` `{email,password}` | anyone | sets the session cookie (final phase; with `OPEN_ACCESS=1` the staff screens need none, see `src/auth/open.ts`) |
 | `POST /auth/logout`, `GET /me` | signed in | |
 | `GET /pcrs`, `GET /pcrs/:id` | signed in | list of open PCRs; one PCR with its seated guests and their invite links |
-| `POST /pcrs` `{name,settings?}`, `PATCH /pcrs/:id`, `POST /pcrs/:id/archive` | admin | settings: slots, outputNames, readyRequired, ifbAllowed, languages; a change restarts the room controller |
+| `POST /pcrs` `{name,settings?}`, `PATCH /pcrs/:id`, `POST /pcrs/:id/archive` | admin | settings: slots, outputNames, ifbAllowed, languages; a change restarts the room controller |
 | `GET /contacts?q=`, `POST /contacts`, `PATCH /contacts/:id`, `DELETE /contacts/:id` | read: signed in; write: admin, producer | the guest contact book |
 | `POST /pcrs/:id/guests` `{contactId}` or `{displayName,language}` | staff | seats a contact (idempotent per PCR) or a one-off name; returns the guest with its identity |
 | `PATCH /guests/:id`, `DELETE /guests/:id` | staff | delete also shows a connected guest out |
@@ -54,7 +54,7 @@ Body is `{ "type": …, … }`. Guests are addressed by identity (`guest:<id>`, 
 | `table` | guest, table or null | guests at the same table hear and see each other |
 | `studioSound`, `program`, `ready` | guest, on | ready: engineer or admin only |
 | `slot` | guest, slot or null | exclusive; refused while the guest is on the studio side |
-| `handoff` | guest | green → studio, tally standby; needs a slot and, if the PCR says so, the ready mark |
+| `handoff` | guest | green → studio, tally standby, first free slot (or the one already held); the producer decides, no ready mark |
 | `tally` | guest, `standby` / `onair` | |
 | `bringBack` | guest | studio → green, tally off |
 | `ifb` | guest, on | engineer or admin; only when the program allows it |

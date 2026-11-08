@@ -31,7 +31,7 @@ const rooms = new RoomRegistry(
   control,
   async (room): Promise<RoomSettings | null> => {
     const row = await pcrFor(room);
-    return row ? { slots: row.settings.slots, readyRequired: row.settings.readyRequired, ifbAllowed: row.settings.ifbAllowed } : null;
+    return row ? { slots: row.settings.slots, ifbAllowed: row.settings.ifbAllowed } : null;
   },
   (room) => (type, actor, payload) => {
     void pcrFor(room)

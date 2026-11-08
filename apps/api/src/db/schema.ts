@@ -42,8 +42,6 @@ export const sessions = pgTable(
 export interface PcrSettings {
   /** Number of studio output slots (one output page, later one NDI/SDI output, each). */
   slots: number;
-  /** An engineer's ready mark is required before a hand-off (off since 2026-11-08: the producer decides). */
-  readyRequired: boolean;
   /** An engineer may talk to a guest who is in the studio (IFB override). */
   ifbAllowed: boolean;
   /** Languages offered on guest invites: ku, ckb, ar, en, tr. */
@@ -55,7 +53,6 @@ export interface PcrSettings {
 export function defaultPcrSettings(slots: number): PcrSettings {
   return {
     slots,
-    readyRequired: false,
     ifbAllowed: true,
     languages: ['ku', 'ckb', 'ar', 'en'],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),

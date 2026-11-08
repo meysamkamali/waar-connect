@@ -28,7 +28,6 @@ import { routedSource } from './tracks.ts';
 
 export interface RoomSettings {
   slots: number;
-  readyRequired: boolean;
   ifbAllowed: boolean;
 }
 
@@ -289,7 +288,6 @@ export class RoomController {
       case 'handoff': {
         const g = this.#guest(action.guest);
         if (g.place !== 'green') throw new ActionError('Only a guest in the green room can be sent to the studio.');
-        if (this.settings.readyRequired && !g.ready) throw new ActionError('The engineer has not marked this guest ready.');
         if (g.slot === null) {
           // No slot chosen (the normal case): the first one no guest holds.
           const taken = new Set([...this.#guests.values()].filter((o) => o !== g).map((o) => o.slot));

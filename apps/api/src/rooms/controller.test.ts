@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { TrackSource } from 'livekit-server-sdk';
-import { ActionError, RoomController } from './controller.ts';
+import { RoomController } from './controller.ts';
 import type { LiveKitControl, ParticipantSnapshot, TrackSnapshot } from './livekit-control.ts';
 
 class FakeControl implements LiveKitControl {
@@ -49,7 +49,7 @@ const PROD = 'producer:p';
 const ENG = 'engineer:e';
 const OUT1 = 'out:slot-1';
 
-async function roomWithEveryone(settings = { slots: 4, readyRequired: true, ifbAllowed: true }) {
+async function roomWithEveryone(settings = { slots: 4, ifbAllowed: true }) {
   const fake = new FakeControl();
   const c = new RoomController('ep-1', fake, settings);
   await c.load();
@@ -90,7 +90,6 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf(A), ['b-cam', 'b-mic', 'p-talk']);
 
     await c.act({ type: 'slot', guest: A, slot: 1 }, PROD);
-    await assert.rejects(c.act({ type: 'handoff', guest: A }, PROD), ActionError); // not ready
     await c.act({ type: 'ready', guest: A, on: true }, ENG);
     await c.act({ type: 'handoff', guest: A }, PROD);
 
@@ -128,10 +127,10 @@ describe('room controller', () => {
     await c.act({ type: 'ifb', guest: A, on: false }, ENG);
     assert.deepEqual(fake.subsOf(A), ['pgm-a', 'pgm-v']);
 
-    const strict = await roomWithEveryone({ slots: 4, readyRequired: false, ifbAllowed: false });
+    const strict = await roomWithEveryone({ slots: 4, ifbAllowed: false });
     await strict.c.act({ type: 'admit', guest: A }, PROD);
     await strict.c.act({ type: 'slot', guest: A, slot: 1 }, PROD);
-    await strict.c.act({ type: 'handoff', guest: A }, PROD); // readyRequired false
+    await strict.c.act({ type: 'handoff', guest: A }, PROD);
     await assert.rejects(strict.c.act({ type: 'ifb', guest: A, on: true }, ENG), /switched off/);
   });
 
@@ -162,7 +161,7 @@ describe('room controller', () => {
       join(PROD, [track('p-talk', TrackSource.MICROPHONE)], { 'wc.role': 'producer', 'wc.talk_to': 'all', 'wc.face_to': '', 'wc.talk_allowed': '' }),
       join('out:slot-3'),
     ];
-    const c = new RoomController('ep-1', fake, { slots: 4, readyRequired: true, ifbAllowed: true });
+    const c = new RoomController('ep-1', fake, { slots: 4, ifbAllowed: true });
     await c.load();
     const snap = c.snapshot();
     assert.equal(snap.guests[0]?.place, 'studio');
@@ -173,7 +172,7 @@ describe('room controller', () => {
   });
 
   it('slots are exclusive, bounded and locked while on the studio side', async () => {
-    const { c } = await roomWithEveryone({ slots: 2, readyRequired: false, ifbAllowed: false });
+    const { c } = await roomWithEveryone({ slots: 2, ifbAllowed: false });
     await c.act({ type: 'admit', guest: A }, PROD);
     await c.act({ type: 'admit', guest: B }, PROD);
     await assert.rejects(c.act({ type: 'slot', guest: A, slot: 3 }, PROD), /1 to 2/);
@@ -214,7 +213,7 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf('studio'), []);
   });
   it('send to studio takes the first free slot and bring back frees it', async () => {
-    const { fake, c } = await roomWithEveryone({ slots: 2, readyRequired: false, ifbAllowed: false });
+    const { fake, c } = await roomWithEveryone({ slots: 2, ifbAllowed: false });
     await c.act({ type: 'admit', guest: A }, PROD);
     await c.act({ type: 'admit', guest: B }, PROD);
     await c.act({ type: 'handoff', guest: A }, PROD);
