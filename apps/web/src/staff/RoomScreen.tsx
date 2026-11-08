@@ -1,51 +1,78 @@
-// /app/producer/:id and /app/engineer/:id — the door, the green room, the studio strip.
+// /app/producer/:id — one PCR: the door, the green room, the studio slots, and the guests seated
+// here with their links (from the contact book or a bare name).
 import type { GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { act, addGuest, ApiError, createInvite, endEpisode, getEpisode, getRoom, joinEpisode, startEpisode, type EpisodeView, type RoomAction, type RoomSnapshot, type User } from '../api.ts';
+import {
+  act,
+  ApiError,
+  createInvite,
+  deleteGuest,
+  getPcr,
+  getRoom,
+  joinPcr,
+  listContacts,
+  seatGuest,
+  type Contact,
+  type PcrView,
+  type RoomAction,
+  type RoomSnapshot,
+  type User,
+} from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
-import { GuestCard } from './GuestCard.tsx';
+import { describeStation, loadStation } from '../lib/station.ts';
+import { LANGUAGES } from './Contacts.tsx';
+import { GuestCard, type Sees } from './GuestCard.tsx';
 import { StaffSession } from './session.ts';
 
-export function RoomScreen({ id, user, engineer }: { id?: string; user: User; engineer: boolean }) {
+export function RoomScreen({ id, user }: { id: string; user: User }) {
   const { route } = useLocation();
   const session = useMemo(() => new StaffSession(), []);
-  const [view, setView] = useState<EpisodeView | null>(null);
+  const [view, setView] = useState<PcrView | null>(null);
   const [snap, setSnap] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [query, setQuery] = useState('');
+  const [found, setFound] = useState<Contact[]>([]);
   const [newGuest, setNewGuest] = useState('');
   const [newLang, setNewLang] = useState('ku');
   const myIdentity = useRef('');
-
-  const episodeId = id ?? '';
+  const station = useMemo(() => describeStation(loadStation()), []);
 
   async function refresh(): Promise<void> {
     try {
-      setView(await getEpisode(episodeId));
+      setView(await getPcr(id));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Server not reachable.');
     }
   }
 
   useEffect(() => {
-    if (!episodeId) return;
     void refresh();
     const poll = setInterval(() => {
-      getRoom(episodeId)
+      getRoom(id)
         .then((r) => setSnap(r.snapshot))
         .catch((err: unknown) => {
           if (err instanceof ApiError && err.status === 409) setError(err.message);
         });
     }, 2000);
     return () => clearInterval(poll);
-  }, [episodeId]);
+  }, [id]);
+
+  useEffect(() => {
+    if (!query.trim()) {
+      setFound([]);
+      return;
+    }
+    const timer = setTimeout(() => void listContacts(query.trim()).then((r) => setFound(r.contacts)).catch(() => setFound([])), 200);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   useEffect(() => () => void session.leave(), [session]);
 
   async function join(): Promise<void> {
     try {
-      const j = await joinEpisode(episodeId);
+      const j = await joinPcr(id);
       myIdentity.current = j.identity;
       setJoined(true);
       await session.connect(j);
@@ -55,7 +82,7 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
   }
 
   function doAction(action: RoomAction): void {
-    act(episodeId, action)
+    act(id, action)
       .then((r) => setSnap(r.snapshot))
       .catch((err: unknown) => setError(err instanceof ApiError ? err.message : String(err)));
   }
@@ -64,7 +91,7 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
   const talkTo = me?.talkTo ?? 'none';
   const talkList = talkTo === 'all' ? null : talkTo === 'none' ? [] : [...talkTo];
 
-  function talk(guest: string, on: boolean): void {
+  function hearMe(guest: string, on: boolean): void {
     let next: 'none' | 'all' | string[];
     if (talkList === null) next = on ? 'all' : 'none';
     else next = on ? [...talkList, guest] : talkList.filter((x) => x !== guest);
@@ -77,19 +104,41 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
     void session.setTalking(on);
   }
 
-  function face(guest: string, on: boolean): void {
-    doAction({ type: 'face', guest: on ? guest : null });
-    void session.setFacing(on);
+  /** What the guest sees in the green room: nothing, the producer's camera, or the studio return. */
+  function see(g: GuestState, mode: Sees): void {
+    const facing = me?.faceTo === g.identity;
+    if (mode === 'me') {
+      doAction({ type: 'face', guest: g.identity });
+      void session.setFacing(true);
+      if (g.program) doAction({ type: 'program', guest: g.identity, on: false });
+      return;
+    }
+    if (facing) {
+      doAction({ type: 'face', guest: null });
+      void session.setFacing(false);
+    }
+    if ((mode === 'studio') !== g.program) doAction({ type: 'program', guest: g.identity, on: mode === 'studio' });
   }
 
-  if (!episodeId) return <p>No episode.</p>;
+  function seat(body: { contactId: string } | { displayName: string; language: string }): void {
+    seatGuest(id, body)
+      .then(({ guest }) => (guest.invites?.length ? undefined : createInvite(guest.id)))
+      .then(() => {
+        setQuery('');
+        setNewGuest('');
+        return refresh();
+      })
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : String(err)));
+  }
+
   if (!view) return <div class="screen center">{error ? <p class="help bad">{error}</p> : <p>Loading…</p>}</div>;
 
+  const settings = view.pcr.settings;
   const guestsByPlace = (place: GuestState['place']) => (snap?.guests ?? []).filter((g) => g.place === place);
   const recordFor = (identity: string) => view.guests.find((g) => g.identity === identity);
   const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
-  const slotsCount = view.settings?.slots ?? 4;
   const audible = session.listening.value ? session.tiles.value.map((t) => t.audio).filter((a): a is NonNullable<typeof a> => a !== null) : [];
+  const seatedIds = new Set(view.guests.map((g) => g.contactId).filter((c): c is string => c !== null));
 
   const card = (g: GuestState) => (
     <GuestCard
@@ -97,18 +146,18 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
       state={g}
       record={recordFor(g.identity)}
       tile={tileFor(g.identity)}
+      report={session.reports.value[g.identity]}
       connected={snap?.connected.includes(g.identity) ?? false}
-      engineer={engineer || user.role === 'admin'}
-      slots={slotsCount}
-      ifbAllowed={view.settings?.ifbAllowed ?? false}
+      outputNames={settings.outputNames}
+      ifbAllowed={settings.ifbAllowed}
       ifb={snap?.ifbOverride.includes(g.identity) ?? false}
-      talkingTo={talkList === null || talkList.includes(g.identity)}
-      facing={me?.faceTo === g.identity}
+      hearsMe={talkList === null || talkList.includes(g.identity)}
+      sees={me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none'}
       hand={session.hands.value[g.identity] === true}
       help={session.helps.value[g.identity] !== undefined}
       onAction={doAction}
-      onTalk={(on) => talk(g.identity, on)}
-      onFace={(on) => face(g.identity, on)}
+      onHearMe={(on) => hearMe(g.identity, on)}
+      onSee={(mode) => see(g, mode)}
       onClearHelp={() => session.clearHelp(g.identity)}
     />
   );
@@ -118,26 +167,16 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
       <header class="row between">
         <div class="row" style={{ alignItems: 'center', gap: '12px' }}>
           <button class="link" onClick={() => route('/app/producer')}>
-            ← programmes
+            ← studios
           </button>
-          <h1>{view.episode.title}</h1>
-          <span class={`badge ${view.episode.status}`}>{view.episode.status}</span>
-          <span class="muted small">{view.episode.livekitRoom}</span>
+          <h1>{view.pcr.name}</h1>
+          <span class="muted small">{view.pcr.livekitRoom}</span>
+          <span class={`badge ${snap?.studioConnected ? 'live' : ''}`}>{snap?.studioConnected ? 'return feed on' : 'no return feed'}</span>
         </div>
         <div class="row" style={{ alignItems: 'center' }}>
-          {view.episode.status === 'planned' && (
-            <button class="btn secondary small" onClick={() => void startEpisode(episodeId).then(refresh)}>
-              Start episode
-            </button>
-          )}
-          {view.episode.status === 'live' && (
-            <button class="btn danger small" onClick={() => void endEpisode(episodeId).then(refresh)}>
-              End episode
-            </button>
-          )}
           {!joined ? (
             <button class="btn" onClick={() => void join()}>
-              Join room as {engineer ? 'engineer' : 'producer'}
+              Join as producer
             </button>
           ) : (
             <>
@@ -158,17 +197,18 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
         </p>
       )}
       {session.error.value && <p class="help">{session.error.value}</p>}
+      {!joined && <p class="help">Join first: without joining you see the states but no pictures, and the guest cannot hear you.</p>}
 
       <section>
         <h2>Studio</h2>
         <div class="slots">
-          {Array.from({ length: slotsCount }, (_, i) => i + 1).map((n) => {
+          {Array.from({ length: settings.slots }, (_, i) => i + 1).map((n) => {
             const g = (snap?.guests ?? []).find((x) => x.slot === n && x.place === 'studio');
             const out = snap?.outputs.find((o) => o.slot === n);
             return (
               <div class={`slot-box ${g ? g.tally : 'empty'}`} key={n}>
                 <div class="slot-head">
-                  slot {n} {out ? <span class="ok">· output connected</span> : <span class="muted">· no output page</span>}
+                  slot {n} · {settings.outputNames[n - 1]} {out ? <span class="ok">· output page connected</span> : <span class="muted">· no output page</span>}
                 </div>
                 {g ? card(g) : <div class="slate-mini">slate</div>}
               </div>
@@ -193,7 +233,7 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
       </section>
 
       <section>
-        <h2>Guest list and links</h2>
+        <h2>Guests and links</h2>
         <ul class="list">
           {view.guests.map((g) => (
             <li key={g.id}>
@@ -211,35 +251,71 @@ export function RoomScreen({ id, user, engineer }: { id?: string; user: User; en
                 </button>
               )}
               {snap?.connected.includes(g.identity) ? <span class="ok"> · online</span> : <span class="muted"> · offline</span>}
+              <button
+                class="link bad"
+                onClick={() => {
+                  if (confirm(`Remove ${g.displayName} and their link from this studio?`)) void deleteGuest(g.id).then(refresh);
+                }}
+              >
+                remove
+              </button>
             </li>
           ))}
+          {view.guests.length === 0 && <li class="muted">No guest seated yet.</li>}
         </ul>
+
+        <h3 style={{ margin: '16px 0 6px' }}>Invite from the contact book</h3>
+        <div class="row">
+          <input placeholder="Search a contact…" value={query} onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)} />
+          <a class="btn secondary small" href="/app/contacts">
+            Open contact book
+          </a>
+        </div>
+        {found.length > 0 && (
+          <ul class="list results">
+            {found.map((c) => (
+              <li key={c.id}>
+                <strong>{c.displayName}</strong>
+                <span class="muted small">
+                  {[c.phone, c.whatsapp && `WhatsApp ${c.whatsapp}`, c.telegram && `Telegram ${c.telegram}`, c.skype && `Skype ${c.skype}`].filter(Boolean).join(' · ') || 'no contact details'}
+                </span>
+                {seatedIds.has(c.id) ? (
+                  <span class="ok">already seated</span>
+                ) : (
+                  <button class="btn secondary small" onClick={() => seat({ contactId: c.id })}>
+                    Seat and make link
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <h3 style={{ margin: '16px 0 6px' }}>Or a one-off guest</h3>
         <form
           class="row"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!newGuest.trim()) return;
-            void addGuest(episodeId, newGuest.trim(), newLang)
-              .then(({ guest }) => createInvite(guest.id))
-              .then(() => {
-                setNewGuest('');
-                return refresh();
-              })
-              .catch((err: unknown) => setError(err instanceof ApiError ? err.message : String(err)));
+            if (newGuest.trim()) seat({ displayName: newGuest.trim(), language: newLang });
           }}
         >
           <input placeholder="Guest name" value={newGuest} onInput={(e) => setNewGuest((e.currentTarget as HTMLInputElement).value)} />
           <select value={newLang} onChange={(e) => setNewLang((e.currentTarget as HTMLSelectElement).value)}>
-            <option value="ku">Kurdî (Kurmancî)</option>
-            <option value="ckb">کوردی (سۆرانی)</option>
-            <option value="ar">العربية</option>
-            <option value="en">English</option>
+            {LANGUAGES.map(([code, label]) => (
+              <option value={code} key={code}>
+                {label}
+              </option>
+            ))}
           </select>
           <button class="btn secondary" type="submit">
-            Add guest and link
+            Seat and make link
           </button>
         </form>
       </section>
+
+      <p class="muted small">
+        {user.name}: this PC uses {station}. Output pages for this studio run on the studio PC; the admin has the links.
+      </p>
 
       {session.localVideo.value && <VideoView track={session.localVideo.value} className="pip" mirror />}
       <AudioSinks tracks={audible} />

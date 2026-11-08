@@ -1,13 +1,13 @@
 // Entry point: configuration, database, LiveKit control, HTTP server, graceful stop.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { RoomServiceClient } from 'livekit-server-sdk';
 import { buildApp } from './app.ts';
 import { purgeExpiredSessions } from './auth/sessions.ts';
 import { loadConfig } from './config.ts';
 import { connectDb } from './db/client.ts';
-import { episodes, events, programs } from './db/schema.ts';
+import { events, pcrs } from './db/schema.ts';
 import { RoomRegistry, type RoomSettings } from './rooms/controller.ts';
 import { LiveKitRoomControl } from './rooms/livekit-control.ts';
 
@@ -18,12 +18,11 @@ const { db, close } = connectDb(cfg.DATABASE_URL);
 const livekitHttp = cfg.LIVEKIT_URL.replace(/^ws/, 'http');
 const control = new LiveKitRoomControl(new RoomServiceClient(livekitHttp, cfg.LIVEKIT_API_KEY, cfg.LIVEKIT_API_SECRET));
 
-async function episodeFor(room: string) {
+async function pcrFor(room: string) {
   const [row] = await db
-    .select({ id: episodes.id, settings: programs.settings })
-    .from(episodes)
-    .innerJoin(programs, eq(episodes.programId, programs.id))
-    .where(and(eq(episodes.livekitRoom, room), ne(episodes.status, 'ended')))
+    .select({ id: pcrs.id, settings: pcrs.settings })
+    .from(pcrs)
+    .where(and(eq(pcrs.livekitRoom, room), isNull(pcrs.archivedAt)))
     .limit(1);
   return row;
 }
@@ -31,12 +30,12 @@ async function episodeFor(room: string) {
 const rooms = new RoomRegistry(
   control,
   async (room): Promise<RoomSettings | null> => {
-    const row = await episodeFor(room);
+    const row = await pcrFor(room);
     return row ? { slots: row.settings.slots, readyRequired: row.settings.readyRequired, ifbAllowed: row.settings.ifbAllowed } : null;
   },
   (room) => (type, actor, payload) => {
-    void episodeFor(room)
-      .then((row) => (row ? db.insert(events).values({ episodeId: row.id, actor, type, payload }) : undefined))
+    void pcrFor(room)
+      .then((row) => (row ? db.insert(events).values({ pcrId: row.id, actor, type, payload }) : undefined))
       .catch((err: unknown) => app.log.warn({ err, room, type }, 'event not recorded'));
   },
 );

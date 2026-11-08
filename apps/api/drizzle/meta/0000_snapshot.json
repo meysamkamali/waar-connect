@@ -1,11 +1,11 @@
 {
-  "id": "8241a480-407f-4ad6-b829-f4586801207d",
+  "id": "e4dc91ee-7996-449c-baf1-d701a366a276",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.episodes": {
-      "name": "episodes",
+    "public.contacts": {
+      "name": "contacts",
       "schema": "",
       "columns": {
         "id": {
@@ -15,49 +15,73 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "program_id": {
-          "name": "program_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "title": {
-          "name": "title",
+        "display_name": {
+          "name": "display_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp with time zone",
+        "caspar_name": {
+          "name": "caspar_name",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "status": {
-          "name": "status",
-          "type": "episode_status",
-          "typeSchema": "public",
+        "language": {
+          "name": "language",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'planned'"
+          "default": "'ku'"
         },
-        "livekit_room": {
-          "name": "livekit_room",
+        "phone": {
+          "name": "phone",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "started_at": {
-          "name": "started_at",
-          "type": "timestamp with time zone",
+        "whatsapp": {
+          "name": "whatsapp",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "ended_at": {
-          "name": "ended_at",
-          "type": "timestamp with time zone",
+        "telegram": {
+          "name": "telegram",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "skype": {
+          "name": "skype",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "other": {
+          "name": "other",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         },
         "created_at": {
           "name": "created_at",
@@ -67,48 +91,10 @@
           "default": "now()"
         }
       },
-      "indexes": {
-        "episodes_program_idx": {
-          "name": "episodes_program_idx",
-          "columns": [
-            {
-              "expression": "program_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "episodes_program_id_programs_id_fk": {
-          "name": "episodes_program_id_programs_id_fk",
-          "tableFrom": "episodes",
-          "tableTo": "programs",
-          "columnsFrom": [
-            "program_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "indexes": {},
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "episodes_livekit_room_unique": {
-          "name": "episodes_livekit_room_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "livekit_room"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -124,8 +110,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "episode_id": {
-          "name": "episode_id",
+        "pcr_id": {
+          "name": "pcr_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -157,11 +143,11 @@
         }
       },
       "indexes": {
-        "events_episode_at_idx": {
-          "name": "events_episode_at_idx",
+        "events_pcr_at_idx": {
+          "name": "events_pcr_at_idx",
           "columns": [
             {
-              "expression": "episode_id",
+              "expression": "pcr_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -180,12 +166,12 @@
         }
       },
       "foreignKeys": {
-        "events_episode_id_episodes_id_fk": {
-          "name": "events_episode_id_episodes_id_fk",
+        "events_pcr_id_pcrs_id_fk": {
+          "name": "events_pcr_id_pcrs_id_fk",
           "tableFrom": "events",
-          "tableTo": "episodes",
+          "tableTo": "pcrs",
           "columnsFrom": [
-            "episode_id"
+            "pcr_id"
           ],
           "columnsTo": [
             "id"
@@ -211,11 +197,17 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "episode_id": {
-          "name": "episode_id",
+        "pcr_id": {
+          "name": "pcr_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "contact_id": {
+          "name": "contact_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "display_name": {
           "name": "display_name",
@@ -223,30 +215,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "caspar_name": {
-          "name": "caspar_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "language": {
           "name": "language",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'ku'"
-        },
-        "phone": {
-          "name": "phone",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notes": {
-          "name": "notes",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "created_at": {
           "name": "created_at",
@@ -257,11 +231,26 @@
         }
       },
       "indexes": {
-        "guests_episode_idx": {
-          "name": "guests_episode_idx",
+        "guests_pcr_idx": {
+          "name": "guests_pcr_idx",
           "columns": [
             {
-              "expression": "episode_id",
+              "expression": "pcr_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "guests_contact_idx": {
+          "name": "guests_contact_idx",
+          "columns": [
+            {
+              "expression": "contact_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -274,17 +263,30 @@
         }
       },
       "foreignKeys": {
-        "guests_episode_id_episodes_id_fk": {
-          "name": "guests_episode_id_episodes_id_fk",
+        "guests_pcr_id_pcrs_id_fk": {
+          "name": "guests_pcr_id_pcrs_id_fk",
           "tableFrom": "guests",
-          "tableTo": "episodes",
+          "tableTo": "pcrs",
           "columnsFrom": [
-            "episode_id"
+            "pcr_id"
           ],
           "columnsTo": [
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "guests_contact_id_contacts_id_fk": {
+          "name": "guests_contact_id_contacts_id_fk",
+          "tableFrom": "guests",
+          "tableTo": "contacts",
+          "columnsFrom": [
+            "contact_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -388,8 +390,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.programs": {
-      "name": "programs",
+    "public.pcrs": {
+      "name": "pcrs",
       "schema": "",
       "columns": {
         "id": {
@@ -411,6 +413,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "livekit_room": {
+          "name": "livekit_room",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "archived_at": {
           "name": "archived_at",
           "type": "timestamp with time zone",
@@ -428,7 +436,15 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "pcrs_livekit_room_unique": {
+          "name": "pcrs_livekit_room_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "livekit_room"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -522,78 +538,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.slots": {
-      "name": "slots",
-      "schema": "",
-      "columns": {
-        "episode_id": {
-          "name": "episode_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "number": {
-          "name": "number",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "guest_id": {
-          "name": "guest_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "output_name": {
-          "name": "output_name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "slots_episode_id_episodes_id_fk": {
-          "name": "slots_episode_id_episodes_id_fk",
-          "tableFrom": "slots",
-          "tableTo": "episodes",
-          "columnsFrom": [
-            "episode_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "slots_guest_id_guests_id_fk": {
-          "name": "slots_guest_id_guests_id_fk",
-          "tableFrom": "slots",
-          "tableTo": "guests",
-          "columnsFrom": [
-            "guest_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "slots_episode_id_number_pk": {
-          "name": "slots_episode_id_number_pk",
-          "columns": [
-            "episode_id",
-            "number"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.stats_samples": {
       "name": "stats_samples",
       "schema": "",
@@ -605,8 +549,8 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "episode_id": {
-          "name": "episode_id",
+        "pcr_id": {
+          "name": "pcr_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
@@ -674,11 +618,11 @@
         }
       },
       "indexes": {
-        "stats_episode_identity_at_idx": {
-          "name": "stats_episode_identity_at_idx",
+        "stats_pcr_identity_at_idx": {
+          "name": "stats_pcr_identity_at_idx",
           "columns": [
             {
-              "expression": "episode_id",
+              "expression": "pcr_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -703,12 +647,12 @@
         }
       },
       "foreignKeys": {
-        "stats_samples_episode_id_episodes_id_fk": {
-          "name": "stats_samples_episode_id_episodes_id_fk",
+        "stats_samples_pcr_id_pcrs_id_fk": {
+          "name": "stats_samples_pcr_id_pcrs_id_fk",
           "tableFrom": "stats_samples",
-          "tableTo": "episodes",
+          "tableTo": "pcrs",
           "columnsFrom": [
-            "episode_id"
+            "pcr_id"
           ],
           "columnsTo": [
             "id"
@@ -791,15 +735,6 @@
     }
   },
   "enums": {
-    "public.episode_status": {
-      "name": "episode_status",
-      "schema": "public",
-      "values": [
-        "planned",
-        "live",
-        "ended"
-      ]
-    },
     "public.user_role": {
       "name": "user_role",
       "schema": "public",

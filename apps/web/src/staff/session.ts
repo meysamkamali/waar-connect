@@ -23,7 +23,9 @@ import {
   type Room,
 } from 'livekit-client';
 import type { StaffJoin } from '../api.ts';
+import type { GuestReport } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel } from '../lib/room.ts';
+import { loadStation, resolveDeviceId } from '../lib/station.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 
 export interface StaffTile {
@@ -44,6 +46,8 @@ export class StaffSession {
   readonly tiles = signal<StaffTile[]>([]);
   readonly hands = signal<Record<string, boolean>>({});
   readonly helps = signal<Record<string, number>>({});
+  /** What each guest's phone last said about itself (wc.report). */
+  readonly reports = signal<Record<string, GuestReport>>({});
   readonly talking = signal(false);
   readonly facing = signal(false);
   readonly listening = signal(true);
@@ -92,6 +96,7 @@ export class StaffSession {
         }
         if (topic === 'wc.hand') this.hands.value = { ...this.hands.value, [p.identity]: msg['on'] === true };
         if (topic === 'wc.help') this.helps.value = { ...this.helps.value, [p.identity]: Date.now() };
+        if (topic === 'wc.report') this.reports.value = { ...this.reports.value, [p.identity]: msg as unknown as GuestReport };
       });
   }
 
@@ -100,13 +105,17 @@ export class StaffSession {
     this.status.value = 'connecting';
     await connectRoom(this.room, join.url, join.token, false);
     for (const p of this.room.remoteParticipants.values()) this.#ensureTile(p);
+    // Devices come from the admin's station lock on this PC; the producer has no picker.
+    const station = loadStation();
+    const micId = await resolveDeviceId('audioinput', station?.mic ?? null);
+    const camId = await resolveDeviceId('videoinput', station?.camera ?? null);
     // Talk track: published muted; "talk" unmutes it. The server names who may subscribe.
-    this.#talk = await createLocalAudioTrack({ echoCancellation: true, noiseSuppression: true, autoGainControl: true });
+    this.#talk = await createLocalAudioTrack({ ...(micId ? { deviceId: micId } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true });
     await this.#talk.mute();
     await this.room.localParticipant.publishTrack(this.#talk, { name: 'talkback', source: Track.Source.Microphone, dtx: false, red: true });
     // Face camera: published muted; "face to face" unmutes it for one guest.
     try {
-      this.#cam = await createLocalVideoTrack({ facingMode: 'user', resolution: { width: 640, height: 360, frameRate: 25 } });
+      this.#cam = await createLocalVideoTrack({ ...(camId ? { deviceId: camId } : { facingMode: 'user' }), resolution: { width: 640, height: 360, frameRate: 25 } });
       await this.#cam.mute();
       await this.room.localParticipant.publishTrack(this.#cam, { name: 'face', source: Track.Source.Camera, simulcast: false, videoEncoding: { maxBitrate: 600_000, maxFramerate: 25 } });
       this.localVideo.value = this.#cam;

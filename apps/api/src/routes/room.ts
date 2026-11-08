@@ -1,9 +1,11 @@
-// Live room: snapshot for the producer and engineer screens, and the green-room actions.
+// Live room of a PCR: snapshot for the producer and engineer screens, and the green-room actions.
+// Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
+
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { identityFor } from '@waar-connect/shared';
 import { z } from 'zod';
-import { episodes } from '../db/schema.ts';
+import { pcrs } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
 import { ActionError, type RoomAction } from '../rooms/controller.ts';
 
@@ -32,33 +34,30 @@ export async function roomRoutes(app: FastifyInstance): Promise<void> {
   const { db, rooms } = app.ctx;
   const staff = app.requireRole('admin', 'producer', 'engineer');
 
-  async function controllerFor(episodeId: string) {
-    const [episode] = await db.select().from(episodes).where(eq(episodes.id, episodeId)).limit(1);
-    if (!episode) return { episode: undefined, controller: null };
-    return { episode, controller: await rooms.get(episode.livekitRoom) };
+  async function controllerFor(pcrId: string) {
+    const [pcr] = await db.select().from(pcrs).where(eq(pcrs.id, pcrId)).limit(1);
+    if (!pcr) return { pcr: undefined, controller: null };
+    return { pcr, controller: pcr.archivedAt ? null : await rooms.get(pcr.livekitRoom) };
   }
 
-  app.get('/episodes/:id/room', { preHandler: staff }, async (req, reply) => {
+  app.get('/pcrs/:id/room', { preHandler: staff }, async (req, reply) => {
     const params = parseOr400(Id, req.params, reply);
     if (!params) return;
-    const { episode, controller } = await controllerFor(params.id);
-    if (!episode) return notFound(reply, 'Episode');
-    if (!controller) return reply.code(409).send({ error: 'This episode has ended; its room is closed.' });
+    const { pcr, controller } = await controllerFor(params.id);
+    if (!pcr) return notFound(reply, 'PCR');
+    if (!controller) return reply.code(409).send({ error: 'This studio is closed.' });
     return { snapshot: controller.snapshot() };
   });
 
-  app.post('/episodes/:id/room/actions', { preHandler: staff }, async (req, reply) => {
+  app.post('/pcrs/:id/room/actions', { preHandler: staff }, async (req, reply) => {
     const params = parseOr400(Id, req.params, reply);
     const body = params && parseOr400(Action, req.body, reply);
     if (!params || !body) return;
-    const { episode, controller } = await controllerFor(params.id);
-    if (!episode) return notFound(reply, 'Episode');
-    if (!controller) return reply.code(409).send({ error: 'This episode has ended; its room is closed.' });
+    const { pcr, controller } = await controllerFor(params.id);
+    if (!pcr) return notFound(reply, 'PCR');
+    if (!controller) return reply.code(409).send({ error: 'This studio is closed.' });
 
     const user = req.user!;
-    if (body.type === 'ready' && user.role === 'producer') return reply.code(403).send({ error: 'Only an engineer marks a guest ready.' });
-    if (body.type === 'ifb' && user.role === 'producer') return reply.code(403).send({ error: 'Only an engineer uses the IFB override.' });
-
     const staffIdentity = identityFor(user.role === 'engineer' ? 'engineer' : 'producer', user.id);
     const action: RoomAction =
       body.type === 'talk' ? { type: 'talk', staff: staffIdentity, to: body.to } : body.type === 'face' ? { type: 'face', staff: staffIdentity, guest: body.guest } : body;

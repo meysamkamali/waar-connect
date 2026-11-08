@@ -91,7 +91,7 @@ export function DeviceCheck({ info, onJoin }: { info: JoinInfo; onJoin: (devices
       <div class="card wide">
         <div class="row between">
           <img class="logo" src="/app/logo.svg" alt="" />
-          <div class="muted">{info.episode.program} · {info.episode.title}</div>
+          <div class="muted">{info.pcr.name}</div>
         </div>
         <h1>{t('checkTitle')}</h1>
         <div class="preview">

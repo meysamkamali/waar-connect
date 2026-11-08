@@ -1,8 +1,10 @@
 // LiveKit webhooks: every room event is recorded, and the live ones drive the room controller.
+// Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
+
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { WebhookReceiver } from 'livekit-server-sdk';
-import { episodes, events } from '../db/schema.ts';
+import { events, pcrs } from '../db/schema.ts';
 
 export async function livekitRoutes(app: FastifyInstance): Promise<void> {
   const { db, cfg, rooms } = app.ctx;
@@ -18,9 +20,9 @@ export async function livekitRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const roomName = event.room?.name;
-    const [episode] = roomName ? await db.select({ id: episodes.id }).from(episodes).where(eq(episodes.livekitRoom, roomName)).limit(1) : [];
+    const [pcr] = roomName ? await db.select({ id: pcrs.id }).from(pcrs).where(eq(pcrs.livekitRoom, roomName)).limit(1) : [];
     await db.insert(events).values({
-      episodeId: episode?.id ?? null,
+      pcrId: pcr?.id ?? null,
       actor: 'livekit',
       type: `livekit.${event.event}`,
       payload: {
@@ -32,7 +34,7 @@ export async function livekitRoutes(app: FastifyInstance): Promise<void> {
 
     // Answer LiveKit at once; the controller work continues in the background.
     void reply.send({ ok: true });
-    if (!roomName || !episode) return;
+    if (!roomName || !pcr) return;
 
     try {
       if (event.event === 'room_finished') {

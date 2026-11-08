@@ -8,11 +8,11 @@ import { SESSION_COOKIE, userForSession, type SessionUser } from './auth/session
 import type { Config } from './config.ts';
 import type { Db } from './db/client.ts';
 import { authRoutes } from './routes/auth.ts';
-import { episodeRoutes } from './routes/episodes.ts';
+import { contactRoutes } from './routes/contacts.ts';
 import { guestRoutes } from './routes/guests.ts';
 import { inviteRoutes } from './routes/invite.ts';
 import { livekitRoutes } from './routes/livekit.ts';
-import { programRoutes } from './routes/programs.ts';
+import { pcrRoutes } from './routes/pcrs.ts';
 import { roomRoutes } from './routes/room.ts';
 import type { RoomRegistry } from './rooms/controller.ts';
 
@@ -79,8 +79,8 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   app.get('/api/v1/health', async () => ({ ok: true, livekitUrl: ctx.cfg.LIVEKIT_URL, openAccess: ctx.cfg.openAccess }));
 
   await app.register(authRoutes, { prefix: '/api/v1' });
-  await app.register(programRoutes, { prefix: '/api/v1' });
-  await app.register(episodeRoutes, { prefix: '/api/v1' });
+  await app.register(pcrRoutes, { prefix: '/api/v1' });
+  await app.register(contactRoutes, { prefix: '/api/v1' });
   await app.register(guestRoutes, { prefix: '/api/v1' });
   await app.register(inviteRoutes, { prefix: '/api/v1' });
   await app.register(roomRoutes, { prefix: '/api/v1' });

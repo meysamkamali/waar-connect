@@ -288,9 +288,15 @@ export class RoomController {
       }
       case 'handoff': {
         const g = this.#guest(action.guest);
-        if (g.place !== 'green') throw new ActionError('Only a guest in the green room can be handed off.');
-        if (g.slot === null) throw new ActionError('Assign a slot first.');
+        if (g.place !== 'green') throw new ActionError('Only a guest in the green room can be sent to the studio.');
         if (this.settings.readyRequired && !g.ready) throw new ActionError('The engineer has not marked this guest ready.');
+        if (g.slot === null) {
+          // No slot chosen (the normal case): the first one no guest holds.
+          const taken = new Set([...this.#guests.values()].filter((o) => o !== g).map((o) => o.slot));
+          const free = Array.from({ length: this.settings.slots }, (_, i) => i + 1).find((n) => !taken.has(n));
+          if (free === undefined) throw new ActionError(`All ${this.settings.slots} slots are taken.`);
+          g.slot = free;
+        }
         for (const other of this.#guests.values()) {
           if (other !== g && other.place === 'studio' && other.slot === g.slot) throw new ActionError(`Slot ${g.slot} is still occupied by ${other.identity}.`);
         }
@@ -309,6 +315,7 @@ export class RoomController {
         const g = this.#guest(action.guest);
         this.#move(g, ['studio'], 'green', 'Bring back');
         g.tally = 'off';
+        g.slot = null; // the slot is free for the next guest; sending again picks the first free one
         this.#ifb.delete(g.identity);
         return;
       }

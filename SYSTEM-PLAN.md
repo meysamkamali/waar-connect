@@ -24,13 +24,26 @@ brings them back and the green room opens again.
 | Role | Where they are | What they can do |
 |---|---|---|
 | **Guest** | one place at a time | Send camera and microphone. Receive program picture, studio mix-minus, tally, text cues, and in the green room the voices and faces of producer and engineer. Mute self, raise hand, ask for help. Nothing else: all settings are done for them. |
-| **Producer** | green room, with a window on the studio | Create the episode, make one link per guest, see who is at the door, preview and admit, video-chat with any guest, let chosen guests talk to each other, give them the program picture or studio sound, assign a studio slot, hand off to the studio, bring back, send cues, end the episode. |
+| **Producer** | sits in a PCR (green room, with a window on the studio) | Keep the guest contact book (phone, WhatsApp, Telegram, Skype, email), seat a contact in the PCR and make their link, see who is at the door, receive them into the green room, choose what the guest sees (nothing, the producer's camera, the studio return) and hears (the producer, the studio mix-minus), let chosen guests talk to each other, assign a studio slot, send to the studio, bring back, send cues. Cannot change which camera or microphone the PC uses. |
 | **Engineer** | green room, with a window on the studio | Everything the producer sees, plus the connection detail of every guest, test tools, remote settings on the guest's device, and a separate talk button that works at the same time as the producer's. Marks a guest **ready**; the hand-off needs that mark. |
 | **Studio** (vision mixer operator) | studio | Sees each studio slot on its own SDI or NDI input plus the multiview. Sets ON AIR tally (manual in phase 1, from the mixer in phase 2). Does not talk to guests. |
-| **Admin** | — | Users, roles, programs, output slots, CasparCG and mixer settings. |
+| **Admin** | — | Builds the PCRs (studios) with their output slots and names, locks the hardware of every PC (which camera, microphone and capture inputs each station uses), users and roles, CasparCG and mixer settings later. |
 
 Producer and engineer are two roles, not two people by necessity. A small show can run with one person
-holding both, and the hand-off rule "engineer must mark ready" is a per-program setting.
+holding both, and the hand-off rule "engineer must mark ready" is a per-PCR setting.
+
+**Decided 2026-11-08:** there are no programmes or episodes. The admin builds **PCRs** (production
+control rooms, "studios"); each is a standing place with its own door, green room, studio slots and
+LiveKit room. A producer sits in a PCR and brings guests to it. Guests live in a **contact book** the
+producer edits; seating a contact in a PCR makes the invite link. The studio return (program picture
+with the mix-minus on it) is published from the studio PC by the **return feed page**; each slot has an
+**output page** on the studio PC for now, NDI or SDI output later from the same place.
+
+**Decided 2026-11-08 (later the same day):** no engineer screen and no engineer approval for now;
+the producer does it all, including the connection check and the settings of the guest's phone
+(picture size, frame rate, bitrate cap, codec, relay, front/back camera, voice processing, mute,
+reload). No tables in the green room. No slot choice: "send to studio" takes the first free slot,
+"bring back" frees it. The engineer role stays in the API for a later phase.
 
 ## The places
 
@@ -122,11 +135,14 @@ One layout for every place, so nothing jumps around:
 
 ## Producer's screen
 
-- Episode list, and inside an episode: the door (waiting guests), the green room grid, the studio strip
-  with the N slots, and the program picture small.
-- Link maker: name, language, expiry, one tap to copy or share by WhatsApp with a QR code.
-- Per-guest card with the green-room controls listed above.
-- Own camera and microphone with a self-check; a "talk to all" button; "studio sound to all".
+- The list of PCRs the admin built; inside one: the door (waiting guests), the green room grid, the
+  studio strip with the N slots (each named after its output), and whether the return feed is on.
+- Guests and links: seat a contact from the contact book (search by name, number or handle) or a one-off
+  name, copy the link, send it over WhatsApp or Telegram from the contact's details, remove the seat.
+- Per-guest card in the green room: **guest sees** nothing / me / studio, **guest hears** me / studio,
+  table, slot, send to studio; in the studio: stand by, on air, bring back; cues everywhere.
+- A "talk to all" button and a sound on/off for the producer's own monitoring.
+- No device pickers: the admin locks the camera, microphone and capture inputs per PC ("This station").
 
 ## Engineer's toolkit
 
@@ -193,11 +209,13 @@ The engineer's screen is the producer's screen plus a detail panel per guest:
   `waar.work` whichever web domain the guest used.
 - The studio gateway PC needs a wired line to the internet with priority on the station router.
 
-## Data model (first cut)
+## Data model (since 2026-11-08)
 
-Program · Episode (status, LiveKit room, slots) · Guest (name, on-screen name for CasparCG, language,
-phone or WhatsApp, notes) · Invite (token, expiry, uses) · Slot (number, output, current guest) ·
-Event log (who did what, when) · Stats sample · User (role).
+PCR (name, settings: slots, output names, ready required, IFB allowed, languages; LiveKit room) ·
+Contact (name, on-screen name for CasparCG, language, phone, WhatsApp, Telegram, Skype, email, other,
+notes) · Guest = a contact (or a bare name) seated in a PCR · Invite (token, expiry, uses) ·
+Event log (who did what, when) · Stats sample · User (role). The station lock (which devices a PC
+uses) lives in that PC's browser, set by the admin.
 
 ## What phase 1 builds from this plan
 

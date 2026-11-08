@@ -15,13 +15,17 @@ async function readJson<T>(res: Response): Promise<T> {
   return data;
 }
 
-// Test phase without passwords: the API serves the screen as producer or engineer by this header.
-const roleHeader = (): string => (location.pathname.startsWith('/app/engineer') ? 'engineer' : 'producer');
+// Test phase without passwords: the API serves the screen by the role in this header, taken from the path.
+export function roleFromPath(path: string = location.pathname): 'producer' | 'engineer' | 'admin' {
+  if (path.startsWith('/app/engineer')) return 'engineer';
+  if (path.startsWith('/app/admin')) return 'admin';
+  return 'producer';
+}
 
 function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   return fetch(`/api/v1${path}`, {
     method,
-    headers: { 'x-wc-role': roleHeader(), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+    headers: { 'x-wc-role': roleFromPath(), ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   }).then((r) => readJson<T>(r));
 }
@@ -30,7 +34,7 @@ function call<T>(method: string, path: string, body?: unknown): Promise<T> {
 
 export interface JoinInfo {
   guest: { id: string; displayName: string; language: string };
-  episode: { id: string; title: string; status: 'planned' | 'live' | 'ended'; program: string };
+  pcr: { id: string; name: string };
   livekit: { url: string; token: string; identity: string };
 }
 
@@ -65,26 +69,37 @@ export interface User {
   role: UserRole;
 }
 
-export interface ProgramSettings {
+export interface PcrSettings {
   slots: number;
   readyRequired: boolean;
   ifbAllowed: boolean;
   languages: string[];
+  outputNames: string[];
 }
-export interface Program {
+export interface Pcr {
   id: string;
   name: string;
-  settings: ProgramSettings;
-}
-export interface Episode {
-  id: string;
-  programId: string;
-  title: string;
-  status: 'planned' | 'live' | 'ended';
+  settings: PcrSettings;
   livekitRoom: string;
-  startsAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
 }
+export interface Contact {
+  id: string;
+  displayName: string;
+  casparName: string | null;
+  language: string;
+  phone: string | null;
+  whatsapp: string | null;
+  telegram: string | null;
+  skype: string | null;
+  email: string | null;
+  other: string | null;
+  notes: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+export type ContactInput = Partial<Omit<Contact, 'id' | 'updatedAt' | 'createdAt'>> & { displayName: string };
 export interface Invite {
   token: string;
   url: string;
@@ -94,24 +109,16 @@ export interface Invite {
 }
 export interface GuestRecord {
   id: string;
+  pcrId: string;
+  contactId: string | null;
   identity: string;
   displayName: string;
-  casparName: string | null;
   language: string;
-  phone: string | null;
-  notes: string | null;
   invites: Invite[];
 }
-export interface Slot {
-  number: number;
-  guestId: string | null;
-  outputName: string | null;
-}
-export interface EpisodeView {
-  episode: Episode;
-  settings: ProgramSettings | null;
+export interface PcrView {
+  pcr: Pcr;
   guests: GuestRecord[];
-  slots: Slot[];
 }
 export interface RoomSnapshot {
   room: string;
@@ -130,6 +137,13 @@ export interface StaffJoin {
   identity: string;
   room: string;
   role: 'producer' | 'engineer';
+}
+export interface KioskToken {
+  url: string;
+  token: string;
+  identity: string;
+  room: string;
+  pcrName: string;
 }
 
 export type RoomAction =
@@ -152,17 +166,26 @@ export type RoomAction =
 export const login = (email: string, password: string) => call<{ user: User }>('POST', '/auth/login', { email, password });
 export const logout = () => call<{ ok: true }>('POST', '/auth/logout');
 export const me = () => call<{ user: User; open?: boolean }>('GET', '/me');
-export const listPrograms = () => call<{ programs: Program[] }>('GET', '/programs');
-export const getProgram = (id: string) => call<{ program: Program; episodes: Episode[] }>('GET', `/programs/${id}`);
-export const createProgram = (name: string) => call<{ program: Program }>('POST', '/programs', { name });
-export const createEpisode = (programId: string, title: string) => call<{ episode: Episode }>('POST', `/programs/${programId}/episodes`, { title });
-export const getEpisode = (id: string) => call<EpisodeView>('GET', `/episodes/${id}`);
-export const startEpisode = (id: string) => call<{ episode: Episode }>('POST', `/episodes/${id}/start`);
-export const endEpisode = (id: string) => call<{ episode: Episode }>('POST', `/episodes/${id}/end`);
-export const addGuest = (episodeId: string, displayName: string, language: string) => call<{ guest: GuestRecord }>('POST', `/episodes/${episodeId}/guests`, { displayName, language });
+
+export const listPcrs = () => call<{ pcrs: Pcr[] }>('GET', '/pcrs');
+export const getPcr = (id: string) => call<PcrView>('GET', `/pcrs/${id}`);
+export const createPcr = (name: string, settings?: Partial<PcrSettings>) => call<{ pcr: Pcr }>('POST', '/pcrs', { name, settings });
+export const updatePcr = (id: string, patch: { name?: string; settings?: Partial<PcrSettings> }) => call<{ pcr: Pcr }>('PATCH', `/pcrs/${id}`, patch);
+export const archivePcr = (id: string) => call<{ pcr: Pcr }>('POST', `/pcrs/${id}/archive`);
+
+export const listContacts = (q = '') => call<{ contacts: Contact[] }>('GET', `/contacts${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const createContact = (input: ContactInput) => call<{ contact: Contact }>('POST', '/contacts', input);
+export const updateContact = (id: string, patch: Partial<ContactInput>) => call<{ contact: Contact }>('PATCH', `/contacts/${id}`, patch);
+export const deleteContact = (id: string) => call<{ ok: true }>('DELETE', `/contacts/${id}`);
+
+export const seatGuest = (pcrId: string, body: { contactId: string } | { displayName: string; language: string }) =>
+  call<{ guest: GuestRecord; existing: boolean }>('POST', `/pcrs/${pcrId}/guests`, body);
 export const deleteGuest = (guestId: string) => call<{ ok: true }>('DELETE', `/guests/${guestId}`);
-export const createInvite = (guestId: string) => call<Invite & { token: string }>('POST', `/guests/${guestId}/invite`, {});
-export const joinEpisode = (id: string) => call<StaffJoin>('POST', `/episodes/${id}/join`);
-export const getRoom = (id: string) => call<{ snapshot: RoomSnapshot }>('GET', `/episodes/${id}/room`);
-export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnapshot }>('POST', `/episodes/${id}/room/actions`, action);
-export const outputToken = (id: string, slot: number) => call<{ url: string; token: string; identity: string; room: string; slot: number }>('POST', `/episodes/${id}/outputs/${slot}/token`);
+export const createInvite = (guestId: string) => call<Invite>('POST', `/guests/${guestId}/invite`, {});
+export const revokeInvite = (token: string) => call<{ ok: true }>('POST', `/invites/${encodeURIComponent(token)}/revoke`);
+
+export const joinPcr = (id: string) => call<StaffJoin>('POST', `/pcrs/${id}/join`);
+export const getRoom = (id: string) => call<{ snapshot: RoomSnapshot }>('GET', `/pcrs/${id}/room`);
+export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnapshot }>('POST', `/pcrs/${id}/room/actions`, action);
+export const outputToken = (id: string, slot: number) => call<KioskToken & { slot: number; name: string }>('POST', `/pcrs/${id}/outputs/${slot}/token`);
+export const studioToken = (id: string) => call<KioskToken>('POST', `/pcrs/${id}/studio-token`);

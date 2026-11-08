@@ -213,4 +213,21 @@ describe('room controller', () => {
     for (const id of [OUT1, 'studio', 'monitor:m']) for (const sid of fake.subsOf(id)) assert.ok(!sid.endsWith('talk'), `${id} got ${sid}`);
     assert.deepEqual(fake.subsOf('studio'), []);
   });
+  it('send to studio takes the first free slot and bring back frees it', async () => {
+    const { fake, c } = await roomWithEveryone({ slots: 2, readyRequired: false, ifbAllowed: false });
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await c.act({ type: 'admit', guest: B }, PROD);
+    await c.act({ type: 'handoff', guest: A }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.slot, 1);
+    assert.deepEqual(fake.subsOf(OUT1), ['a-cam', 'a-mic']);
+    await c.act({ type: 'handoff', guest: B }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === B)?.slot, 2);
+    await c.act({ type: 'bringBack', guest: A }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.slot, null);
+    await c.onParticipantJoined(join('guest:c', [track('c-cam', TrackSource.CAMERA)]));
+    await c.act({ type: 'admit', guest: 'guest:c' }, PROD);
+    await c.act({ type: 'handoff', guest: 'guest:c' }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === 'guest:c')?.slot, 1);
+    await assert.rejects(c.act({ type: 'handoff', guest: A }, PROD), /slots are taken/);
+  });
 });

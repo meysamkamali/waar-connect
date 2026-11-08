@@ -1,10 +1,14 @@
 // Database schema (Postgres, Drizzle). Column names are explicit; migrations live in ../../drizzle.
+//
+// Model since 2026-11-08: no programmes or episodes. A PCR (production control room, "studio") is a
+// standing place with a fixed LiveKit room and output slots; the admin builds PCRs, producers work in
+// them. Guests come from a contact book; seating a contact in a PCR makes a guest row whose invite
+// link brings them to that PCR's door.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
-import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
 export const userRole = pgEnum('user_role', ['admin', 'producer', 'engineer']);
-export const episodeStatus = pgEnum('episode_status', ['planned', 'live', 'ended']);
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -34,65 +38,73 @@ export const sessions = pgTable(
   (t) => [index('sessions_user_idx').on(t.userId), index('sessions_expires_idx').on(t.expiresAt)],
 );
 
-/** Per-program settings; defaults come from defaultProgramSettings(). */
-export interface ProgramSettings {
-  /** Number of studio output slots. */
+/** Per-PCR settings, set by the admin; defaults come from defaultPcrSettings(). */
+export interface PcrSettings {
+  /** Number of studio output slots (one output page, later one NDI/SDI output, each). */
   slots: number;
-  /** The engineer's ready mark is required before a hand-off. */
+  /** An engineer's ready mark is required before a hand-off (off since 2026-11-08: the producer decides). */
   readyRequired: boolean;
   /** An engineer may talk to a guest who is in the studio (IFB override). */
   ifbAllowed: boolean;
-  /** Languages offered on guest invites, BCP 47-ish: ku, ckb, ar, en, tr. */
+  /** Languages offered on guest invites: ku, ckb, ar, en, tr. */
   languages: string[];
+  /** Label of each output slot as the vision mixer operator knows it, e.g. "SDI 3" or "NDI Guest 1". */
+  outputNames: string[];
 }
 
-export function defaultProgramSettings(slots: number): ProgramSettings {
-  return { slots, readyRequired: true, ifbAllowed: false, languages: ['ku', 'ar', 'en'] };
+export function defaultPcrSettings(slots: number): PcrSettings {
+  return {
+    slots,
+    readyRequired: false,
+    ifbAllowed: true,
+    languages: ['ku', 'ckb', 'ar', 'en'],
+    outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
+  };
 }
 
-export const programs = pgTable('programs', {
+/** A production control room: a standing room with its slots. Built by the admin. */
+export const pcrs = pgTable('pcrs', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),
-  settings: jsonb('settings').$type<ProgramSettings>().notNull(),
+  settings: jsonb('settings').$type<PcrSettings>().notNull(),
+  /** LiveKit room name; one fixed room per PCR. */
+  livekitRoom: text('livekit_room').notNull().unique(),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
   ...timestamps,
 });
 
-export const episodes = pgTable(
-  'episodes',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    programId: uuid('program_id')
-      .notNull()
-      .references(() => programs.id, { onDelete: 'cascade' }),
-    title: text('title').notNull(),
-    startsAt: timestamp('starts_at', { withTimezone: true }),
-    status: episodeStatus('status').notNull().default('planned'),
-    /** LiveKit room name; one room per episode. */
-    livekitRoom: text('livekit_room').notNull().unique(),
-    startedAt: timestamp('started_at', { withTimezone: true }),
-    endedAt: timestamp('ended_at', { withTimezone: true }),
-    ...timestamps,
-  },
-  (t) => [index('episodes_program_idx').on(t.programId)],
-);
+/** The guest contact book: how to reach a person outside the system. Producers edit it. */
+export const contacts = pgTable('contacts', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  displayName: text('display_name').notNull(),
+  /** Name as it should appear in CasparCG lower thirds; falls back to displayName. */
+  casparName: text('caspar_name'),
+  language: text('language').notNull().default('ku'),
+  phone: text('phone'),
+  whatsapp: text('whatsapp'),
+  telegram: text('telegram'),
+  skype: text('skype'),
+  email: text('email'),
+  other: text('other'),
+  notes: text('notes'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  ...timestamps,
+});
 
+/** A contact seated in a PCR: the row the invite link and the LiveKit identity hang on. */
 export const guests = pgTable(
   'guests',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    episodeId: uuid('episode_id')
+    pcrId: uuid('pcr_id')
       .notNull()
-      .references(() => episodes.id, { onDelete: 'cascade' }),
+      .references(() => pcrs.id, { onDelete: 'cascade' }),
+    contactId: uuid('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
     displayName: text('display_name').notNull(),
-    /** Name as it should appear in CasparCG lower thirds; falls back to displayName. */
-    casparName: text('caspar_name'),
     language: text('language').notNull().default('ku'),
-    phone: text('phone'),
-    notes: text('notes'),
     ...timestamps,
   },
-  (t) => [index('guests_episode_idx').on(t.episodeId)],
+  (t) => [index('guests_pcr_idx').on(t.pcrId), index('guests_contact_idx').on(t.contactId)],
 );
 
 export const invites = pgTable(
@@ -113,41 +125,27 @@ export const invites = pgTable(
   (t) => [index('invites_guest_idx').on(t.guestId)],
 );
 
-export const slots = pgTable(
-  'slots',
-  {
-    episodeId: uuid('episode_id')
-      .notNull()
-      .references(() => episodes.id, { onDelete: 'cascade' }),
-    number: integer('number').notNull(),
-    guestId: uuid('guest_id').references(() => guests.id, { onDelete: 'set null' }),
-    /** NDI or SDI output name shown to the vision mixer operator. */
-    outputName: text('output_name'),
-  },
-  (t) => [primaryKey({ columns: [t.episodeId, t.number] })],
-);
-
 export const events = pgTable(
   'events',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    episodeId: uuid('episode_id').references(() => episodes.id, { onDelete: 'cascade' }),
+    pcrId: uuid('pcr_id').references(() => pcrs.id, { onDelete: 'cascade' }),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
     /** Who did it: a user id, a participant identity, or 'livekit' for webhooks. */
     actor: text('actor').notNull(),
     type: text('type').notNull(),
     payload: jsonb('payload').$type<Record<string, unknown>>(),
   },
-  (t) => [index('events_episode_at_idx').on(t.episodeId, t.at)],
+  (t) => [index('events_pcr_at_idx').on(t.pcrId, t.at)],
 );
 
 export const statsSamples = pgTable(
   'stats_samples',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    episodeId: uuid('episode_id')
+    pcrId: uuid('pcr_id')
       .notNull()
-      .references(() => episodes.id, { onDelete: 'cascade' }),
+      .references(() => pcrs.id, { onDelete: 'cascade' }),
     identity: text('identity').notNull(),
     at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
     rttMs: integer('rtt_ms'),
@@ -159,5 +157,5 @@ export const statsSamples = pgTable(
     path: text('path'),
     relay: boolean('relay'),
   },
-  (t) => [index('stats_episode_identity_at_idx').on(t.episodeId, t.identity, t.at)],
+  (t) => [index('stats_pcr_identity_at_idx').on(t.pcrId, t.identity, t.at)],
 );

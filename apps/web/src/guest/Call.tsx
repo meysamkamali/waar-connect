@@ -51,7 +51,7 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
         <div class="slate">
           <img class="logo" src="/app/logo.svg" alt="" />
           <div class="slate-title">{placeLabel}</div>
-          <div class="slate-text">{inLobby ? t('lobbyText') : inStudio ? info.episode.title : t('greenText')}</div>
+          <div class="slate-text">{inLobby ? t('lobbyText') : inStudio ? info.pcr.name : t('greenText')}</div>
         </div>
       )}
 

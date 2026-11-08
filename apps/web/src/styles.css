@@ -360,3 +360,32 @@ body.stage {
 .cues { display: flex; flex-wrap: wrap; gap: 6px; width: 100%; align-items: center; }
 .help.bad { color: var(--bad); cursor: pointer; }
 .staff .pip { bottom: 16px; width: 160px; }
+
+/* ---- PCR model (2026-11-08): nav, segmented controls, forms, contact book, kiosk pages ---- */
+.topnav { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.topnav a { color: var(--muted); text-decoration: none; }
+.topnav a.active { color: var(--fg); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid #3a4557; border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 0.85rem; padding: 6px 10px; background: #121720; color: var(--fg); border: 0; cursor: pointer; }
+.seg button + button { border-inline-start: 1px solid #3a4557; }
+.seg button.on { background: var(--ok); color: #000; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px 12px; }
+.form-grid label { display: grid; gap: 4px; font-size: 0.8rem; color: var(--muted); }
+.form-grid label.inline { display: inline-flex; align-items: center; gap: 6px; }
+.form-grid input, .form-grid select, .form-grid textarea { width: 100%; font: inherit; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: center; }
+.kv code { word-break: break-all; }
+.card.contact { display: grid; gap: 4px; }
+.results li { justify-content: space-between; }
+.guest-controls .inline .seg { margin-inline-start: 4px; }
+.stage video.main { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.stage .statusbar { position: fixed; left: 12px; top: 12px; }
+.stage .stage-stats { position: fixed; right: 12px; bottom: 12px; margin: 0; padding: 6px 8px; border-radius: 6px; background: rgba(13,17,23,0.8); font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.tap { position: fixed; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,0.6); cursor: pointer; }
+.hidden { display: none !important; }
+.guest-controls details.conn { width: 100%; }
+.guest-controls details.conn summary { cursor: pointer; font-size: 0.85rem; color: var(--muted); }
+.guest-controls details.conn .stats { margin: 6px 0; }
+.guest-controls .settings { flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+.chip.on { background: var(--ok); color: #000; border-color: var(--ok); }
+.guest-overlay .quality-poor, .guest-overlay .quality-lost { color: var(--bad); }
