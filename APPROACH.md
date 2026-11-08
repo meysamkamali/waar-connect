@@ -62,6 +62,9 @@ Sends program video and a studio-mic mix back. Guest names reach CasparCG for lo
    network with the mixer, otherwise on a small studio PC. Interim for phase 0: the browser pages
    `/out.html` rendered by whatever the station has that outputs NDI (CasparCG HTML producer with the NDI
    consumer, or vMix), and NDI Tools Webcam Input feeding `/studio.html` for the return.
+   **2026-11-08: the return side is built** (`apps/gateway`: NDI in through koffi + the NDI runtime,
+   `@livekit/rtc-node` out as `studio`, H.264 at the source's resolution, mono mix-minus; the admin
+   names the NDI source per PCR). The slot outputs (room → NDI) are the next step.
 
 ## Audio design
 

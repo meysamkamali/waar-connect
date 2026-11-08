@@ -10,6 +10,7 @@ import { connectDb } from './db/client.ts';
 import { events, pcrs } from './db/schema.ts';
 import { RoomRegistry, type RoomSettings } from './rooms/controller.ts';
 import { LiveKitRoomControl } from './rooms/livekit-control.ts';
+import { newGatewayState } from './routes/gateway.ts';
 
 const cfg = loadConfig();
 const { db, close } = connectDb(cfg.DATABASE_URL);
@@ -40,7 +41,7 @@ const rooms = new RoomRegistry(
   },
 );
 
-const app = await buildApp({ cfg, db, rooms });
+const app = await buildApp({ cfg, db, rooms, gateway: newGatewayState() });
 
 const purge = setInterval(() => void purgeExpiredSessions(db).catch((err) => app.log.warn({ err }, 'session purge failed')), 3_600_000);
 

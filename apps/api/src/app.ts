@@ -9,6 +9,7 @@ import type { Config } from './config.ts';
 import type { Db } from './db/client.ts';
 import { authRoutes } from './routes/auth.ts';
 import { contactRoutes } from './routes/contacts.ts';
+import { gatewayRoutes, type GatewayState } from './routes/gateway.ts';
 import { guestRoutes } from './routes/guests.ts';
 import { inviteRoutes } from './routes/invite.ts';
 import { livekitRoutes } from './routes/livekit.ts';
@@ -20,6 +21,8 @@ export interface AppContext {
   cfg: Config;
   db: Db;
   rooms: RoomRegistry;
+  /** The gateway's last status report (routes/gateway.ts). */
+  gateway: GatewayState;
 }
 
 export type UserRole = SessionUser['role'];
@@ -85,6 +88,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(inviteRoutes, { prefix: '/api/v1' });
   await app.register(roomRoutes, { prefix: '/api/v1' });
   await app.register(livekitRoutes, { prefix: '/api/v1' });
+  await app.register(gatewayRoutes, { prefix: '/api/v1' });
 
   app.setNotFoundHandler(async (_req, reply) => reply.code(404).send({ error: 'Not found.' }));
   app.setErrorHandler(async (error: unknown, req, reply) => {

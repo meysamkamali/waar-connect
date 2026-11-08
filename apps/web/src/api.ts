@@ -1,5 +1,5 @@
 // Calls to the waar Connect API (same origin, /api/v1). Sessions are cookies, sent automatically.
-import type { GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
+import type { GatewayStatus, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -74,6 +74,13 @@ export interface PcrSettings {
   ifbAllowed: boolean;
   languages: string[];
   outputNames: string[];
+  /** NDI source the gateway publishes as the return feed; null = the return feed page on the studio PC. */
+  returnSource: string | null;
+}
+/** The gateway as the API knows it: set up at all, and its last report if one came recently. */
+export interface GatewayView {
+  configured: boolean;
+  status: GatewayStatus | null;
 }
 export interface Pcr {
   id: string;
@@ -188,3 +195,4 @@ export const getRoom = (id: string) => call<{ snapshot: RoomSnapshot }>('GET', `
 export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnapshot }>('POST', `/pcrs/${id}/room/actions`, action);
 export const outputToken = (id: string, slot: number) => call<KioskToken & { slot: number; name: string }>('POST', `/pcrs/${id}/outputs/${slot}/token`);
 export const studioToken = (id: string) => call<KioskToken>('POST', `/pcrs/${id}/studio-token`);
+export const gatewayStatus = () => call<GatewayView>('GET', '/gateway/status');

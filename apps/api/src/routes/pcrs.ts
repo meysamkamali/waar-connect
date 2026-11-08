@@ -16,6 +16,7 @@ const Settings = z.object({
   ifbAllowed: z.boolean(),
   languages: z.array(z.string().min(2).max(8)).min(1).max(8),
   outputNames: z.array(z.string().trim().max(40)).max(16),
+  returnSource: z.string().trim().max(200).nullable(),
 });
 const CreateBody = z.object({ name: z.string().trim().min(1).max(80), settings: Settings.partial().optional() });
 const PatchBody = z.object({ name: z.string().trim().min(1).max(80).optional(), settings: Settings.partial().optional() });
@@ -26,12 +27,14 @@ type SettingsPatch = { [K in keyof PcrSettings]?: PcrSettings[K] | undefined };
 
 /** Merges a partial settings patch; output names always cover exactly the slot count. */
 export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefined): PcrSettings {
-  const out: PcrSettings = { ...base, outputNames: [...base.outputNames] };
+  // Rows written before the field existed have no returnSource key; they mean "the page".
+  const out: PcrSettings = { ...base, outputNames: [...base.outputNames], returnSource: base.returnSource ?? null };
   if (patch) {
     if (patch.slots !== undefined) out.slots = patch.slots;
     if (patch.ifbAllowed !== undefined) out.ifbAllowed = patch.ifbAllowed;
     if (patch.languages !== undefined) out.languages = patch.languages;
     if (patch.outputNames !== undefined) out.outputNames = [...patch.outputNames];
+    if (patch.returnSource !== undefined) out.returnSource = patch.returnSource?.trim() || null;
   }
   out.outputNames = Array.from({ length: out.slots }, (_, i) => out.outputNames[i]?.trim() || `Guest ${i + 1}`);
   return out;

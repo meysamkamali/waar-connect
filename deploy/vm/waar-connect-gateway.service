@@ -1,0 +1,25 @@
+[Unit]
+Description=waar Connect gateway (NDI in and out)
+After=network-online.target waar-connect-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=waarconnect
+Group=waarconnect
+WorkingDirectory=/opt/waar-connect/apps/gateway
+ExecStart=/usr/bin/node --env-file=/opt/waar-connect/apps/gateway/.env /opt/waar-connect/apps/gateway/dist/index.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+# The NDI runtime keeps a small config under $HOME/.ndi
+StateDirectory=waar-connect-gateway
+Environment=HOME=/var/lib/waar-connect-gateway
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadOnlyPaths=/opt/waar-connect
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

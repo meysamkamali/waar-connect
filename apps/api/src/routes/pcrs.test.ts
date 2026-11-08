@@ -18,3 +18,17 @@ test('mergeSettings keeps output names in step with the slot count', () => {
   assert.deepEqual(untouched, base);
   assert.notEqual(untouched.outputNames, base.outputNames);
 });
+
+test('mergeSettings: the NDI return source is trimmed, cleared by an empty string, and absent means null', () => {
+  const base = defaultPcrSettings(2);
+  assert.equal(base.returnSource, null);
+  assert.equal(mergeSettings(base, { returnSource: '  MIXER (Program) ' }).returnSource, 'MIXER (Program)');
+  const set = mergeSettings(base, { returnSource: 'MIXER (Program)' });
+  assert.equal(mergeSettings(set, { slots: 3 }).returnSource, 'MIXER (Program)', 'untouched by other changes');
+  assert.equal(mergeSettings(set, { returnSource: '' }).returnSource, null);
+  assert.equal(mergeSettings(set, { returnSource: null }).returnSource, null);
+  // A row written before the field existed
+  const old = { ...base } as Partial<typeof base>;
+  delete old.returnSource;
+  assert.equal(mergeSettings(old as typeof base, undefined).returnSource, null);
+});

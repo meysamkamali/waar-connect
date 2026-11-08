@@ -17,6 +17,9 @@
     "phase0:start": "npm --workspace apps/phase0 run start",
     "typecheck": "npm -w packages/shared run build && npm --workspaces --if-present run typecheck",
     "test": "npm --workspaces --if-present run test",
-    "build": "npm -w packages/shared run build && npm -w apps/api run build && npm -w apps/web run build && npm -w apps/phase0 run build"
+    "build": "npm -w packages/shared run build && npm -w apps/api run build && npm -w apps/gateway run build && npm -w apps/web run build && npm -w apps/phase0 run build"
+  },
+  "allowScripts": {
+    "koffi@3.3.7": true
   }
 }

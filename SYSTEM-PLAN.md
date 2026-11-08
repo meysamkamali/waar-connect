@@ -36,8 +36,10 @@ holding both, and the hand-off rule "engineer must mark ready" is a per-PCR sett
 control rooms, "studios"); each is a standing place with its own door, green room, studio slots and
 LiveKit room. A producer sits in a PCR and brings guests to it. Guests live in a **contact book** the
 producer edits; seating a contact in a PCR makes the invite link. The studio return (program picture
-with the mix-minus on it) is published from the studio PC by the **return feed page**; each slot has an
-**output page** on the studio PC for now, NDI or SDI output later from the same place.
+with the mix-minus on it) is published by the **gateway** (`apps/gateway`, since 2026-11-08) from the
+NDI program source the admin names on the PCR, or, with no NDI source named, from the studio PC by the
+**return feed page**; each slot has an **output page** on the studio PC for now, NDI output later from
+the gateway.
 
 **Decided 2026-11-08 (later the same day):** no engineer screen and no engineer approval for now;
 the producer does it all, including the connection check and the settings of the guest's phone

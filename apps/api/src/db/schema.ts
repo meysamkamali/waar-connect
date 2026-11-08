@@ -48,6 +48,11 @@ export interface PcrSettings {
   languages: string[];
   /** Label of each output slot as the vision mixer operator knows it, e.g. "SDI 3" or "NDI Guest 1". */
   outputNames: string[];
+  /**
+   * NDI source the gateway publishes as the return feed (program picture with the mix-minus on it),
+   * e.g. "MIXER (Program)". null: the return feed page on the studio PC does it instead.
+   */
+  returnSource: string | null;
 }
 
 export function defaultPcrSettings(slots: number): PcrSettings {
@@ -56,6 +61,7 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     ifbAllowed: true,
     languages: ['ku', 'ckb', 'ar', 'en'],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
+    returnSource: null,
   };
 }
 

@@ -15,6 +15,8 @@ const schema = z.object({
   DEFAULT_SLOTS: z.coerce.number().int().min(1).max(16).default(4),
   // Test phase: 1 serves the staff screens without passwords (see auth/open.ts). 0 for the final phase.
   OPEN_ACCESS: z.enum(['0', '1']).default('0'),
+  // Shared secret of the gateway (apps/gateway); unset = no gateway, its routes answer 503.
+  GATEWAY_TOKEN: z.string().min(16, 'at least 16 characters').optional(),
 });
 
 export type Config = Readonly<z.infer<typeof schema>> & { readonly cookieSecure: boolean; readonly openAccess: boolean };

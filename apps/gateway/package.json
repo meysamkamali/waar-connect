@@ -1,0 +1,28 @@
+{
+  "name": "@waar-connect/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "waar Connect gateway: the studio's NDI program return into the room; later each studio slot out as NDI.",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file-if-exists=.env dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test src/audio.test.ts src/config.test.ts"
+  },
+  "dependencies": {
+    "@livekit/rtc-node": "^1.2.1",
+    "@waar-connect/shared": "*",
+    "koffi": "^3.3.7",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "typescript": "^5.9.2"
+  }
+}

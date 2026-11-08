@@ -38,6 +38,8 @@ redirect to port 8443, so a link without the port still works.
 | Certificate reload | `waar-certs.path` → `waar-certs.service` → `/usr/local/sbin/waar-certs-apply` | systemd |
 | Firewall | ufw: 22/tcp, 8443/tcp, 7881/tcp, 7882/udp, 3478/udp | ufw |
 | Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
+| Gateway (NDI return into the rooms) | `waar-connect-gateway.service`, user `waarconnect`, no port; `/opt/waar-connect/apps/gateway/.env` holds the token shared with the API | systemd, `install-gateway.sh` |
+| NDI runtime | `/usr/local/lib/libndi.so.6` from the NDI SDK for Linux; licence texts in `/usr/local/share/doc/ndi/` | `install-gateway.sh --accept-ndi-license` |
 
 ## Install
 
@@ -74,10 +76,19 @@ starts serving as soon as both certificates are present.
 - From outside, after the router rules: `https://connect.waar.work:8443/` opens the launcher; a phone
   on mobile data shows `direct` in its status pill.
 
+## Gateway
+
+`sudo bash /opt/waar-connect/deploy/vm/install-gateway.sh --accept-ndi-license` after `install-api.sh`:
+puts a shared `GATEWAY_TOKEN` into the API's and the gateway's `.env`, downloads the NDI SDK for Linux
+and installs its runtime (the flag is your acceptance of the NDI SDK licence), builds, and starts
+`waar-connect-gateway`. Without the flag everything but the runtime is done and the service stays
+stopped. The admin then names the NDI source per studio under `/app/admin`. NDI senders on another
+subnet than the VM go into `NDI_EXTRA_IPS` in the gateway `.env` (mDNS does not cross the router).
+
 ## Updating the app
 
-From the development PC, until the repository has a remote:
+From the development PC (the API, web and gateway build together; `.env` files stay on the VM):
 
 ```bash
-tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='apps/phase0/.env' -czf - waar-connect | ssh meysam@10.0.0.41 'sudo tar -xzf - -C /opt && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo npm run phase0:build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && sudo systemctl restart waar-connect-phase0'
+tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' -czf - . | ssh -i ~/.ssh/waar-connect meysam@10.0.0.41 'sudo tar -xzf - -C /opt/waar-connect && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo env WC_COMMIT=$(git rev-parse --short HEAD) npm run -s build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && sudo systemctl restart waar-connect-api waar-connect-phase0 waar-connect-gateway'
 ```
