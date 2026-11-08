@@ -5,6 +5,16 @@ import type { LocalTrack, RemoteTrack } from 'livekit-client';
 
 export type Path = 'direct' | 'relay' | 'tcp' | 'unknown';
 
+/** One simulcast copy on the send side. */
+export interface LayerStats {
+  rid: string | undefined;
+  width: number | undefined;
+  height: number | undefined;
+  fps: number | undefined;
+  kbps: number;
+  codec: string | undefined;
+}
+
 export interface StatsSummary {
   kbps: number;
   lossPct: number;
@@ -19,6 +29,8 @@ export interface StatsSummary {
   path: Path;
   /** Send side only: why the encoder is not at its target (cpu, bandwidth). */
   limited: string | undefined;
+  /** Send side only: every copy the encoder sends, biggest first; kbps 0 means that copy is paused. */
+  layers?: LayerStats[] | undefined;
 }
 
 type Stat = Record<string, unknown>;
@@ -49,6 +61,7 @@ function codecName(codec: Stat | undefined): string | undefined {
 
 export class TrackStats {
   #prev: Snapshot | undefined;
+  #prevLayers = new Map<string, { ts: number; bytes: number }>();
 
   constructor(
     private readonly track: LocalTrack | RemoteTrack,
@@ -79,18 +92,30 @@ export class TrackStats {
       else path = 'direct';
     }
     const pairRtt = num(pair, 'currentRoundTripTime');
-
     const now = performance.now();
+
     let snap: Snapshot;
     let summary: Omit<StatsSummary, 'kbps' | 'lossPct' | 'bufferMs'>;
 
     if (this.direction === 'send') {
       const outs = all.filter((s) => s['type'] === 'outbound-rtp' && s['kind'] === kind);
-      // Simulcast publishes several layers; report the biggest one and the total bitrate.
-      const main = outs.reduce<Stat | undefined>(
-        (best, s) => (!best || (num(s, 'bytesSent') ?? 0) > (num(best, 'bytesSent') ?? 0) ? s : best),
-        undefined,
-      );
+      // Simulcast publishes several copies. Each gets its own bitrate; the biggest copy that is flowing
+      // stands for the track (the busiest one so far on the first sample, before any rate is known).
+      const rows = outs
+        .map((s) => {
+          const id = String(s['ssrc'] ?? s['id']);
+          const bytes = num(s, 'bytesSent') ?? 0;
+          const p = this.#prevLayers.get(id);
+          this.#prevLayers.set(id, { ts: now, bytes });
+          const kbps = p && now > p.ts ? Math.max(0, Math.round(((bytes - p.bytes) * 8) / (now - p.ts))) : 0;
+          const layer: LayerStats = { rid: str(s, 'rid'), width: num(s, 'frameWidth'), height: num(s, 'frameHeight'), fps: num(s, 'framesPerSecond'), kbps, codec: codecName(byId.get(String(s['codecId']))) };
+          return { s, layer };
+        })
+        .sort((a, b) => (b.layer.height ?? 0) - (a.layer.height ?? 0));
+      const mainRow =
+        rows.find((r) => r.layer.kbps > 0) ??
+        rows.reduce<(typeof rows)[number] | undefined>((best, r) => (!best || (num(r.s, 'bytesSent') ?? 0) > (num(best.s, 'bytesSent') ?? 0) ? r : best), undefined);
+      const main = mainRow?.s;
       const remoteIn = main ? byId.get(String(main['remoteId'])) : undefined;
       const rtt = num(remoteIn, 'roundTripTime') ?? pairRtt;
       const limited = str(main, 'qualityLimitationReason');
@@ -111,6 +136,7 @@ export class TrackStats {
         codec: codecName(byId.get(String(main?.['codecId']))),
         path,
         limited: limited && limited !== 'none' ? limited : undefined,
+        layers: rows.map((r) => r.layer),
       };
     } else {
       const inb = all.find((s) => s['type'] === 'inbound-rtp' && s['kind'] === kind);
@@ -150,12 +176,19 @@ export class TrackStats {
   }
 }
 
+const RID_NAMES: Record<string, string> = { f: 'full', h: 'half', q: 'quarter' };
+
+function describeLayer(l: LayerStats): string {
+  const name = l.height ? `${l.height}p` : l.rid ? (RID_NAMES[l.rid] ?? l.rid) : '?';
+  return `${name} ${l.kbps > 0 ? l.kbps : 'off'}`;
+}
+
 export function formatSummary(label: string, s: StatsSummary | undefined): string {
   if (!s) return `${label.padEnd(5)} —`;
   const parts: string[] = [];
   if (s.width && s.height) parts.push(`${s.width}x${s.height}${s.fps ? `@${Math.round(s.fps)}` : ''}`);
   if (s.codec) parts.push(s.codec);
-  parts.push(`${s.kbps} kbps`);
+  parts.push(s.layers && s.layers.length > 1 ? `${s.kbps} kbps (${s.layers.map(describeLayer).join(' · ')})` : `${s.kbps} kbps`);
   parts.push(`loss ${s.lossPct}%`);
   if (s.rttMs !== undefined) parts.push(`rtt ${s.rttMs} ms`);
   if (s.jitterMs !== undefined) parts.push(`jitter ${s.jitterMs} ms`);

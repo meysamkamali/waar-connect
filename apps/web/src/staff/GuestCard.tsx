@@ -287,9 +287,10 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
             <span class="muted small">codec (reconnects)</span>
             {CODECS.map((c) => {
               const support = r?.codecs?.[c] ?? 'unknown';
-              const mark = support === 'hw' ? ' ⚡' : support === 'sw' ? ' · software' : support === 'no' ? ' · not supported' : '';
+              const mark = support === 'hw' ? ' ⚡' : support === 'sw' ? ' · software' : support === 'no' ? ' · not supported' : support === 'failed' ? ' ⚠ failed' : '';
+              const off = support === 'no' || support === 'failed';
               return (
-                <button class={`chip ${r?.codec === c ? 'on' : ''} ${support === 'no' ? 'off' : ''}`} key={c} disabled={support === 'no'} title={`${CODEC_LABELS[c]}: ${SUPPORT_LABELS[support]} encoder on this phone`} onClick={() => cmd({ codec: c })}>
+                <button class={`chip ${r?.codec === c ? 'on' : ''} ${off ? 'off' : ''}`} key={c} disabled={off} title={`${CODEC_LABELS[c]}: ${SUPPORT_LABELS[support]} encoder on this phone`} onClick={() => cmd({ codec: c })}>
                   {CODEC_LABELS[c]}
                   {mark}
                 </button>

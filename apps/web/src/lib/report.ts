@@ -58,9 +58,13 @@ export interface GuestReport {
   quality: string;
   /** Send-side numbers measured on the phone. */
   up?: StatsSummary | undefined;
+  width?: number | undefined;
   height?: number | undefined;
   fps?: number | undefined;
+  /** Codec the producer asked for. */
   codec: string;
+  /** Codec actually on the wire, from the sender statistics; differs when the browser switched. */
+  wire?: string | undefined;
   /** Bitrate cap in use, kbit/s. */
   kbps: number;
   relay: boolean;
@@ -81,8 +85,8 @@ export interface GuestReport {
 
 export function describeReport(r: GuestReport): string {
   const parts = [
-    r.height ? `${Math.round((r.height * 16) / 9)}x${r.height}@${r.fps ? Math.round(r.fps) : '?'}` : 'no camera',
-    r.codec,
+    r.height ? `${r.width ?? Math.round((r.height * 16) / 9)}x${r.height}@${r.fps ? Math.round(r.fps) : '?'}` : 'no camera',
+    r.wire && r.wire !== r.codec ? `${r.codec} asked, ${r.wire} on the wire` : r.codec,
     `cap ${r.kbps} kbit/s`,
     r.relay ? 'via relay' : 'direct allowed',
     r.net ? `net ${r.net}` : null,

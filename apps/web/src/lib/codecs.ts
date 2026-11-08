@@ -1,10 +1,11 @@
 // Video codecs the system carries, and what a guest's device can do with each of them.
 // "hw" means the browser reports a power-efficient (hardware) encoder for 720p25; "sw" means it
-// can encode but in software (hot phone, shorter battery); "no" means it cannot send that codec.
+// can encode but in software (hot phone, shorter battery); "no" means it cannot send that codec;
+// "failed" means the browser said yes and then switched codec after publishing (guest/session.ts).
 import type { VideoCodec } from 'livekit-client';
 
 export type CodecName = VideoCodec; // 'vp8' | 'h264' | 'vp9' | 'av1' | 'h265'
-export type CodecSupport = 'hw' | 'sw' | 'no' | 'unknown';
+export type CodecSupport = 'hw' | 'sw' | 'no' | 'failed' | 'unknown';
 
 export const CODECS: readonly CodecName[] = ['h264', 'vp8', 'vp9', 'av1', 'h265'];
 
@@ -32,6 +33,7 @@ export const SUPPORT_LABELS: Readonly<Record<CodecSupport, string>> = {
   hw: 'hardware',
   sw: 'software',
   no: 'not supported',
+  failed: 'failed on this phone',
   unknown: 'unknown',
 };
 

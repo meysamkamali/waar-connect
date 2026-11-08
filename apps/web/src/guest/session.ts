@@ -19,7 +19,7 @@ import {
   type Room,
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
-import { isCodecName, probeCodecs, type CodecName, type CodecSupport } from '../lib/codecs.ts';
+import { CODEC_LABELS, isCodecName, probeCodecs, type CodecName, type CodecSupport } from '../lib/codecs.ts';
 import { DEGRADE_DEFAULT, SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
@@ -36,6 +36,8 @@ export interface GuestOverride {
   facing?: 'user' | 'environment';
   audio?: { ec: boolean; ns: boolean; agc: boolean };
   degrade?: Degrade;
+  /** Codecs the browser accepted and then dropped after publishing; never offered again in this tab. */
+  failedCodecs?: CodecName[];
 }
 const DEGRADES: readonly Degrade[] = ['resolution', 'framerate', 'balanced'];
 const toPreference = (d: Degrade): RTCDegradationPreference => (d === 'resolution' ? 'maintain-resolution' : d === 'framerate' ? 'maintain-framerate' : 'balanced');
@@ -123,6 +125,8 @@ export class GuestSession {
   #sweep: SweepResult | undefined;
   #sweeping = false;
   #codecs: Partial<Record<CodecName, CodecSupport>> | undefined;
+  #mismatch = 0;
+  #connectedAt = 0;
 
   constructor() {
     const params = new URLSearchParams(location.search);
@@ -174,6 +178,7 @@ export class GuestSession {
       this.status.value = 'connecting';
       await connectRoom(this.room, info.livekit.url, info.livekit.token, false);
     }
+    this.#connectedAt = Date.now();
     this.#readState();
     const lp = this.room.localParticipant;
     const o = this.#override;
@@ -409,9 +414,11 @@ export class GuestSession {
       test: this.#sweep,
       quality: this.quality.value,
       up: this.up.value,
+      width: settings?.width,
       height: settings?.height,
       fps: settings?.frameRate,
       codec: this.#profile.codec,
+      wire: this.up.value?.codec,
       kbps: this.#profile.maxKbps,
       relay: this.#relay,
       facing: settings?.facingMode,
@@ -420,7 +427,7 @@ export class GuestSession {
       micOn: this.micEnabled.value,
       audio: this.#override.audio ?? { ec: true, ns: true, agc: true },
       degrade: this.#override.degrade ?? DEGRADE_DEFAULT,
-      codecs: this.#codecs,
+      codecs: this.#codecsWithFailures(),
       net: nav.connection?.effectiveType,
       battery,
       ua: navigator.userAgent,
@@ -440,5 +447,39 @@ export class GuestSession {
     } catch {
       this.up.value = undefined;
     }
+    await this.#checkCodec(this.up.value?.codec);
+  }
+
+  /**
+   * The browser can change codec on its own after publishing. Seen 2026-11-08: a phone that advertised a
+   * hardware H.265 encoder switched to VP8 seven seconds in; the server then moved every viewer to the
+   * H.264 backup copy and the phone was uploading twice. When the codec on the wire is not the one asked
+   * for, remember that this codec fails here and go back to H.264: with a reload while the call is
+   * young (the producer just changed it), otherwise only from the next reload, so a live picture is
+   * not cut.
+   */
+  async #checkCodec(wire: string | undefined): Promise<void> {
+    const asked = this.#profile.codec;
+    if (!wire || wire === asked) {
+      this.#mismatch = 0;
+      return;
+    }
+    if (++this.#mismatch < 2) return; // two samples in a row, four seconds
+    const failed = this.#override.failedCodecs ?? [];
+    if (failed.includes(asked)) return;
+    const young = Date.now() - this.#connectedAt < 60_000;
+    this.#override = saveOverride({ failedCodecs: [...failed, asked], ...(asked === 'h264' ? {} : { codec: 'h264' }) });
+    const next = asked === 'h264' ? '' : young ? '; reconnecting with H.264' : '; H.264 from the next reload';
+    this.#lastError = `${CODEC_LABELS[asked]} failed on this phone (the browser switched to ${wire.toUpperCase()})${next}`;
+    await this.#report();
+    if (asked !== 'h264' && young) location.reload();
+  }
+
+  #codecsWithFailures(): Partial<Record<CodecName, CodecSupport>> | undefined {
+    const failed = this.#override.failedCodecs ?? [];
+    if (failed.length === 0) return this.#codecs;
+    const out: Partial<Record<CodecName, CodecSupport>> = { ...this.#codecs };
+    for (const c of failed) out[c] = 'failed';
+    return out;
   }
 }
