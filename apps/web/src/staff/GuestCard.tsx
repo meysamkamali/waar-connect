@@ -7,7 +7,7 @@ import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
-import { describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type GuestReport } from '../lib/report.ts';
+import { DEGRADE_DEFAULT, DEGRADE_LABELS, describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type Degrade, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
 import type { StaffTile } from './session.ts';
@@ -262,6 +262,14 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
             {[25, 30].map((f) => (
               <button class={`chip ${r?.fps && Math.round(r.fps) === f ? 'on' : ''}`} key={f} onClick={() => cmd({ fps: f })}>
                 {f} fps
+              </button>
+            ))}
+          </div>
+          <div class="row settings">
+            <span class="muted small">when short</span>
+            {(Object.keys(DEGRADE_LABELS) as Degrade[]).map((d) => (
+              <button class={`chip ${(r?.degrade ?? DEGRADE_DEFAULT) === d ? 'on' : ''}`} key={d} title={d === 'resolution' ? 'drops frames first, keeps the size' : d === 'framerate' ? 'shrinks the picture first, keeps the motion' : 'lets WebRTC decide'} onClick={() => cmd({ degrade: d })}>
+                {DEGRADE_LABELS[d]}
               </button>
             ))}
           </div>

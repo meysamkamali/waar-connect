@@ -2,6 +2,15 @@
 // producer's card shows it in one line.
 import type { StatsSummary } from './stats.ts';
 
+/** When short: keep the picture size (drop frames), keep the frame rate (shrink), or let WebRTC balance. */
+export type Degrade = 'resolution' | 'framerate' | 'balanced';
+export const DEGRADE_DEFAULT: Degrade = 'resolution';
+export const DEGRADE_LABELS: Readonly<Record<Degrade, string>> = {
+  resolution: 'keep picture size',
+  framerate: 'keep frame rate',
+  balanced: 'balanced',
+};
+
 /** One step of the bandwidth sweep, measured on the phone. */
 export interface TestStep {
   /** Cap the phone was given, kbit/s. */
@@ -59,6 +68,8 @@ export interface GuestReport {
   mic?: string | undefined;
   micOn: boolean;
   audio: { ec: boolean; ns: boolean; agc: boolean };
+  /** What the encoder gives up first when the network or CPU is short. */
+  degrade: Degrade;
   net?: string | undefined;
   battery?: number | undefined;
   ua: string;

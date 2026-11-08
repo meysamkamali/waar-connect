@@ -19,7 +19,7 @@ import {
   type Room,
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
-import { SWEEP_STEPS, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
+import { DEGRADE_DEFAULT, SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
@@ -34,7 +34,10 @@ export interface GuestOverride {
   relay?: boolean;
   facing?: 'user' | 'environment';
   audio?: { ec: boolean; ns: boolean; agc: boolean };
+  degrade?: Degrade;
 }
+const DEGRADES: readonly Degrade[] = ['resolution', 'framerate', 'balanced'];
+const toPreference = (d: Degrade): RTCDegradationPreference => (d === 'resolution' ? 'maintain-resolution' : d === 'framerate' ? 'maintain-framerate' : 'balanced');
 function loadOverride(): GuestOverride {
   try {
     return JSON.parse(sessionStorage.getItem(OVERRIDE_KEY) ?? '{}') as GuestOverride;
@@ -168,6 +171,7 @@ export class GuestSession {
     this.localVideo.value = cam;
     this.#upStats = cam ? new TrackStats(cam, 'send') : undefined;
     if (o.kbps) await this.#setMaxBitrate(o.kbps).catch(() => undefined);
+    await cam?.setDegradationPreference(toPreference(o.degrade ?? DEGRADE_DEFAULT)).catch(() => undefined);
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
     this.#reportTimer = window.setInterval(() => void this.#report(), 10_000);
@@ -288,6 +292,11 @@ export class GuestSession {
         this.#override = saveOverride({ facing: cmd['facing'] });
         await this.localVideo.value?.restartTrack({ facingMode: cmd['facing'] });
       }
+      const degrade = cmd['degrade'];
+      if (typeof degrade === 'string' && (DEGRADES as readonly string[]).includes(degrade)) {
+        this.#override = saveOverride({ degrade: degrade as Degrade });
+        await this.localVideo.value?.setDegradationPreference(toPreference(degrade as Degrade));
+      }
       const audio = cmd['audio'];
       if (audio && typeof audio === 'object') {
         const want = audio as Record<string, unknown>;
@@ -393,6 +402,7 @@ export class GuestSession {
       mic: mic?.mediaStreamTrack.label,
       micOn: this.micEnabled.value,
       audio: this.#override.audio ?? { ec: true, ns: true, agc: true },
+      degrade: this.#override.degrade ?? DEGRADE_DEFAULT,
       net: nav.connection?.effectiveType,
       battery,
       ua: navigator.userAgent,
