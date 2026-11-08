@@ -58,6 +58,13 @@ ufw allow 3478/udp comment 'waar Connect TURN' >/dev/null
 ufw --force enable >/dev/null
 ufw status | grep -E "^(Status|$WEB_PORT|7881|7882|3478|22)" | head -8
 
+echo "== public IP on loopback (TURN relay hairpin)"
+install -m 755 "$REPO/deploy/vm/waar-hairpin.sh" /usr/local/sbin/waar-hairpin
+install -m 644 "$REPO/deploy/vm/waar-hairpin.service" /etc/systemd/system/waar-hairpin.service
+systemctl daemon-reload
+systemctl enable --now waar-hairpin.service >/dev/null
+/usr/local/sbin/waar-hairpin || true
+
 echo "== app build"
 cd "$REPO"
 npm ci --no-audit --no-fund --loglevel=error

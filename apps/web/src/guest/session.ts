@@ -162,7 +162,18 @@ export class GuestSession {
   async connect(info: JoinInfo, devices: DeviceChoice): Promise<void> {
     this.status.value = 'connecting';
     this.state.value = defaultGuestState(info.livekit.identity);
-    await connectRoom(this.room, info.livekit.url, info.livekit.token, this.#relay);
+    try {
+      await connectRoom(this.room, info.livekit.url, info.livekit.token, this.#relay);
+    } catch (err) {
+      if (!this.#relay) throw err;
+      // "Force relay" needs the station's TURN server reachable from this network. When it is not, the
+      // phone must not stay locked out of the room: drop the setting, tell the producer, connect normally.
+      this.#lastError = `forced relay did not connect (${err instanceof Error ? err.message : String(err)}); went back to direct`;
+      this.#relay = false;
+      this.#override = saveOverride({ relay: false });
+      this.status.value = 'connecting';
+      await connectRoom(this.room, info.livekit.url, info.livekit.token, false);
+    }
     this.#readState();
     const lp = this.room.localParticipant;
     const o = this.#override;

@@ -77,12 +77,17 @@ export function createRoom(profile: PublishProfile): Room {
   return new Room(options);
 }
 
+/**
+ * Connects; `relay` allows only TURN relay candidates (a test tool). The engine keeps the last rtcConfig,
+ * so the policy is always stated, also when going back to 'all' after a failed relay attempt, and a
+ * relay-only attempt gives up sooner: once the relay leg does not answer there is nothing to wait for.
+ */
 export async function connectRoom(room: Room, url: string, token: string, relay: boolean): Promise<void> {
-  await room.connect(
-    url,
-    token,
-    relay ? { autoSubscribe: false, rtcConfig: { iceTransportPolicy: 'relay' } } : { autoSubscribe: false },
-  );
+  await room.connect(url, token, {
+    autoSubscribe: false,
+    rtcConfig: { iceTransportPolicy: relay ? 'relay' : 'all' },
+    peerConnectionTimeout: relay ? 10_000 : 15_000,
+  });
 }
 
 export type PubFilter = (participant: RemoteParticipant, pub: RemoteTrackPublication) => boolean;

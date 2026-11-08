@@ -20,6 +20,12 @@ The strict corporate or hotel firewall that allows only TCP 443 is the one case 
 guest switches to mobile data. If that case ever matters, the fix is a second public IP for TURN over
 TLS 443, not a second server.
 
+The embedded TURN hands out relay addresses on the public IP, and the SFU in the same process must
+reach them. A router without hairpin NAT drops that traffic (seen 2026-11-08: every relay pair
+"requests sent, no response"), so the VM carries its public IP on the loopback interface; see
+`deploy/vm/waar-hairpin.sh`. In the producer's card, "force relay" is a test tool: when the relay is
+not reachable from the phone's network, the phone drops the setting and connects directly.
+
 ## DNS (all to this machine's IP)
 
 | Record | Purpose |
@@ -27,7 +33,7 @@ TLS 443, not a second server.
 | `connect.waar.work` | the pages and the API |
 | `connect.waarmedia.com` | same site, pointed later |
 | `media.connect.waar.work` | LiveKit signaling (WebSocket over TLS) |
-| `turn.connect.waar.work` | TURN hostname advertised to clients |
+| `turn.connect.waar.work` | TURN hostname; only used for TURN over TLS, which is not enabled (UDP TURN is advertised by IP) |
 
 ## Firewall (inbound)
 

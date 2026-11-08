@@ -8,6 +8,7 @@ server, with port forwarding for its own ports.
  internet ──TCP 8443──► router ──► VM 10.0.0.41  Nginx  ─► 127.0.0.1:8787  app (pages, tokens)
                                                       └─► 127.0.0.1:7880  LiveKit signaling
  internet ──UDP 7882 / UDP 3478 / TCP 7881 ──► router ──► VM  LiveKit media and TURN
+                                   (checked 2026-11-08: UDP 7882 is forwarded; UDP 3478 is not yet)
  aaPanel 10.0.0.40 ──rsync hourly──► VM /etc/waar-connect/certs   (Let's Encrypt certificates)
 ```
 
@@ -36,6 +37,7 @@ redirect to port 8443, so a link without the port still works.
 | Certificates | `/etc/waar-connect/certs/<name>/{fullchain,privkey}.pem`, owner `certsync` | aaPanel job |
 | Certificate reload | `waar-certs.path` → `waar-certs.service` → `/usr/local/sbin/waar-certs-apply` | systemd |
 | Firewall | ufw: 22/tcp, 8443/tcp, 7881/tcp, 7882/udp, 3478/udp | ufw |
+| Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
 
 ## Install
 

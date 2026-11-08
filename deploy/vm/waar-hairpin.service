@@ -1,0 +1,12 @@
+[Unit]
+Description=waar Connect: station public IP on loopback (TURN relay hairpin)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/waar-hairpin
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

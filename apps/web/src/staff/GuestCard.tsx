@@ -250,7 +250,7 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
                   </button>
                 </>
               ) : (
-                <span class="small bad">Even {sweep.steps[0]} kbit/s did not pass: try force relay, or a better network.</span>
+                <span class="small bad">Even {sweep.steps[0]} kbit/s did not pass: try force relay (some networks pass only the relay port), or a better network.</span>
               )}
             </div>
           )}
@@ -296,10 +296,10 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
               );
             })}
             <span class="muted small">path</span>
-            <button class={`chip ${r && !r.relay ? 'on' : ''}`} onClick={() => cmd({ relay: false })}>
+            <button class={`chip ${r && !r.relay ? 'on' : ''}`} title="UDP straight to the media server, TCP as fallback: the normal way" onClick={() => cmd({ relay: false })}>
               direct if possible
             </button>
-            <button class={`chip ${r?.relay ? 'on' : ''}`} onClick={() => cmd({ relay: true })}>
+            <button class={`chip ${r?.relay ? 'on' : ''}`} title="Test tool: only through the station's TURN relay (UDP 3478). If the relay cannot be reached from the phone's network, the phone goes back to direct by itself." onClick={() => cmd({ relay: true })}>
               force relay (reconnects)
             </button>
           </div>
