@@ -1,5 +1,6 @@
 // What a guest's phone reports about itself to the producer (data topic wc.report), and how the
 // producer's card shows it in one line.
+import type { CodecName, CodecSupport } from './codecs.ts';
 import type { StatsSummary } from './stats.ts';
 
 /** When short: keep the picture size (drop frames), keep the frame rate (shrink), or let WebRTC balance. */
@@ -70,6 +71,8 @@ export interface GuestReport {
   audio: { ec: boolean; ns: boolean; agc: boolean };
   /** What the encoder gives up first when the network or CPU is short. */
   degrade: Degrade;
+  /** What this device can send, per codec, probed once on join. */
+  codecs?: Partial<Record<CodecName, CodecSupport>> | undefined;
   net?: string | undefined;
   battery?: number | undefined;
   ua: string;

@@ -19,6 +19,7 @@ import {
   type Room,
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
+import { isCodecName, probeCodecs, type CodecName, type CodecSupport } from '../lib/codecs.ts';
 import { DEGRADE_DEFAULT, SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
@@ -30,7 +31,7 @@ export interface GuestOverride {
   res?: number;
   fps?: number;
   kbps?: number;
-  codec?: 'h264' | 'vp8';
+  codec?: CodecName;
   relay?: boolean;
   facing?: 'user' | 'environment';
   audio?: { ec: boolean; ns: boolean; agc: boolean };
@@ -121,6 +122,7 @@ export class GuestSession {
   #lastError: string | undefined;
   #sweep: SweepResult | undefined;
   #sweeping = false;
+  #codecs: Partial<Record<CodecName, CodecSupport>> | undefined;
 
   constructor() {
     const params = new URLSearchParams(location.search);
@@ -175,6 +177,10 @@ export class GuestSession {
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
     this.#reportTimer = window.setInterval(() => void this.#report(), 10_000);
+    void probeCodecs().then((c) => {
+      this.#codecs = c;
+      return this.#report();
+    });
   }
 
   async setMic(on: boolean): Promise<void> {
@@ -278,7 +284,7 @@ export class GuestSession {
         this.#override = saveOverride({ kbps });
         await this.#setMaxBitrate(kbps);
       }
-      if (cmd['codec'] === 'h264' || cmd['codec'] === 'vp8') {
+      if (isCodecName(cmd['codec'])) {
         saveOverride({ codec: cmd['codec'] });
         location.reload();
         return;
@@ -403,6 +409,7 @@ export class GuestSession {
       micOn: this.micEnabled.value,
       audio: this.#override.audio ?? { ec: true, ns: true, agc: true },
       degrade: this.#override.degrade ?? DEGRADE_DEFAULT,
+      codecs: this.#codecs,
       net: nav.connection?.effectiveType,
       battery,
       ua: navigator.userAgent,

@@ -7,6 +7,7 @@ import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
+import { CODEC_LABELS, CODECS, describeCodecs, SUPPORT_LABELS } from '../lib/codecs.ts';
 import { DEGRADE_DEFAULT, DEGRADE_LABELS, describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type Degrade, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
@@ -191,7 +192,8 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
           <pre class="stats">
             {formatSummary('IN ', p.tile?.stats)}
             {'\n'}
-            {r ? `${formatSummary('UP ', r.up)}\nphone: ${describeReport(r)}\n${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error: ${r.error}` : ''}` : 'phone: no report yet'}
+            {r ? `${formatSummary('UP ', r.up)}\nphone: ${describeReport(r)}\n${describeCodecs(r.codecs)}
+${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error: ${r.error}` : ''}` : 'phone: no report yet'}
           </pre>
           {stale && (
             <p class="help bad" style={{ margin: '4px 0' }}>
@@ -282,12 +284,17 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
             ))}
           </div>
           <div class="row settings">
-            <span class="muted small">codec</span>
-            {(['h264', 'vp8'] as const).map((c) => (
-              <button class={`chip ${r?.codec === c ? 'on' : ''}`} key={c} onClick={() => cmd({ codec: c })}>
-                {c} (reconnects)
-              </button>
-            ))}
+            <span class="muted small">codec (reconnects)</span>
+            {CODECS.map((c) => {
+              const support = r?.codecs?.[c] ?? 'unknown';
+              const mark = support === 'hw' ? ' ⚡' : support === 'sw' ? ' · software' : support === 'no' ? ' · not supported' : '';
+              return (
+                <button class={`chip ${r?.codec === c ? 'on' : ''} ${support === 'no' ? 'off' : ''}`} key={c} disabled={support === 'no'} title={`${CODEC_LABELS[c]}: ${SUPPORT_LABELS[support]} encoder on this phone`} onClick={() => cmd({ codec: c })}>
+                  {CODEC_LABELS[c]}
+                  {mark}
+                </button>
+              );
+            })}
             <span class="muted small">path</span>
             <button class={`chip ${r && !r.relay ? 'on' : ''}`} onClick={() => cmd({ relay: false })}>
               direct if possible

@@ -11,13 +11,15 @@ import {
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RoomOptions,
+  type VideoCodec,
 } from 'livekit-client';
+import { isCodecName } from './codecs.ts';
 
 export interface PublishProfile {
   height: number;
   fps: number;
   maxKbps: number;
-  codec: 'h264' | 'vp8';
+  codec: VideoCodec;
 }
 
 const HEIGHTS = [360, 540, 720, 1080];
@@ -35,7 +37,7 @@ export function profileFromParams(p: URLSearchParams): PublishProfile {
     height,
     fps,
     maxKbps: Number.isFinite(kbps) && kbps >= 400 ? kbps : defaultKbps,
-    codec: p.get('codec') === 'vp8' ? 'vp8' : 'h264',
+    codec: isCodecName(p.get('codec')) ? (p.get('codec') as VideoCodec) : 'h264',
   };
 }
 
@@ -63,6 +65,9 @@ export function createRoom(profile: PublishProfile): Room {
         new VideoPreset(320, 180, 150_000, profile.fps),
         new VideoPreset(640, 360, 500_000, profile.fps),
       ],
+      // VP9, AV1 and H.265 are sent as one layered stream; a viewer that cannot decode them gets an
+      // H.264 copy the phone adds on demand (LiveKit's backup codec).
+      backupCodec: profile.codec === 'h264' ? true : { codec: 'h264' },
       audioPreset: AudioPresets.music,
       dtx: false,
       red: true,
