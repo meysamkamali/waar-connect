@@ -9,6 +9,7 @@ import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
 import { describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
+import { BUILD } from '../lib/version.ts';
 import type { StaffTile } from './session.ts';
 
 export type Sees = 'none' | 'me' | 'studio';
@@ -86,6 +87,7 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
   const processing = r ? r.audio.ec || r.audio.ns || r.audio.agc : true;
   const sweep = r?.test;
   const recommended = recommendedCap(sweep);
+  const stale = r !== undefined && r.build !== BUILD;
 
   return (
     <div class="guest-controls">
@@ -191,6 +193,14 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
             {'\n'}
             {r ? `${formatSummary('UP ', r.up)}\nphone: ${describeReport(r)}\n${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error: ${r.error}` : ''}` : 'phone: no report yet'}
           </pre>
+          {stale && (
+            <p class="help bad" style={{ margin: '4px 0' }}>
+              The phone runs an older page (build {r.build ?? 'unknown'}; this screen is {BUILD}). New buttons do nothing there until it reloads.{' '}
+              <button class="link" onClick={() => cmd({ reload: true })}>
+                Reload the phone page
+              </button>
+            </p>
+          )}
           <div class="row">
             <button class="btn secondary small" onClick={() => cmd({ check: true })}>
               Check now

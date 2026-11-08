@@ -22,6 +22,7 @@ import type { JoinInfo } from '../api.ts';
 import { SWEEP_STEPS, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
+import { BUILD } from '../lib/version.ts';
 
 // Settings the producer pushed to this phone; they survive a reload of the same tab.
 const OVERRIDE_KEY = 'wc.guest.override';
@@ -378,6 +379,7 @@ export class GuestSession {
     }
     const report: GuestReport = {
       at: Date.now(),
+      build: BUILD,
       test: this.#sweep,
       quality: this.quality.value,
       up: this.up.value,

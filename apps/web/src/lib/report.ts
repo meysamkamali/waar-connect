@@ -41,6 +41,8 @@ export function recommendedCap(sweep: SweepResult | undefined): number | undefin
 
 export interface GuestReport {
   at: number;
+  /** Build id of the page running on the phone. */
+  build?: string | undefined;
   /** The last or running bandwidth sweep. */
   test?: SweepResult | undefined;
   quality: string;
