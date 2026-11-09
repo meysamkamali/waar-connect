@@ -13,9 +13,13 @@ also takes each studio slot out of the room as its own NDI source.
 
 ## How it is configured
 
-The admin sets, per studio (PCR), the NDI source name under **/app/admin → Return feed from NDI**.
-The gateway asks the API every 15 s which PCRs want a return feed, starts one feed per PCR, and
-reports its sources and feed states every 5 s; the admin page shows them. Nothing is configured on
+The admin picks, per studio (PCR), the NDI source under **/app/admin → Return feed from NDI source**:
+a list of every sender the gateway sees, each with its address and the VM interface it is on (or
+"via router" when it sits behind one), the gateway's own outputs left out. A sender that is off right
+now can be typed by name; it shows as "not seen now" until it comes back. The network a sender is on
+plays no part in the choice: NDI names are unique per sender and the gateway connects to the address
+the sender advertises. The gateway asks the API every 15 s which PCRs want a return feed, starts one
+feed per PCR, and reports its sources and feed states every 5 s; the admin page shows them. Nothing is configured on
 the gateway itself except the API address and the shared token (`.env`, see `.env.example`).
 
 With no NDI source set, a PCR keeps using the browser page `/app/return/:pcr` on the studio PC.

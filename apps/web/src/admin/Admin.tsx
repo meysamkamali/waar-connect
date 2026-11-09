@@ -2,6 +2,7 @@
 // page links for the studio PC (return feed in, one output page per slot).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
+import type { NdiSourceInfo } from '@waar-connect/shared';
 import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
 import { LANGUAGES } from '../staff/Contacts.tsx';
 
@@ -22,8 +23,75 @@ function gatewaySummary(gateway: GatewayView | null): string {
   if (!gateway) return 'Gateway: …';
   if (!gateway.configured) return 'Gateway: none set up on the server. Return feeds come from the page on the studio PC.';
   if (!gateway.status) return 'Gateway: offline (no report in the last 20 s).';
-  const names = gateway.status.sources.map((s) => s.name);
-  return `Gateway ${gateway.status.host} (${gateway.status.version}) online · NDI sources: ${names.length ? names.join(', ') : 'none seen'}`;
+  const n = gateway.status.sources.length;
+  return `Gateway ${gateway.status.host} (${gateway.status.version}) online · ${n === 0 ? 'no NDI sources seen' : n === 1 ? '1 NDI source seen' : `${n} NDI sources seen`}`;
+}
+
+/** Where a sender sits as seen from the gateway: on one of the VM's own networks, or behind a router. */
+function networkLabel(src: NdiSourceInfo): string {
+  return src.network ? `on ${src.network}` : 'via router';
+}
+
+/** Every sender the gateway sees, with address and network. */
+function SourceList({ gateway }: { gateway: GatewayView | null }) {
+  const sources = gateway?.status?.sources ?? [];
+  if (!sources.length) return null;
+  return (
+    <ul class="list muted small" style={{ marginTop: '4px' }}>
+      {sources.map((src) => (
+        <li key={`${src.name}|${src.url ?? ''}`}>
+          <strong>{src.name}</strong> · {src.url ?? 'address unknown'} · {networkLabel(src)}
+          {src.own ? ' · this gateway' : ''}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const TYPE_A_NAME = '#type-a-name'; // never an NDI name, those are 'MACHINE (source)'
+
+/**
+ * The return source for one studio: a list of every sender the gateway sees (its own outputs left out,
+ * a return must never be one of them), the saved name marked when its sender is off right now, and a
+ * typed name for a sender that is not on yet.
+ */
+function SourcePicker({ value, gateway, onChange }: { value: string | null; gateway: GatewayView | null; onChange: (v: string | null) => void }) {
+  const [typing, setTyping] = useState(false);
+  const sources = (gateway?.status?.sources ?? []).filter((s) => !s.own);
+  const seen = value !== null && sources.some((s) => s.name === value);
+  return (
+    <>
+      <select
+        value={typing ? TYPE_A_NAME : (value ?? '')}
+        onChange={(e) => {
+          const v = (e.currentTarget as HTMLSelectElement).value;
+          if (v === TYPE_A_NAME) {
+            setTyping(true);
+            return;
+          }
+          setTyping(false);
+          onChange(v || null);
+        }}
+      >
+        <option value="">none: the return feed page on the studio PC</option>
+        {value && !seen && !typing ? <option value={value}>{value} · not seen now</option> : null}
+        {sources.map((s) => (
+          <option key={`${s.name}|${s.url ?? ''}`} value={s.name}>
+            {s.name} · {s.url ?? 'address unknown'} · {networkLabel(s)}
+          </option>
+        ))}
+        <option value={TYPE_A_NAME}>type a name…</option>
+      </select>
+      {typing ? (
+        <input
+          style={{ marginTop: '6px' }}
+          placeholder="MACHINE (source), as NDI shows it"
+          value={value ?? ''}
+          onInput={(e) => onChange((e.currentTarget as HTMLInputElement).value || null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: GatewayView | null; onSaved: () => void; onError: (m: string) => void }) {
@@ -78,12 +146,7 @@ function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: Gate
       <div class="form-grid" style={{ marginTop: '8px', gridTemplateColumns: 'minmax(200px, 1fr) 2fr' }}>
         <label>
           Return feed from NDI source
-          <input
-            list="ndi-sources"
-            placeholder="none: the return feed page"
-            value={s.returnSource ?? ''}
-            onInput={(e) => setS({ ...s, returnSource: (e.currentTarget as HTMLInputElement).value || null })}
-          />
+          <SourcePicker value={s.returnSource} gateway={gateway} onChange={(v) => setS({ ...s, returnSource: v })} />
         </label>
         <span class="muted small" style={{ alignSelf: 'end', paddingBottom: '6px' }}>
           {returnLine(pcr, gateway)}
@@ -210,7 +273,7 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
         <p class="muted small" style={{ marginTop: '10px' }}>
           {gatewaySummary(gateway)}
         </p>
-        <datalist id="ndi-sources">{(gateway?.status?.sources ?? []).map((src) => <option key={src.name} value={src.name} />)}</datalist>
+        <SourceList gateway={gateway} />
         <div class="list" style={{ marginTop: '12px' }}>
           {pcrs.map((p) => (
             <PcrEditor key={`${p.id}-${p.settings.slots}-${p.name}`} pcr={p} gateway={gateway} onSaved={() => void load()} onError={setError} />

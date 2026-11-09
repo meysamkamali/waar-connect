@@ -19,11 +19,11 @@ import {
   VideoSource,
   type LocalTrackPublication,
 } from '@livekit/rtc-node';
-import type { NdiSourceInfo, ReturnFeedStatus, ReturnState } from '@waar-connect/shared';
+import type { ReturnFeedStatus, ReturnState } from '@waar-connect/shared';
 import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
-import type { AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
+import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
 
 /** What the API hands out per PCR that wants a return feed. */
 export interface ReturnTarget {
@@ -162,7 +162,7 @@ export class ReturnFeed {
     }
   }
 
-  async #findSource(): Promise<NdiSourceInfo | undefined> {
+  async #findSource(): Promise<NdiSource | undefined> {
     let waited = 0;
     while (!this.#stopped) {
       const found = this.ndi.source(this.target.source);

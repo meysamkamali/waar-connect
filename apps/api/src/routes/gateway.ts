@@ -27,7 +27,9 @@ export function newGatewayState(): GatewayState {
 export const Report = z.object({
   version: z.string().max(80),
   host: z.string().max(120),
-  sources: z.array(z.object({ name: z.string().max(200), url: z.string().max(200).nullable() })).max(200),
+  sources: z
+    .array(z.object({ name: z.string().max(200), url: z.string().max(200).nullable(), network: z.string().max(40).nullable(), own: z.boolean() }))
+    .max(200),
   returns: z
     .array(
       z.object({

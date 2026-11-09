@@ -7,8 +7,15 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import koffi from 'koffi';
-import type { NdiSourceInfo } from '@waar-connect/shared';
 import { log } from './log.ts';
+
+/** A sender as discovery lists it. The report adds network and ownership (see network.ts). */
+export interface NdiSource {
+  /** Name as NDI shows it, e.g. "MIXER (Program)". */
+  name: string;
+  /** host:port the gateway connects to, when known. */
+  url: string | null;
+}
 
 function fourcc(s: string): number {
   return (s.charCodeAt(0) | (s.charCodeAt(1) << 8) | (s.charCodeAt(2) << 16) | (s.charCodeAt(3) << 24)) >>> 0;
@@ -215,7 +222,7 @@ export class Ndi {
   readonly path: string;
   readonly #Source: unknown;
   #finder: unknown;
-  #sources: NdiSourceInfo[] = [];
+  #sources: NdiSource[] = [];
   #discovering = false;
   #discoveryLoop: Promise<void> | undefined;
 
@@ -307,12 +314,12 @@ export class Ndi {
   }
 
   /** Every source seen on the network, refreshed by the discovery loop. */
-  sources(): NdiSourceInfo[] {
+  sources(): NdiSource[] {
     return this.#sources;
   }
 
   /** Finds a source by its NDI name; exact first, then case-insensitive. */
-  source(name: string): NdiSourceInfo | undefined {
+  source(name: string): NdiSource | undefined {
     const exact = this.#sources.find((s) => s.name === name);
     if (exact) return exact;
     const lower = name.toLowerCase();
@@ -367,7 +374,7 @@ export class Ndi {
   }
 
   /** A receiver connected to one source, BGRA/BGRX at full bandwidth, progressive frames only. */
-  createReceiver(source: NdiSourceInfo, receiverName: string): Receiver {
+  createReceiver(source: NdiSource, receiverName: string): Receiver {
     const inst = this.f.recvCreate({
       source_to_connect_to: { p_ndi_name: source.name, p_url_address: source.url },
       color_format: COLOR_BGRX_BGRA,

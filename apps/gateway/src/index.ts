@@ -8,6 +8,7 @@ import { ApiClient } from './api.ts';
 import { loadConfig } from './config.ts';
 import { log } from './log.ts';
 import { Ndi } from './ndi.ts';
+import { describeSource } from './network.ts';
 import { ReturnFeed } from './return-feed.ts';
 
 const cfg = loadConfig();
@@ -59,7 +60,7 @@ async function reconcile(): Promise<void> {
 
 async function report(): Promise<void> {
   try {
-    await api.report({ version, host: cfg.GATEWAY_NAME, sources: ndi.sources(), returns: [...feeds.values()].map((f) => f.status()) });
+    await api.report({ version, host: cfg.GATEWAY_NAME, sources: ndi.sources().map((s) => describeSource(s)), returns: [...feeds.values()].map((f) => f.status()) });
   } catch (err) {
     if (!apiDown) log('warn', 'report failed', { err });
   }

@@ -6,7 +6,7 @@ import { newGatewayState, Report, statusOf } from './gateway.ts';
 const report = {
   version: '0.1.0+abc1234',
   host: 'connect',
-  sources: [{ name: 'MIXER (Program)', url: '10.0.0.12:5961' }],
+  sources: [{ name: 'MIXER (Program)', url: '10.0.0.12:5961', network: 'ens34', own: false }],
   returns: [
     {
       pcrId: '6f1d2c7e-0a3b-4c5d-8e9f-0a1b2c3d4e5f',

@@ -14,6 +14,10 @@ export interface NdiSourceInfo {
   name: string;
   /** host:port the gateway would connect to, when known. */
   url: string | null;
+  /** The gateway's interface on the sender's subnet, e.g. "ens37"; null when the sender is reached through a router. */
+  network: string | null;
+  /** The sender is this gateway itself (its own outputs), so not a return source. */
+  own: boolean;
 }
 
 export interface ReturnFeedStatus {
