@@ -15,9 +15,10 @@ export class ApiClient {
     this.#token = token;
   }
 
-  async returns(): Promise<ReturnTarget[]> {
-    const data = await this.#call<{ returns: ReturnTarget[] }>('GET', '/api/v1/gateway/returns');
-    return data.returns;
+  /** Which PCRs want a return feed, and the admin's list of NDI sender addresses on other networks. */
+  async poll(): Promise<{ targets: ReturnTarget[]; extraIps: string[] }> {
+    const data = await this.#call<{ returns: ReturnTarget[]; extraIps?: string[] }>('GET', '/api/v1/gateway/returns');
+    return { targets: data.returns, extraIps: data.extraIps ?? [] };
   }
 
   async report(report: GatewayReport): Promise<void> {

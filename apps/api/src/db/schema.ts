@@ -53,6 +53,10 @@ export interface PcrSettings {
    * e.g. "MIXER (Program)". null: the return feed page on the studio PC does it instead.
    */
   returnSource: string | null;
+  /** Height of the return picture the gateway sends (1080, 720, 540, 360); null = the gateway's default. */
+  returnHeight: number | null;
+  /** Bitrate cap of the return picture, kbit/s; null = the gateway's default. */
+  returnKbps: number | null;
 }
 
 export function defaultPcrSettings(slots: number): PcrSettings {
@@ -62,6 +66,8 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     languages: ['ku', 'ckb', 'ar', 'en'],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
     returnSource: null,
+    returnHeight: null,
+    returnKbps: null,
   };
 }
 
@@ -162,3 +168,10 @@ export const statsSamples = pgTable(
   },
   (t) => [index('stats_pcr_identity_at_idx').on(t.pcrId, t.identity, t.at)],
 );
+
+/** Station-wide settings the admin edits, one row per key. `ndi_extra_ips`: string[] of NDI sender addresses. */
+export const stationSettings = pgTable('station_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').$type<unknown>().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});

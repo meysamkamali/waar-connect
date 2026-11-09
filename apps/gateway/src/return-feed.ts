@@ -24,6 +24,7 @@ import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
 import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
+import { scaleBgra, sizeFor } from './scale.ts';
 
 /** What the API hands out per PCR that wants a return feed. */
 export interface ReturnTarget {
@@ -32,6 +33,10 @@ export interface ReturnTarget {
   room: string;
   /** NDI source name. */
   source: string;
+  /** Picture height to send (1080, 720, 540, 360), or null for the gateway's default; scaled before the encode. */
+  height: number | null;
+  /** Bitrate cap, kbit/s, or null for the gateway's default. */
+  kbps: number | null;
   /** LiveKit URL and a token for identity `studio`. */
   url: string;
   token: string;
@@ -78,6 +83,8 @@ export class ReturnFeed {
   #resampler: AudioResampler | undefined;
 
   #size: { width: number; height: number } | null = null;
+  /** Size of the picture sent to the room, after scaling. */
+  #outSize: { width: number; height: number } | null = null;
   #audioInfo: { channels: number; sampleRate: number } | null = null;
   #lastVideoAt = 0;
   #sourceFps = 0;
@@ -128,7 +135,13 @@ export class ReturnFeed {
       audio: this.#audioInfo,
       // The mime type is empty until the server has confirmed the publication; H.264 is what we ask for.
       publish: this.#videoPub
-        ? { codec: this.#videoPub.mimeType?.replace(/^video\//i, '').toLowerCase() || 'h264', maxKbps: this.cfg.RETURN_MAX_KBPS, maxFps: this.#targetFps() }
+        ? {
+            codec: this.#videoPub.mimeType?.replace(/^video\//i, '').toLowerCase() || 'h264',
+            maxKbps: this.#kbps(),
+            maxFps: this.#targetFps(),
+            width: this.#outSize?.width ?? 0,
+            height: this.#outSize?.height ?? 0,
+          }
         : null,
       since: this.#since,
     };
@@ -146,11 +159,23 @@ export class ReturnFeed {
     return Math.min(this.cfg.RETURN_MAX_FPS, this.#sourceFps || this.cfg.RETURN_MAX_FPS);
   }
 
+  /** Bitrate cap: the PCR's own, else the gateway's. */
+  #kbps(): number {
+    return this.target.kbps ?? this.cfg.RETURN_MAX_KBPS;
+  }
+
+  /** Picture height to send: the PCR's own, else the gateway's; null = the source's size. */
+  #outHeight(): number | null {
+    return this.target.height ?? (this.cfg.RETURN_HEIGHT || null);
+  }
+
   async #run(): Promise<void> {
     while (!this.#stopped) {
       const source = await this.#findSource();
       if (!source) return;
-      this.#receiver = this.ndi.createReceiver(source, `waar Connect return · ${this.target.pcrName}`);
+      // At 360p the sender's own low-bandwidth proxy stream (about 640x360) is enough, and cheaper to decode.
+      const lowBandwidth = (this.#outHeight() ?? Infinity) <= 360;
+      this.#receiver = this.ndi.createReceiver(source, `waar Connect return · ${this.target.pcrName}`, { lowBandwidth });
       this.#set('no-signal', `connected to ${source.name}${source.url ? ` at ${source.url}` : ''}, waiting for the first frame`);
       void this.#connectRoom();
       try {
@@ -194,7 +219,7 @@ export class ReturnFeed {
       const now = Date.now();
       if (got.kind === 'video') {
         this.#lastVideoAt = now;
-        this.#onVideo(got);
+        await this.#onVideo(got);
       } else if (got.kind === 'audio') {
         await this.#onAudio(got);
       } else if (got.kind === 'error') {
@@ -216,25 +241,40 @@ export class ReturnFeed {
     }
   }
 
-  #onVideo(frame: VideoFrameIn): void {
+  async #onVideo(frame: VideoFrameIn): Promise<void> {
     const srcFps = frame.fpsD > 0 ? frame.fpsN / frame.fpsD : 25;
     this.#sourceFps = srcFps;
-    if (!this.#videoSource) {
-      this.#videoSource = new VideoSource(frame.width, frame.height);
-      log('info', 'program video', { pcr: this.target.pcrName, width: frame.width, height: frame.height, fps: srcFps, fourcc: frame.fourcc.toString(16), progressive: frame.progressive });
-      void this.#publish();
-    }
     if (!this.#size || this.#size.width !== frame.width || this.#size.height !== frame.height) {
-      if (this.#size) log('info', 'program video size changed', { pcr: this.target.pcrName, width: frame.width, height: frame.height });
+      log('info', this.#size ? 'program video size changed' : 'program video', {
+        pcr: this.target.pcrName,
+        width: frame.width,
+        height: frame.height,
+        fps: srcFps,
+        fourcc: frame.fourcc.toString(16),
+        progressive: frame.progressive,
+      });
       this.#size = { width: frame.width, height: frame.height };
     }
-    // 50 fps in, 25 out: pass every second frame. Below the cap every frame goes through.
+    // 50 fps in, 25 out: pass every second frame. Below the cap every frame goes through. Dropped
+    // frames are never scaled.
     const target = Math.min(this.cfg.RETURN_MAX_FPS, srcFps);
     this.#fpsAcc += target / srcFps;
     if (this.#fpsAcc < 1 - 1e-6) return;
     this.#fpsAcc -= 1;
 
-    this.#videoSource.captureFrame(new VideoFrame(frame.data, frame.width, frame.height, VideoBufferType.BGRA));
+    const wantHeight = this.#outHeight();
+    const out = wantHeight !== null && frame.height > wantHeight ? sizeFor(frame.width, frame.height, wantHeight) : { width: frame.width, height: frame.height };
+    if (!this.#outSize || this.#outSize.width !== out.width || this.#outSize.height !== out.height) {
+      this.#outSize = out;
+      log('info', 'return picture', { pcr: this.target.pcrName, source: `${frame.width}x${frame.height}`, sent: `${out.width}x${out.height}`, maxKbps: this.#kbps() });
+    }
+    if (!this.#videoSource) {
+      this.#videoSource = new VideoSource(out.width, out.height);
+      void this.#publish();
+    }
+    const scaled = await scaleBgra(frame.data, frame.width, frame.height, out.width, out.height);
+    if (this.#stopped || !this.#videoSource) return;
+    this.#videoSource.captureFrame(new VideoFrame(scaled.data, scaled.width, scaled.height, VideoBufferType.BGRA));
     this.#countFrame();
     const state: ReturnState = this.#connected && this.#videoPub ? 'publishing' : 'receiving';
     if (this.#state !== state) this.#set(state, state === 'receiving' ? 'frames arrive; the room is not connected yet' : null);
@@ -253,8 +293,8 @@ export class ReturnFeed {
   }
 
   #sendBlack(): void {
-    if (!this.#videoSource || !this.#size) return;
-    const { width, height } = this.#size;
+    if (!this.#videoSource || !this.#outSize) return;
+    const { width, height } = this.#outSize;
     this.#videoSource.captureFrame(new VideoFrame(new Uint8Array(width * height * 4), width, height, VideoBufferType.BGRA));
   }
 
@@ -328,10 +368,16 @@ export class ReturnFeed {
           source: TrackSource.SOURCE_CAMERA,
           videoCodec: VideoCodec.H264,
           simulcast: false,
-          videoEncoding: { maxBitrate: BigInt(this.cfg.RETURN_MAX_KBPS * 1000), maxFramerate: this.#targetFps() },
+          videoEncoding: { maxBitrate: BigInt(this.#kbps() * 1000), maxFramerate: this.#targetFps() },
         });
         this.#videoPub = await me.publishTrack(track, opts);
-        log('info', 'program video published', { pcr: this.target.pcrName, codec: this.#videoPub.mimeType, maxKbps: this.cfg.RETURN_MAX_KBPS, maxFps: this.#targetFps() });
+        log('info', 'program video published', {
+          pcr: this.target.pcrName,
+          codec: this.#videoPub.mimeType,
+          maxKbps: this.#kbps(),
+          maxFps: this.#targetFps(),
+          size: this.#outSize ? `${this.#outSize.width}x${this.#outSize.height}` : null,
+        });
       }
       if (this.#audioSource && !this.#audioPub) {
         const track = LocalAudioTrack.createAudioTrack('mix-minus', this.#audioSource);

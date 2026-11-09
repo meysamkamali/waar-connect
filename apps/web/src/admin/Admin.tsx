@@ -2,8 +2,8 @@
 // page links for the studio PC (return feed in, one output page per slot).
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import type { NdiSourceInfo } from '@waar-connect/shared';
-import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
+import { RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiSourceInfo } from '@waar-connect/shared';
+import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
 import { LANGUAGES } from '../staff/Contacts.tsx';
 
 /** One line on where this studio's return feed stands, from the gateway's last report. */
@@ -15,7 +15,8 @@ function returnLine(pcr: Pcr, gateway: GatewayView | null): string {
   const r = gateway.status.returns.find((x) => x.pcrId === pcr.id);
   if (!r) return 'Gateway online; it picks this studio up within 15 s.';
   const video = r.video ? `${r.video.width}x${r.video.height} ${r.video.fps} fps` : '';
-  const out = r.publish ? `${r.publish.codec} up to ${r.publish.maxKbps} kbit/s` : '';
+  const sent = r.publish && r.publish.width && r.publish.height ? `${r.publish.width}x${r.publish.height} ` : '';
+  const out = r.publish ? `sends ${sent}${r.publish.codec} up to ${r.publish.maxKbps} kbit/s` : '';
   return `gateway ${r.state}${r.detail ? `: ${r.detail}` : ''}${video ? ` · ${video}` : ''}${out ? ` · ${out}` : ''}`;
 }
 
@@ -94,9 +95,54 @@ function SourcePicker({ value, gateway, onChange }: { value: string | null; gate
   );
 }
 
+/**
+ * NDI senders on networks the VM is not on: mDNS does not reach them, so discovery also asks these
+ * addresses. The gateway picks a change up within its next poll and restarts discovery.
+ */
+function DiscoveryEditor({ gateway, onSaved, onError }: { gateway: GatewayView | null; onSaved: () => void; onError: (m: string) => void }) {
+  const saved = gateway?.extraIps ?? [];
+  const [text, setText] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const value = text ?? saved.join(', ');
+  const inUse = gateway?.status?.extraIps ?? [];
+  return (
+    <form
+      class="row"
+      style={{ marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        setDiscovery(value.split(/[\s,;]+/).filter(Boolean))
+          .then(() => {
+            setText(null);
+            onSaved();
+          })
+          .catch((err: unknown) => onError(err instanceof ApiError ? err.message : String(err)))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <span class="muted small" title="IPv4 addresses or host names of NDI senders on subnets the VM has no leg on, separated by commas">
+        NDI senders on other networks
+      </span>
+      <input style={{ flex: '1 1 260px' }} placeholder="10.1.1.107, 10.100.2.102" value={value} onInput={(e) => setText((e.currentTarget as HTMLInputElement).value)} />
+      <button class="btn secondary small" type="submit" disabled={busy || text === null}>
+        Save
+      </button>
+      <span class="muted small">{gateway?.status ? (inUse.length ? `gateway asks: ${inUse.join(', ')}` : 'gateway asks mDNS only') : ''}</span>
+    </form>
+  );
+}
+
 function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: GatewayView | null; onSaved: () => void; onError: (m: string) => void }) {
   const [name, setName] = useState(pcr.name);
-  const [s, setS] = useState<PcrSettings>({ ...pcr.settings, outputNames: [...pcr.settings.outputNames], returnSource: pcr.settings.returnSource ?? null });
+  const [s, setS] = useState<PcrSettings>({
+    ...pcr.settings,
+    outputNames: [...pcr.settings.outputNames],
+    returnSource: pcr.settings.returnSource ?? null,
+    returnHeight: pcr.settings.returnHeight ?? null,
+    returnKbps: pcr.settings.returnKbps ?? null,
+  });
+  const defaults = gateway?.status?.defaults;
   const [busy, setBusy] = useState(false);
   const origin = location.origin;
 
@@ -150,6 +196,33 @@ function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: Gate
         </label>
         <span class="muted small" style={{ alignSelf: 'end', paddingBottom: '6px' }}>
           {returnLine(pcr, gateway)}
+        </span>
+      </div>
+      <div class="form-grid" style={{ marginTop: '8px', gridTemplateColumns: 'minmax(140px, 1fr) minmax(140px, 1fr) 2fr' }}>
+        <label>
+          Return picture
+          <select value={s.returnHeight ?? ''} onChange={(e) => setS({ ...s, returnHeight: Number((e.currentTarget as HTMLSelectElement).value) || null })}>
+            <option value="">gateway default{defaults ? ` (${defaults.height ? `${defaults.height}p` : 'source size'})` : ''}</option>
+            {RETURN_HEIGHTS.map((h) => (
+              <option key={h} value={h}>
+                {h}p
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Return bitrate
+          <select value={s.returnKbps ?? ''} onChange={(e) => setS({ ...s, returnKbps: Number((e.currentTarget as HTMLSelectElement).value) || null })}>
+            <option value="">gateway default{defaults ? ` (${defaults.kbps} kbit/s)` : ''}</option>
+            {RETURN_KBPS_CHOICES.map((k) => (
+              <option key={k} value={k}>
+                {k} kbit/s
+              </option>
+            ))}
+          </select>
+        </label>
+        <span class="muted small" style={{ alignSelf: 'end', paddingBottom: '6px' }}>
+          The guests watch the return on a phone. A smaller picture costs the server less: 540p is about a quarter of 1080p to encode.
         </span>
       </div>
       <div class="row" style={{ marginTop: '8px', flexWrap: 'wrap' }}>
@@ -227,10 +300,10 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
   useEffect(() => void load(), []);
 
   // The gateway reports every 5 s; the page follows at the same pace.
+  const pollGateway = () => void gatewayStatus().then(setGateway).catch(() => undefined);
   useEffect(() => {
-    const poll = () => void gatewayStatus().then(setGateway).catch(() => undefined);
-    poll();
-    const timer = setInterval(poll, 5000);
+    pollGateway();
+    const timer = setInterval(pollGateway, 5000);
     return () => clearInterval(timer);
   }, []);
 
@@ -274,6 +347,7 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
           {gatewaySummary(gateway)}
         </p>
         <SourceList gateway={gateway} />
+        <DiscoveryEditor gateway={gateway} onSaved={pollGateway} onError={setError} />
         <div class="list" style={{ marginTop: '12px' }}>
           {pcrs.map((p) => (
             <PcrEditor key={`${p.id}-${p.settings.slots}-${p.name}`} pcr={p} gateway={gateway} onSaved={() => void load()} onError={setError} />

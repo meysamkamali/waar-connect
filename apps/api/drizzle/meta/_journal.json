@@ -8,6 +8,13 @@
       "when": 1794109507017,
       "tag": "0000_pcr_model",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794201493832,
+      "tag": "0001_station_settings",
+      "breakpoints": true
     }
   ]
 }

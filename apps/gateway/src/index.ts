@@ -17,7 +17,17 @@ const version = process.env['WC_COMMIT'] ? `${pkg.version}+${process.env['WC_COM
 
 const ndi = Ndi.load(cfg.NDI_LIB);
 log('info', 'gateway starting', { version, host: cfg.GATEWAY_NAME, ndi: ndi.version(), lib: ndi.path, api: cfg.API_URL, extraIps: cfg.extraIps });
-ndi.startDiscovery(cfg.extraIps);
+let discoveryIps: string[] = [...new Set(cfg.extraIps)];
+ndi.startDiscovery(discoveryIps);
+
+/** Discovery asks mDNS plus these addresses; a changed list (admin page or .env) needs a new NDI finder. */
+async function setDiscovery(next: string[]): Promise<void> {
+  if (next.join(',') === discoveryIps.join(',')) return;
+  discoveryIps = next;
+  await ndi.stopDiscovery();
+  ndi.startDiscovery(next);
+  log('info', 'NDI discovery restarted', { extraIps: next });
+}
 
 const api = new ApiClient(cfg.API_URL, cfg.GATEWAY_TOKEN);
 const feeds = new Map<string, ReturnFeed>();
@@ -29,17 +39,19 @@ async function reconcile(): Promise<void> {
   if (reconciling) return;
   reconciling = true;
   try {
-    const targets = await api.returns();
+    const { targets, extraIps } = await api.poll();
     if (apiDown) log('info', 'API reachable again');
     apiDown = false;
+    await setDiscovery([...new Set([...cfg.extraIps, ...extraIps])]);
     const wanted = new Map(targets.map((t) => [t.pcrId, t]));
     for (const [id, feed] of feeds) {
       const t = wanted.get(id);
-      if (t && t.source === feed.target.source) {
+      if (t && t.source === feed.target.source && t.height === feed.target.height && t.kbps === feed.target.kbps) {
         feed.update(t);
         continue;
       }
-      log('info', 'return feed stopping', { pcr: feed.target.pcrName, source: feed.target.source, why: t ? 'source changed' : 'no longer wanted' });
+      const why = !t ? 'no longer wanted' : t.source !== feed.target.source ? 'source changed' : 'picture size or bitrate changed';
+      log('info', 'return feed stopping', { pcr: feed.target.pcrName, source: feed.target.source, why });
       feeds.delete(id);
       await feed.stop().catch((err: unknown) => log('warn', 'feed stop failed', { err }));
     }
@@ -60,7 +72,14 @@ async function reconcile(): Promise<void> {
 
 async function report(): Promise<void> {
   try {
-    await api.report({ version, host: cfg.GATEWAY_NAME, sources: ndi.sources().map((s) => describeSource(s)), returns: [...feeds.values()].map((f) => f.status()) });
+    await api.report({
+      version,
+      host: cfg.GATEWAY_NAME,
+      sources: ndi.sources().map((s) => describeSource(s)),
+      extraIps: discoveryIps,
+      defaults: { height: cfg.RETURN_HEIGHT || null, kbps: cfg.RETURN_MAX_KBPS, fps: cfg.RETURN_MAX_FPS },
+      returns: [...feeds.values()].map((f) => f.status()),
+    });
   } catch (err) {
     if (!apiDown) log('warn', 'report failed', { err });
   }

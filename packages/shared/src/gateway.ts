@@ -33,8 +33,8 @@ export interface ReturnFeedStatus {
   /** What arrives from NDI right now. */
   video: { width: number; height: number; fps: number } | null;
   audio: { channels: number; sampleRate: number } | null;
-  /** What goes out: codec on the wire and the bitrate cap. */
-  publish: { codec: string; maxKbps: number; maxFps: number } | null;
+  /** What goes out: codec on the wire, the bitrate cap, and the picture size sent (0x0 before the first frame). */
+  publish: { codec: string; maxKbps: number; maxFps: number; width: number; height: number } | null;
   /** Since when the feed has been in this state (ms since epoch). */
   since: number;
 }
@@ -46,6 +46,10 @@ export interface GatewayReport {
   host: string;
   /** Every NDI source the gateway can see on the network right now. */
   sources: NdiSourceInfo[];
+  /** Addresses discovery also asks, beyond mDNS: the admin's list plus NDI_EXTRA_IPS on the gateway. */
+  extraIps: string[];
+  /** What a PCR gets when it names no picture size or bitrate of its own (height null = the source's size). */
+  defaults: { height: number | null; kbps: number; fps: number };
   returns: ReturnFeedStatus[];
 }
 
@@ -56,3 +60,9 @@ export interface GatewayStatus extends GatewayReport {
 
 /** A gateway report older than this counts as a gateway that is gone. */
 export const GATEWAY_STALE_MS = 20_000;
+
+/** Picture heights the admin may choose for a return; null on the PCR = the gateway's default. */
+export const RETURN_HEIGHTS = [1080, 720, 540, 360] as const;
+export type ReturnHeight = (typeof RETURN_HEIGHTS)[number];
+/** Bitrate caps offered for a return, kbit/s. */
+export const RETURN_KBPS_CHOICES = [1000, 1500, 2000, 3000, 4000, 6000] as const;

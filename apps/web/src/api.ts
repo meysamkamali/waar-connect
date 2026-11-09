@@ -76,11 +76,17 @@ export interface PcrSettings {
   outputNames: string[];
   /** NDI source the gateway publishes as the return feed; null = the return feed page on the studio PC. */
   returnSource: string | null;
+  /** Height of the return picture (1080, 720, 540, 360); null = the gateway's default. */
+  returnHeight: number | null;
+  /** Bitrate cap of the return picture, kbit/s; null = the gateway's default. */
+  returnKbps: number | null;
 }
 /** The gateway as the API knows it: set up at all, and its last report if one came recently. */
 export interface GatewayView {
   configured: boolean;
   status: GatewayStatus | null;
+  /** NDI sender addresses the admin listed; discovery asks them beyond mDNS. */
+  extraIps: string[];
 }
 export interface Pcr {
   id: string;
@@ -196,3 +202,15 @@ export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnap
 export const outputToken = (id: string, slot: number) => call<KioskToken & { slot: number; name: string }>('POST', `/pcrs/${id}/outputs/${slot}/token`);
 export const studioToken = (id: string) => call<KioskToken>('POST', `/pcrs/${id}/studio-token`);
 export const gatewayStatus = () => call<GatewayView>('GET', '/gateway/status');
+export const setDiscovery = (extraIps: string[]) => call<{ extraIps: string[] }>('PUT', '/gateway/discovery', { extraIps });
+
+/** Temporary, test phase: the VM's CPU and memory for the staff top bar. */
+export interface SystemLoad {
+  at: number;
+  cpuPct: number;
+  cores: number;
+  load1: number;
+  memUsedMb: number;
+  memTotalMb: number;
+}
+export const systemLoad = () => call<SystemLoad>('GET', '/system');

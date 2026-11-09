@@ -39,6 +39,8 @@ const FRAME_STATUS_CHANGE = 100;
 // NDIlib_recv_color_format_e / NDIlib_recv_bandwidth_e / NDIlib_frame_format_type_e
 const COLOR_BGRX_BGRA = 0;
 const BANDWIDTH_HIGHEST = 100;
+/** The sender's own low-bandwidth proxy stream, about 640x360: enough for a 360p return and cheaper to decode. */
+const BANDWIDTH_LOWEST = 0;
 const FORMAT_PROGRESSIVE = 1;
 
 export interface VideoFrameIn {
@@ -373,12 +375,12 @@ export class Ndi {
     }
   }
 
-  /** A receiver connected to one source, BGRA/BGRX at full bandwidth, progressive frames only. */
-  createReceiver(source: NdiSource, receiverName: string): Receiver {
+  /** A receiver connected to one source, BGRA/BGRX, progressive frames only; full bandwidth or the sender's proxy stream. */
+  createReceiver(source: NdiSource, receiverName: string, opts: { lowBandwidth?: boolean } = {}): Receiver {
     const inst = this.f.recvCreate({
       source_to_connect_to: { p_ndi_name: source.name, p_url_address: source.url },
       color_format: COLOR_BGRX_BGRA,
-      bandwidth: BANDWIDTH_HIGHEST,
+      bandwidth: opts.lowBandwidth ? BANDWIDTH_LOWEST : BANDWIDTH_HIGHEST,
       allow_video_fields: false,
       p_ndi_recv_name: receiverName,
     });

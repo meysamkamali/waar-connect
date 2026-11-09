@@ -32,3 +32,20 @@ test('mergeSettings: the NDI return source is trimmed, cleared by an empty strin
   delete old.returnSource;
   assert.equal(mergeSettings(old as typeof base, undefined).returnSource, null);
 });
+
+test('return picture size and bitrate: null means the gateway default; other changes leave them alone', () => {
+  const base = defaultPcrSettings(2);
+  assert.equal(base.returnHeight, null);
+  assert.equal(base.returnKbps, null);
+  const set = mergeSettings(base, { returnHeight: 540, returnKbps: 1500 });
+  assert.equal(set.returnHeight, 540);
+  assert.equal(set.returnKbps, 1500);
+  assert.equal(mergeSettings(set, { slots: 3 }).returnHeight, 540);
+  assert.equal(mergeSettings(set, { returnHeight: null }).returnHeight, null);
+  assert.equal(mergeSettings(set, { returnKbps: null }).returnKbps, null);
+  // rows written before the fields existed
+  const old = { ...base } as Partial<typeof base>;
+  delete old.returnHeight;
+  delete old.returnKbps;
+  assert.equal(mergeSettings(old as typeof base, undefined).returnHeight, null);
+});

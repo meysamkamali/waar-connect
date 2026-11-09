@@ -83,8 +83,10 @@ starts serving as soon as both certificates are present.
 puts a shared `GATEWAY_TOKEN` into the API's and the gateway's `.env`, downloads the NDI SDK for Linux
 and installs its runtime (the flag is your acceptance of the NDI SDK licence), builds, and starts
 `waar-connect-gateway`. Without the flag everything but the runtime is done and the service stays
-stopped. The admin then names the NDI source per studio under `/app/admin`. NDI senders on a subnet the VM
-is not on go into `NDI_EXTRA_IPS` in the gateway `.env` (mDNS does not cross the router).
+stopped. The admin then names the NDI source per studio under `/app/admin`, with the picture size and bitrate the
+gateway sends for it (default 540p at 1500 kbit/s, about a quarter of 1080p to encode). NDI senders on a
+subnet the VM is not on are listed under **Admin → NDI senders on other networks** (mDNS does not cross the
+router); `NDI_EXTRA_IPS` in the gateway `.env` is added to that list.
 
 ### Second NIC: the station's NDI network
 
@@ -106,8 +108,8 @@ not pass traffic from 10.100.1.0/24 to the ENG network 10.1.1.0/24. "ENG07 (WAAR
 NDI network's own senders ("NDI (OUT 1)" at 10.100.1.112) no longer need an entry there.
 
 The station has more NDI subnets than the VM has legs (2026-11-09: "PCR2-INGEST" at 10.100.2.102, reached
-through 10.0.0.1 but not found by mDNS), so `NDI_EXTRA_IPS` is `10.1.1.107,10.100.2.102` for now and grows
-by one address per machine. Two ways out of that list: have the MikroTik repeat mDNS from the NDI VLANs
+through 10.0.0.1 but not found by mDNS), so the admin's list (Admin → NDI senders on other networks) holds 10.1.1.107 and
+10.100.2.102 for now and grows by one address per machine. Two ways out of that list: have the MikroTik repeat mDNS from the NDI VLANs
 into 10.0.0.0/24 (RouterOS 7.16+, `/ip/dns set mdns-repeat-ifaces=…`), or run the NDI discovery server
 (`ndi-discovery-server` ships in the SDK tarball, `bin/x86_64-linux-gnu/`) on the VM and point every NDI
 sender in the station at it, which turns mDNS off on those senders. Neither is set up yet.
@@ -117,5 +119,5 @@ sender in the station at it, which turns mDNS off on those senders. Neither is s
 From the development PC (the API, web and gateway build together; `.env` files stay on the VM):
 
 ```bash
-tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' -czf - . | ssh -i ~/.ssh/waar-connect meysam@10.0.0.41 'sudo tar -xzf - -C /opt/waar-connect && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo env WC_COMMIT=$(git rev-parse --short HEAD) npm run -s build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && sudo systemctl restart waar-connect-api waar-connect-phase0 waar-connect-gateway'
+tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' -czf - . | ssh -i ~/.ssh/waar-connect meysam@10.0.0.41 'sudo tar -xzf - -C /opt/waar-connect && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo env WC_COMMIT=$(git rev-parse --short HEAD) npm run -s build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && (cd apps/api && sudo -u waarconnect node --env-file=.env dist/db/migrate.js) && sudo systemctl restart waar-connect-api waar-connect-phase0 waar-connect-gateway'
 ```
