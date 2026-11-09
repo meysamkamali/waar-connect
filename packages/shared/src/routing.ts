@@ -93,8 +93,9 @@ function staffMayReceive(staff: StaffState, track: PublishedTrack, state: RoomSt
     case 'talkback':
       return false; // producer and engineer do not hear each other's talk; they have the room
     case 'program-video':
-    case 'program-audio':
       return true;
+    case 'program-audio':
+      return false; // the console sits in the PCR, where the programme sound is on the monitors already
     case 'camera':
     case 'microphone':
       // every guest, in every place: the door needs a preview, the studio needs monitoring

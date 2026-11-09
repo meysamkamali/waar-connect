@@ -137,9 +137,9 @@ describe('outputs', () => {
 });
 
 describe('staff, monitor, studio return', () => {
-  it('producer and engineer see every guest in every place and the program, never talkback', () => {
+  it('producer and engineer see every guest in every place and the program picture, never talkback or the program sound', () => {
     const s = state({ staff: [staff(PROD, 'producer', { talkTo: 'all' }), staff(ENG, 'engineer', { talkTo: 'all' })] });
-    assert.deepEqual(sids(PROD, s), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'c-cam', 'c-mic', 'pgm-a', 'pgm-v']);
+    assert.deepEqual(sids(PROD, s), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'c-cam', 'c-mic', 'pgm-v']);
     assert.deepEqual(sids(ENG, s), sids(PROD, s));
   });
   it('a monitor sees everything except talkback', () => {

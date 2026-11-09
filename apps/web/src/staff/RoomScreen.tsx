@@ -1,6 +1,6 @@
 // /app/producer/:id — one PCR: the door, the green room, the studio slots, and the guests seated
 // here with their links (from the contact book or a bare name).
-import type { GuestState } from '@waar-connect/shared';
+import { roleOf, type GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import {
@@ -141,8 +141,11 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   const guestsByPlace = (place: GuestState['place']) => (snap?.guests ?? []).filter((g) => g.place === place);
   const recordFor = (identity: string) => view.guests.find((g) => g.identity === identity);
   const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
+  // Only the guests are played here. The studio's sound is never attached: the console sits in the PCR,
+  // where the programme is on the monitors already (the server does not send it to staff either).
   const audible = session.listening.value
     ? session.tiles.value
+        .filter((t) => roleOf(t.identity) === 'guest')
         .filter((t) => !(focused && solo) || t.identity === focused)
         .map((t) => t.audio)
         .filter((a): a is NonNullable<typeof a> => a !== null)

@@ -68,8 +68,8 @@ describe('room controller', () => {
     assert.equal(fake.attrs.get(A)?.['wc.place'], 'lobby');
     assert.deepEqual(fake.subsOf(A), []);
     assert.deepEqual(fake.subsOf(OUT1), []);
-    // staff see every guest in every place, and the program
-    assert.deepEqual(fake.subsOf(PROD), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'pgm-a', 'pgm-v']);
+    // staff see every guest in every place, and the program picture (its sound is on the PCR's monitors)
+    assert.deepEqual(fake.subsOf(PROD), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'pgm-v']);
     assert.deepEqual(c.snapshot().guests.map((g) => g.place), ['lobby', 'lobby']);
   });
 

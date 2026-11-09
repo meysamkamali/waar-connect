@@ -102,6 +102,10 @@ the Studio.
 Two rules never bend: a talk track can never reach a studio output, and a guest can never hear
 themselves. Both are enforced on the server, not only in the pages (see "How it maps to LiveKit").
 
+The producer and the engineer see and hear every guest in every place and may see the program picture.
+They never get the studio mix-minus: their console sits in the PCR, where the programme sound is on the
+room's monitors already, and a second copy from the PC would come late and double it.
+
 ## Studio slots
 
 Outputs are **fixed slots**, not guest names. Slot 1 is always the same SDI output and the same input
