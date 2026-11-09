@@ -40,6 +40,7 @@ redirect to port 8443, so a link without the port still works.
 | Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
 | Gateway (NDI return into the rooms) | `waar-connect-gateway.service`, user `waarconnect`, no port; `/opt/waar-connect/apps/gateway/.env` holds the token shared with the API | systemd, `install-gateway.sh` |
 | NDI runtime | `/usr/local/lib/libndi.so.6` from the NDI SDK for Linux; licence texts in `/usr/local/share/doc/ndi/` | `install-gateway.sh --accept-ndi-license` |
+| Second NIC (station NDI network) | `ens37`, 10.100.1.0/24 by DHCP from the MikroTik at 10.100.1.1; `/etc/netplan/60-ens37.yaml` (from `netplan-ens37.yaml`) | netplan |
 
 ## Install
 
@@ -82,8 +83,27 @@ starts serving as soon as both certificates are present.
 puts a shared `GATEWAY_TOKEN` into the API's and the gateway's `.env`, downloads the NDI SDK for Linux
 and installs its runtime (the flag is your acceptance of the NDI SDK licence), builds, and starts
 `waar-connect-gateway`. Without the flag everything but the runtime is done and the service stays
-stopped. The admin then names the NDI source per studio under `/app/admin`. NDI senders on another
-subnet than the VM go into `NDI_EXTRA_IPS` in the gateway `.env` (mDNS does not cross the router).
+stopped. The admin then names the NDI source per studio under `/app/admin`. NDI senders on a subnet the VM
+is not on go into `NDI_EXTRA_IPS` in the gateway `.env` (mDNS does not cross the router).
+
+### Second NIC: the station's NDI network
+
+Since 2026-11-09 the VM has a second VMXNET3 NIC, `ens37`, on the station's NDI network
+10.100.1.0/24, so NDI senders there are found by mDNS and received directly. `netplan-ens37.yaml`
+is the configuration (`/etc/netplan/60-ens37.yaml`, mode 600, then `netplan apply`):
+
+- DHCP for the address only (the MikroTik at 10.100.1.1 leases it; 10.100.1.105 at the time of
+  writing). The default route and DNS stay on `ens34`, where the public port forwards arrive.
+- Routing table 100 with a rule `from 10.100.1.0/24`: whatever reaches the VM on `ens37` is answered
+  through `ens37`, so the host is symmetric on both networks.
+- ufw allows mDNS (5353/udp) from 10.100.1.0/24 as well (`install-gateway.sh` adds both rules).
+- LiveKit keeps `rtc.interfaces.includes: [ens34]`: no ICE candidates on the NDI network. Station PCs
+  reach the rooms the same way as before.
+
+Measured 2026-11-09: 10.100.1.1 and 10.0.0.1 are one router (same MAC) on two VLANs, and it does
+not pass traffic from 10.100.1.0/24 to the ENG network 10.1.1.0/24. "ENG07 (WAAR PGM on ENG07)" at
+10.1.1.107 therefore still arrives over `ens34` through 10.0.0.1 and stays in `NDI_EXTRA_IPS`; the
+NDI network's own senders ("NDI (OUT 1)" at 10.100.1.112) no longer need an entry there.
 
 ## Updating the app
 

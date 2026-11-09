@@ -80,7 +80,10 @@ else
 fi
 systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
-  ufw allow from 10.0.0.0/24 to any port 5353 proto udp comment 'mDNS for NDI discovery' >/dev/null 2>&1 || true
+  # mDNS on both of the VM's networks: the server LAN (ens34) and the station's NDI network (ens37).
+  for net in 10.0.0.0/24 10.100.1.0/24; do
+    ufw allow from "$net" to any port 5353 proto udp comment 'mDNS for NDI discovery' >/dev/null 2>&1 || true
+  done
 fi
 
 echo "== ndi runtime"

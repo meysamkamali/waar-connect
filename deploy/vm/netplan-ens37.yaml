@@ -1,0 +1,26 @@
+# Second NIC, added 2026-11-09: the station's NDI network 10.100.1.0/24 (DHCP from the MikroTik at
+# 10.100.1.1). Address only: the default route and DNS stay on ens34 (10.0.0.0/24), where the public
+# port forwards arrive. Table 100 sends replies to anything that reached us on this NIC back out
+# through it, so the host is symmetric on both networks.
+# Install: sudo install -m 600 netplan-ens37.yaml /etc/netplan/60-ens37.yaml && sudo netplan apply
+network:
+  version: 2
+  ethernets:
+    ens37:
+      dhcp4: true
+      dhcp4-overrides:
+        use-routes: false
+        use-dns: false
+        use-domains: false
+        route-metric: 200
+      routes:
+        - to: 10.100.1.0/24
+          scope: link
+          table: 100
+        - to: default
+          via: 10.100.1.1
+          table: 100
+      routing-policy:
+        - from: 10.100.1.0/24
+          table: 100
+          priority: 100

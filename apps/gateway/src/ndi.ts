@@ -344,7 +344,17 @@ export class Ndi {
         const ptr = this.f.findSources(this.#finder, count);
         const n = Number(count[0] ?? 0);
         const list = ptr && n > 0 ? (koffi.decode(ptr, this.#Source as never, n) as RawSource[]) : [];
-        const next = list.map((s) => ({ name: s.p_ndi_name ?? '?', url: s.p_url_address })).sort((x, y) => x.name.localeCompare(y.name));
+        // A sender found both by mDNS and through NDI_EXTRA_IPS is listed twice by the SDK; keep one.
+        const seen = new Set<string>();
+        const next = list
+          .map((s) => ({ name: s.p_ndi_name ?? '?', url: s.p_url_address }))
+          .filter((s) => {
+            const key = `${s.name}|${s.url ?? ''}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          })
+          .sort((x, y) => x.name.localeCompare(y.name));
         if (JSON.stringify(next) !== JSON.stringify(this.#sources)) {
           this.#sources = next;
           log('info', 'NDI sources', { count: next.length, names: next.map((s) => s.name) });
