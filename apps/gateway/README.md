@@ -62,9 +62,14 @@ NDI discovery is mDNS; a sender on another subnet is reached by listing its IP i
 
 ## CPU
 
-Measured 2026-11-09 on the VM (Xeon E5-2680 v2, 2013, no AVX2): one 1080p25 return costs about
-2.2 cores, most of it the OpenH264 software encode, the NDI decode about half a core. Two returns fit
-the 8-core VM beside LiveKit; a 720p send would roughly halve it if ever needed. Guests' phones
-decode H.264 in hardware.
+Measured 2026-11-09 on the VM (Xeon E5-2680 v2, 2013, no AVX2), one 1080p25 program source:
+
+| sent as | gateway process | where it goes |
+|---|---|---|
+| 1080p (source size) | 2.2 cores | OpenH264 encode about 1.5, NDI decode 0.5 |
+| 540p (default) | 1.7 cores | main thread 0.9 (frame copy, 9 ms box filter, audio), NDI decode 0.5, encode 0.16 |
+
+At 360p the sender's proxy stream is taken, so the NDI decode shrinks as well (not measured yet). Two
+or three returns fit the 8-core VM beside LiveKit. Guests' phones decode H.264 in hardware.
 
 NDI® is a registered trademark of Vizrt NDI AB.
