@@ -7,6 +7,7 @@ import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
+import { evLabel, type CameraControls, type CameraState } from '../lib/camera.ts';
 import { CODEC_LABELS, CODECS, describeCodecs, SUPPORT_LABELS } from '../lib/codecs.ts';
 import { DEGRADE_DEFAULT, DEGRADE_LABELS, describeReport, phoneModel, recommendedCap, SWEEP_STEPS, type Degrade, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
@@ -72,6 +73,59 @@ export function GuestVideo(p: GuestCardProps & { className?: string }) {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The camera controls this phone said it offers (Android Chrome: most of them; iPhone: usually none);
+ * each change goes to the phone as a `cam` command and the phone reports back at once. The locks are
+ * the useful part live: a phone's automatic exposure and white balance hunt when the guest moves.
+ */
+function CameraRow({ can, now, cmd }: { can: CameraControls; now: CameraState; cmd: (command: Record<string, unknown>) => void }) {
+  const ec = can.exposureCompensation;
+  const zoom = can.zoom;
+  const ev = now.exposureCompensation ?? 0;
+  const z = now.zoom ?? zoom?.min ?? 1;
+  const slider = (e: Event) => Number((e.currentTarget as HTMLInputElement).value);
+  return (
+    <div class="row settings">
+      <span class="muted small">lens</span>
+      {ec && (
+        <label class="inline" title="Exposure offset: brighter or darker than the camera's own choice">
+          exposure {evLabel(ev)}
+          <input type="range" min={ec.min} max={ec.max} step={ec.step || 0.1} value={ev} onChange={(e) => cmd({ cam: { exposureCompensation: slider(e) } })} />
+        </label>
+      )}
+      {can.exposureLock && (
+        <button class={`chip ${now.exposureLocked ? 'on' : ''}`} title="Hold the exposure where it is now, so the picture does not pump when the guest moves" onClick={() => cmd({ cam: { exposureLock: !now.exposureLocked } })}>
+          {now.exposureLocked ? 'exposure locked' : 'lock exposure'}
+        </button>
+      )}
+      {can.whiteBalanceLock && (
+        <button class={`chip ${now.whiteBalanceLocked ? 'on' : ''}`} title="Hold the colour balance where it is now" onClick={() => cmd({ cam: { whiteBalanceLock: !now.whiteBalanceLocked } })}>
+          {now.whiteBalanceLocked ? 'white balance locked' : 'lock white balance'}
+        </button>
+      )}
+      {can.focusLock && (
+        <button class={`chip ${now.focusLocked ? 'on' : ''}`} title="Hold the focus where it is now" onClick={() => cmd({ cam: { focusLock: !now.focusLocked } })}>
+          {now.focusLocked ? 'focus locked' : 'lock focus'}
+        </button>
+      )}
+      {zoom && (
+        <label class="inline" title="The phone's own zoom">
+          zoom {z.toFixed(1)}×
+          <input type="range" min={zoom.min} max={zoom.max} step={zoom.step || 0.1} value={z} onChange={(e) => cmd({ cam: { zoom: slider(e) } })} />
+        </label>
+      )}
+      {can.torch && (
+        <button class={`chip ${now.torch ? 'on' : ''}`} title="The phone's LED as a fill light (back camera)" onClick={() => cmd({ cam: { torch: !now.torch } })}>
+          {now.torch ? 'light on' : 'light'}
+        </button>
+      )}
+      <button class="chip" title="Everything back to the camera's automatic behaviour" onClick={() => cmd({ cam: { auto: true } })}>
+        auto
+      </button>
     </div>
   );
 }
@@ -329,6 +383,7 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
               off (music, studio mic)
             </button>
           </div>
+          {r?.cam && <CameraRow can={r.cam.can} now={r.cam.now} cmd={cmd} />}
           <div class="row settings">
             <button class="chip" onClick={() => cmd({ mute: !(r?.micOn ?? true) })}>
               {r?.micOn === false ? 'unmute mic' : 'mute mic'}

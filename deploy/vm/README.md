@@ -105,6 +105,13 @@ not pass traffic from 10.100.1.0/24 to the ENG network 10.1.1.0/24. "ENG07 (WAAR
 10.1.1.107 therefore still arrives over `ens34` through 10.0.0.1 and stays in `NDI_EXTRA_IPS`; the
 NDI network's own senders ("NDI (OUT 1)" at 10.100.1.112) no longer need an entry there.
 
+The station has more NDI subnets than the VM has legs (2026-11-09: "PCR2-INGEST" at 10.100.2.102, reached
+through 10.0.0.1 but not found by mDNS), so `NDI_EXTRA_IPS` is `10.1.1.107,10.100.2.102` for now and grows
+by one address per machine. Two ways out of that list: have the MikroTik repeat mDNS from the NDI VLANs
+into 10.0.0.0/24 (RouterOS 7.16+, `/ip/dns set mdns-repeat-ifaces=…`), or run the NDI discovery server
+(`ndi-discovery-server` ships in the SDK tarball, `bin/x86_64-linux-gnu/`) on the VM and point every NDI
+sender in the station at it, which turns mDNS off on those senders. Neither is set up yet.
+
 ## Updating the app
 
 From the development PC (the API, web and gateway build together; `.env` files stay on the VM):

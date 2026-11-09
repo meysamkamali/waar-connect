@@ -25,6 +25,8 @@ import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishP
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
 
+import { cameraConstraints, mergeCameraRequest, parseCameraRequest, readCamera, type CameraRequest } from '../lib/camera.ts';
+
 // Settings the producer pushed to this phone; they survive a reload of the same tab.
 const OVERRIDE_KEY = 'wc.guest.override';
 export interface GuestOverride {
@@ -40,6 +42,8 @@ export interface GuestOverride {
   failedCodecs?: CodecName[];
   /** False: send only the full-size copy (no 360p / 180p simulcast copies). */
   small?: boolean;
+  /** Camera settings the producer pushed (exposure, locks, zoom, torch); put back after a reload or a camera restart. */
+  cam?: CameraRequest | undefined;
 }
 
 // Ceilings of the small simulcast copies (see lib/room.ts) and their share of the cap at low caps.
@@ -200,6 +204,7 @@ export class GuestSession {
     if (o.kbps) await this.#setMaxBitrate(o.kbps).catch(() => undefined);
     if (o.small === false) await this.#setSmallCopies(false).catch(() => undefined);
     await cam?.setDegradationPreference(toPreference(o.degrade ?? DEGRADE_DEFAULT)).catch(() => undefined);
+    if (o.cam) await this.#applyCamera(o.cam).catch(() => undefined);
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
     this.#reportTimer = window.setInterval(() => void this.#report(), 10_000);
@@ -303,6 +308,7 @@ export class GuestSession {
         this.#profile = { ...this.#profile, height, fps: rate };
         this.#override = saveOverride({ res: height, fps: rate });
         await this.localVideo.value?.restartTrack({ resolution: { width: Math.round((height * 16) / 9), height, frameRate: rate } });
+        await this.#reapplyCamera();
       }
       const kbps = cmd['kbps'];
       if (typeof kbps === 'number' && kbps >= 400 && kbps <= 8000) {
@@ -328,6 +334,12 @@ export class GuestSession {
       if (cmd['facing'] === 'user' || cmd['facing'] === 'environment') {
         this.#override = saveOverride({ facing: cmd['facing'] });
         await this.localVideo.value?.restartTrack({ facingMode: cmd['facing'] });
+        await this.#reapplyCamera();
+      }
+      const camera = parseCameraRequest(cmd['cam']);
+      if (camera) {
+        this.#override = saveOverride({ cam: mergeCameraRequest(this.#override.cam, camera) });
+        await this.#applyCamera(camera);
       }
       const degrade = cmd['degrade'];
       if (typeof degrade === 'string' && (DEGRADES as readonly string[]).includes(degrade)) {
@@ -356,7 +368,26 @@ export class GuestSession {
     } catch (err) {
       this.#lastError = err instanceof Error ? err.message : String(err);
     }
-    if (cmd['check'] === true || this.#lastError) await this.#report();
+    if (cmd['check'] === true || cmd['cam'] !== undefined || this.#lastError) await this.#report();
+  }
+
+  /**
+   * Pushes camera settings (exposure offset and lock, white balance lock, focus lock, zoom, torch) to
+   * the camera track, each as its own constraint set and only those this camera offers.
+   */
+  async #applyCamera(req: CameraRequest): Promise<void> {
+    const track = this.localVideo.value?.mediaStreamTrack;
+    if (!track) return;
+    const info = readCamera(track.getCapabilities?.(), track.getSettings());
+    if (!info) return;
+    const advanced = cameraConstraints(req, info.can);
+    if (advanced.length === 0) return;
+    await track.applyConstraints({ advanced: advanced as unknown as MediaTrackConstraintSet[] });
+  }
+
+  /** A restarted camera track starts from the camera's own defaults; put the producer's settings back. */
+  async #reapplyCamera(): Promise<void> {
+    if (this.#override.cam) await this.#applyCamera(this.#override.cam).catch(() => undefined);
   }
 
   /**
@@ -480,6 +511,7 @@ export class GuestSession {
       small: this.#override.small ?? true,
       facing: settings?.facingMode,
       camera: cam?.mediaStreamTrack.label,
+      cam: cam ? readCamera(cam.mediaStreamTrack.getCapabilities?.(), settings) : undefined,
       mic: mic?.mediaStreamTrack.label,
       micOn: this.micEnabled.value,
       audio: this.#override.audio ?? { ec: true, ns: true, agc: true },

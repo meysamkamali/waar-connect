@@ -1,5 +1,6 @@
 // What a guest's phone reports about itself to the producer (data topic wc.report), and how the
 // producer's card shows it in one line.
+import type { CameraControls, CameraState } from './camera.ts';
 import type { CodecName, CodecSupport } from './codecs.ts';
 import type { StatsSummary } from './stats.ts';
 
@@ -72,6 +73,8 @@ export interface GuestReport {
   small?: boolean | undefined;
   facing?: string | undefined;
   camera?: string | undefined;
+  /** The exposure, white balance, focus, zoom and torch controls this camera offers, and where they stand. Missing: none offered. */
+  cam?: { can: CameraControls; now: CameraState } | undefined;
   mic?: string | undefined;
   micOn: boolean;
   audio: { ec: boolean; ns: boolean; agc: boolean };
