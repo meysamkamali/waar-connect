@@ -22,8 +22,10 @@ the sender advertises. The gateway asks the API every 15 s which PCRs want a ret
 feed per PCR, and reports its sources and feed states every 5 s; the admin page shows them.
 
 Per studio the admin also sets the **picture size** the gateway sends (1080p, 720p, 540p, 360p; default
-540p) and its **bitrate** (default 1500 kbit/s). The program is scaled down before the encode, and at
-360p the sender's own low-bandwidth proxy stream is taken, which is cheaper to decode as well. NDI
+540p) and its **bitrate** (default 1500 kbit/s). The program is scaled down before the encode (a box filter in the
+gateway, 9 ms a frame for 1080p to 540p on the VM), and at 360p the sender's own low-bandwidth proxy
+stream is taken, which is cheaper to decode as well. Bitrates go down to 200 kbit/s for a guest on a
+poor connection. NDI
 senders on networks the VM is not on go into **Admin → NDI senders on other networks**; `NDI_EXTRA_IPS`
 in `.env` is added to that list, and discovery restarts by itself when the list changes. Nothing is configured on
 the gateway itself except the API address and the shared token (`.env`, see `.env.example`).
@@ -33,7 +35,8 @@ Both publish as `studio`; the later one replaces the earlier.
 
 ## What it does with the signal
 
-- Video: BGRA frames from NDI are scaled to the studio's picture size (sharp/libvips; `RETURN_HEIGHT`,
+- Video: BGRA frames from NDI are scaled to the studio's picture size (box filter for exact 2:1 and 3:1,
+  bilinear otherwise, in JavaScript: sharp/libvips took 58 ms a frame on this CPU; `RETURN_HEIGHT`,
   540, when the studio sets none; 0 keeps the source's size) and go into the LiveKit video source (colour
   conversion and the H.264 encode happen inside the SDK's libwebrtc). Frame rate is capped
   (`RETURN_MAX_FPS`, 50 fps programs go out at 25); bitrate is capped (the studio's, else `RETURN_MAX_KBPS`, 1500).

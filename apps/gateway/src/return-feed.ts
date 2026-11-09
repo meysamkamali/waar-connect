@@ -24,7 +24,7 @@ import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
 import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
-import { scaleBgra, sizeFor } from './scale.ts';
+import { ScaleBuffers, scaleBgraInto, sizeFor } from './scale.ts';
 
 /** What the API hands out per PCR that wants a return feed. */
 export interface ReturnTarget {
@@ -85,6 +85,7 @@ export class ReturnFeed {
   #size: { width: number; height: number } | null = null;
   /** Size of the picture sent to the room, after scaling. */
   #outSize: { width: number; height: number } | null = null;
+  readonly #scaled = new ScaleBuffers();
   #audioInfo: { channels: number; sampleRate: number } | null = null;
   #lastVideoAt = 0;
   #sourceFps = 0;
@@ -219,7 +220,7 @@ export class ReturnFeed {
       const now = Date.now();
       if (got.kind === 'video') {
         this.#lastVideoAt = now;
-        await this.#onVideo(got);
+        this.#onVideo(got);
       } else if (got.kind === 'audio') {
         await this.#onAudio(got);
       } else if (got.kind === 'error') {
@@ -241,7 +242,7 @@ export class ReturnFeed {
     }
   }
 
-  async #onVideo(frame: VideoFrameIn): Promise<void> {
+  #onVideo(frame: VideoFrameIn): void {
     const srcFps = frame.fpsD > 0 ? frame.fpsN / frame.fpsD : 25;
     this.#sourceFps = srcFps;
     if (!this.#size || this.#size.width !== frame.width || this.#size.height !== frame.height) {
@@ -272,9 +273,9 @@ export class ReturnFeed {
       this.#videoSource = new VideoSource(out.width, out.height);
       void this.#publish();
     }
-    const scaled = await scaleBgra(frame.data, frame.width, frame.height, out.width, out.height);
-    if (this.#stopped || !this.#videoSource) return;
-    this.#videoSource.captureFrame(new VideoFrame(scaled.data, scaled.width, scaled.height, VideoBufferType.BGRA));
+    // captureFrame copies the pixels before it returns, so the scale buffers can be reused in turn.
+    const data = scaleBgraInto(frame.data, frame.width, frame.height, out, out.width === frame.width && out.height === frame.height ? frame.data : this.#scaled.take(out));
+    this.#videoSource.captureFrame(new VideoFrame(data, out.width, out.height, VideoBufferType.BGRA));
     this.#countFrame();
     const state: ReturnState = this.#connected && this.#videoPub ? 'publishing' : 'receiving';
     if (this.#state !== state) this.#set(state, state === 'receiving' ? 'frames arrive; the room is not connected yet' : null);

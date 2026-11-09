@@ -18,7 +18,7 @@ const Settings = z.object({
   outputNames: z.array(z.string().trim().max(40)).max(16),
   returnSource: z.string().trim().max(200).nullable(),
   returnHeight: z.union([z.literal(1080), z.literal(720), z.literal(540), z.literal(360)]).nullable(),
-  returnKbps: z.int().min(500).max(8000).nullable(),
+  returnKbps: z.int().min(200).max(8000).nullable(),
 });
 const CreateBody = z.object({ name: z.string().trim().min(1).max(80), settings: Settings.partial().optional() });
 const PatchBody = z.object({ name: z.string().trim().min(1).max(80).optional(), settings: Settings.partial().optional() });

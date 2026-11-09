@@ -51,7 +51,10 @@ export interface VideoFrameIn {
   fpsN: number;
   fpsD: number;
   progressive: boolean;
-  /** Tightly packed rows, 4 bytes per pixel (BGRA or BGRX), our own copy. */
+  /**
+   * Tightly packed rows, 4 bytes per pixel (BGRA or BGRX), in one of the receiver's three buffers in
+   * turn: use it before the next captures (scale it, or hand it to the encoder, which copies), never keep it.
+   */
   data: Uint8Array;
 }
 
@@ -115,6 +118,7 @@ export function libraryCandidates(explicit?: string): string[] {
 }
 
 export class Receiver {
+  readonly #pool = new FramePool(3);
   #inst: unknown;
   readonly #ndi: Ndi;
   #busy = false;
@@ -141,7 +145,7 @@ export class Receiver {
         case FRAME_VIDEO: {
           const raw = v as RawVideo;
           try {
-            return copyVideo(raw);
+            return copyVideo(raw, this.#pool);
           } finally {
             f.recvFreeVideo(inst, raw);
           }
@@ -183,17 +187,40 @@ export class Receiver {
   }
 }
 
-function copyVideo(raw: RawVideo): VideoFrameIn {
+/**
+ * Frame buffers handed out in turn, so a 1080p frame (8 MB) is not allocated 25 times a second: that
+ * kept V8's garbage collector threads busy for most of a core.
+ */
+export class FramePool {
+  readonly #count: number;
+  #bufs: Uint8Array[] = [];
+  #next = 0;
+
+  constructor(count: number) {
+    this.#count = count;
+  }
+
+  take(bytes: number): Uint8Array {
+    if (this.#bufs.length !== this.#count || (this.#bufs[0] as Uint8Array).length !== bytes) {
+      this.#bufs = Array.from({ length: this.#count }, () => new Uint8Array(bytes));
+      this.#next = 0;
+    }
+    const buf = this.#bufs[this.#next] as Uint8Array;
+    this.#next = (this.#next + 1) % this.#count;
+    return buf;
+  }
+}
+
+function copyVideo(raw: RawVideo, pool: FramePool): VideoFrameIn {
   const width = raw.xres;
   const height = raw.yres;
   const stride = raw.line_stride_in_bytes;
   const tight = width * 4;
   const view = new Uint8Array(koffi.view(raw.p_data, stride * height));
-  let data: Uint8Array;
+  const data = pool.take(tight * height);
   if (stride === tight) {
-    data = view.slice();
+    data.set(view);
   } else {
-    data = new Uint8Array(tight * height);
     for (let y = 0; y < height; y++) data.set(view.subarray(y * stride, y * stride + tight), y * tight);
   }
   return {

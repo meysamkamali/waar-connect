@@ -25,7 +25,7 @@ const schema = z.object({
     .refine((n) => [0, 360, 540, 720, 1080].includes(n), '0 (source size), 360, 540, 720 or 1080')
     .default(540),
   /** Bitrate cap of the program picture when a PCR sets none of its own. */
-  RETURN_MAX_KBPS: z.coerce.number().int().min(500).max(8000).default(1500),
+  RETURN_MAX_KBPS: z.coerce.number().int().min(200).max(8000).default(1500),
   /** A 50 fps program is sent at 25: every second frame. */
   RETURN_MAX_FPS: z.coerce.number().int().min(10).max(60).default(30),
   /** 1-based NDI audio channels that carry the mix-minus; averaged into one channel for the guests. */

@@ -65,4 +65,4 @@ export const GATEWAY_STALE_MS = 20_000;
 export const RETURN_HEIGHTS = [1080, 720, 540, 360] as const;
 export type ReturnHeight = (typeof RETURN_HEIGHTS)[number];
 /** Bitrate caps offered for a return, kbit/s. */
-export const RETURN_KBPS_CHOICES = [1000, 1500, 2000, 3000, 4000, 6000] as const;
+export const RETURN_KBPS_CHOICES = [200, 300, 500, 800, 1000, 1500, 2000, 3000, 4000, 6000] as const;
