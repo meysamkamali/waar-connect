@@ -51,12 +51,7 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
           const staff = staffById(state, track.publisher);
           if (staff) return track.source === 'camera' && staff.faceTo === guest.identity;
           const other = guestById(state, track.publisher);
-          return (
-            other !== undefined &&
-            other.place === 'green' &&
-            guest.table !== null &&
-            other.table === guest.table
-          );
+          return other !== undefined && other.place === 'green' && guest.peers.includes(other.identity);
         }
       }
       return false;

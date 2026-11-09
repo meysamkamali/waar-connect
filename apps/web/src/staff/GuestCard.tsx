@@ -1,8 +1,8 @@
 // One guest in the producer's view: picture, state, the controls for their place, and the connection
 // panel with the phone's own report and the settings the producer can push to it.
 // In the green room the producer chooses what the guest sees (nothing, the producer, the studio
-// return) and hears (the producer, the studio mix-minus), then sends them to the studio; the server
-// takes the first free slot. The same pieces build the full-screen view (GuestFocus).
+// return), hears (the producer, the studio mix-minus) and which other guests they see and hear, then
+// sends them to the studio; the server takes the first free slot. The same pieces build the full-screen view (GuestFocus).
 import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
@@ -28,6 +28,8 @@ export interface GuestCardProps {
   /** The producer's voice is routed to this guest. */
   hearsMe: boolean;
   sees: Sees;
+  /** The other green-room guests, by name, for the "sees & hears" switches. */
+  others: { identity: string; name: string }[];
   hand: boolean;
   help: boolean;
   onAction: (action: RoomAction) => void;
@@ -179,6 +181,26 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
               </button>
             </span>
           </div>
+          {p.others.length > 0 && (
+            <div class="inline">
+              guest sees &amp; hears
+              <span class="seg">
+                {p.others.map((o) => {
+                  const on = g.peers.includes(o.identity);
+                  return (
+                    <button
+                      key={o.identity}
+                      class={on ? 'on' : ''}
+                      title={on ? `This guest sees and hears ${o.name}. One way: ${o.name}'s own card says what they get.` : `Let this guest see and hear ${o.name}`}
+                      onClick={() => p.onAction({ type: 'peer', guest: g.identity, other: o.identity, on: !on })}
+                    >
+                      {on ? `${o.name} ●` : o.name}
+                    </button>
+                  );
+                })}
+              </span>
+            </div>
+          )}
           <button class="btn" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
             Send to studio →
           </button>

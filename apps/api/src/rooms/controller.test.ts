@@ -73,7 +73,7 @@ describe('room controller', () => {
     assert.deepEqual(c.snapshot().guests.map((g) => g.place), ['lobby', 'lobby']);
   });
 
-  it('admit, talk, table, hand-off and bring back move subscriptions as the matrix says', async () => {
+  it('admit, talk, peers, hand-off and bring back move subscriptions as the matrix says', async () => {
     const { fake, c } = await roomWithEveryone();
     await c.act({ type: 'admit', guest: A }, PROD);
     await c.act({ type: 'admit', guest: B }, PROD);
@@ -85,9 +85,12 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf(B), ['p-talk']);
     assert.equal(fake.attrs.get(PROD)?.['wc.talk_allowed'], `${A},${B}`);
 
-    await c.act({ type: 'table', guest: A, table: 't1' }, PROD);
-    await c.act({ type: 'table', guest: B, table: 't1' }, PROD);
+    await c.act({ type: 'peer', guest: A, other: B, on: true }, PROD);
     assert.deepEqual(fake.subsOf(A), ['b-cam', 'b-mic', 'p-talk']);
+    assert.deepEqual(fake.subsOf(B), ['p-talk']); // one way until B's own switch is on
+    assert.equal(fake.attrs.get(A)?.['wc.peers'], B);
+    await c.act({ type: 'peer', guest: B, other: A, on: true }, PROD);
+    assert.deepEqual(fake.subsOf(B), ['a-cam', 'a-mic', 'p-talk']);
 
     await c.act({ type: 'slot', guest: A, slot: 1 }, PROD);
     await c.act({ type: 'ready', guest: A, on: true }, ENG);
@@ -96,10 +99,10 @@ describe('room controller', () => {
     const a = c.snapshot().guests.find((g) => g.identity === A)!;
     assert.equal(a.place, 'studio');
     assert.equal(a.tally, 'standby');
-    assert.equal(a.table, null);
-    assert.deepEqual(fake.subsOf(A), ['pgm-a', 'pgm-v']); // no more producer, no more table
+    assert.deepEqual(a.peers, [B]); // kept for when they come back
+    assert.deepEqual(fake.subsOf(A), ['pgm-a', 'pgm-v']); // no more producer, no more B: peers count in the green room only
     assert.deepEqual(fake.subsOf(OUT1), ['a-cam', 'a-mic']);
-    assert.deepEqual(fake.subsOf(B), ['p-talk']); // B lost A when A left the table
+    assert.deepEqual(fake.subsOf(B), ['p-talk']); // B lost A when A went to the studio
     assert.equal(fake.attrs.get(A)?.['wc.tally'], 'standby');
 
     await c.act({ type: 'tally', guest: A, tally: 'onair' }, PROD);
@@ -107,7 +110,7 @@ describe('room controller', () => {
 
     await c.act({ type: 'bringBack', guest: A }, PROD);
     assert.deepEqual(fake.subsOf(OUT1), []);
-    assert.deepEqual(fake.subsOf(A), ['p-talk']);
+    assert.deepEqual(fake.subsOf(A), ['b-cam', 'b-mic', 'p-talk']); // back in the green room, B is there again
     assert.equal(fake.attrs.get(A)?.['wc.place'], 'green');
     assert.equal(fake.attrs.get(A)?.['wc.tally'], 'off');
   });
@@ -172,7 +175,7 @@ describe('room controller', () => {
   it('rebuilds from attributes after a restart', async () => {
     const fake = new FakeControl();
     fake.participants = [
-      join(A, [track('a-cam', TrackSource.CAMERA)], { 'wc.place': 'studio', 'wc.tally': 'onair', 'wc.slot': '3', 'wc.table': '', 'wc.studio_sound': '0', 'wc.program': '0', 'wc.ready': '1', 'wc.ifb': '1' }),
+      join(A, [track('a-cam', TrackSource.CAMERA)], { 'wc.place': 'studio', 'wc.tally': 'onair', 'wc.slot': '3', 'wc.peers': '', 'wc.studio_sound': '0', 'wc.program': '0', 'wc.ready': '1', 'wc.ifb': '1' }),
       join(PROD, [track('p-talk', TrackSource.MICROPHONE)], { 'wc.role': 'producer', 'wc.talk_to': 'all', 'wc.face_to': '', 'wc.talk_allowed': '' }),
       join('out:slot-3'),
     ];

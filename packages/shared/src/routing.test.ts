@@ -78,21 +78,22 @@ describe('green room', () => {
     assert.deepEqual(sids(A, s), ['pgm-a']);
     assert.deepEqual(sids(B, s), ['pgm-v']);
   });
-  it('guests hear each other only at the same table', () => {
+  it('a guest sees and hears the green-room guests the producer picked for them, one way', () => {
     const s = state({
       guests: [
-        guest(A, { place: 'green', table: 't1' }),
-        guest(B, { place: 'green', table: 't1' }),
-        guest(C, { place: 'green', table: 't2' }),
+        guest(A, { place: 'green', peers: [B] }),
+        guest(B, { place: 'green', peers: [A, C] }),
+        guest(C, { place: 'green' }),
       ],
     });
     assert.deepEqual(sids(A, s), ['b-cam', 'b-mic']);
-    assert.deepEqual(sids(B, s), ['a-cam', 'a-mic']);
+    assert.deepEqual(sids(B, s), ['a-cam', 'a-mic', 'c-cam', 'c-mic']);
     assert.deepEqual(sids(C, s), []);
   });
-  it('a table does not reach into the studio', () => {
-    const s = state({ guests: [guest(A, { place: 'green', table: 't1' }), guest(B, { place: 'studio', table: 't1', slot: 1 })] });
+  it('a picked guest is received while both are in the green room only', () => {
+    const s = state({ guests: [guest(A, { place: 'green', peers: [B] }), guest(B, { place: 'studio', peers: [A], slot: 1 })] });
     assert.deepEqual(sids(A, s), []);
+    assert.deepEqual(sids(B, s), ['pgm-a', 'pgm-v']);
   });
   it('face to face sends the producer camera to that guest only', () => {
     const s = state({ staff: [staff(PROD, 'producer', { faceTo: A, talkTo: [A] }), staff(ENG, 'engineer')] });
@@ -164,7 +165,7 @@ describe('invariants over many states', () => {
       for (const ifb of [[], [A]]) {
         states.push(
           state({
-            guests: [guest(A, { place: pa, slot: 1, table: 't' }), guest(B, { place: pb, slot: 2, table: 't' })],
+            guests: [guest(A, { place: pa, slot: 1, peers: [B] }), guest(B, { place: pb, slot: 2, peers: [A] })],
             staff: [staff(PROD, 'producer', { talkTo: 'all', faceTo: A }), staff(ENG, 'engineer', { talkTo: 'all' })],
             ifbOverride: ifb,
           }),

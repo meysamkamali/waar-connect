@@ -14,7 +14,7 @@ const Identity = z.string().min(3).max(120);
 
 const Action = z.discriminatedUnion('type', [
   z.object({ type: z.literal('admit'), guest: Identity }),
-  z.object({ type: z.literal('table'), guest: Identity, table: z.string().max(40).nullable() }),
+  z.object({ type: z.literal('peer'), guest: Identity, other: Identity, on: z.boolean() }),
   z.object({ type: z.literal('studioSound'), guest: Identity, on: z.boolean() }),
   z.object({ type: z.literal('program'), guest: Identity, on: z.boolean() }),
   z.object({ type: z.literal('slot'), guest: Identity, slot: z.int().min(1).max(16).nullable() }),

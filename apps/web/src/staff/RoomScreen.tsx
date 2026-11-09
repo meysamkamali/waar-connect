@@ -22,7 +22,7 @@ import {
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { describeStation, loadStation } from '../lib/station.ts';
 import { LANGUAGES } from './Contacts.tsx';
-import { GuestCard, type GuestCardProps, type Sees } from './GuestCard.tsx';
+import { GuestCard, guestName, type GuestCardProps, type Sees } from './GuestCard.tsx';
 import { GuestFocus } from './GuestFocus.tsx';
 import { StaffSession } from './session.ts';
 
@@ -164,6 +164,9 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     ifb: snap?.ifbOverride.includes(g.identity) ?? false,
     hearsMe: talkList === null || talkList.includes(g.identity),
     sees: me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none',
+    others: guestsByPlace('green')
+      .filter((o) => o.identity !== g.identity)
+      .map((o) => ({ identity: o.identity, name: guestName({ record: recordFor(o.identity), state: o }) })),
     hand: session.hands.value[g.identity] === true,
     help: session.helps.value[g.identity] !== undefined,
     onAction: doAction,
