@@ -119,5 +119,7 @@ sender in the station at it, which turns mDNS off on those senders. Neither is s
 From the development PC (the API, web and gateway build together; `.env` files stay on the VM):
 
 ```bash
-tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' -czf - . | ssh -i ~/.ssh/waar-connect meysam@10.0.0.41 'sudo tar -xzf - -C /opt/waar-connect && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo env WC_COMMIT=$(git rev-parse --short HEAD) npm run -s build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && (cd apps/api && sudo -u waarconnect node --env-file=.env dist/db/migrate.js) && sudo systemctl restart waar-connect-api waar-connect-phase0 waar-connect-gateway'
+C=$(git rev-parse --short HEAD); tar --exclude=node_modules --exclude=dist --exclude=.git --exclude='.env' -czf - . | ssh -i ~/.ssh/waar-connect meysam@10.0.0.41 "sudo tar -xzf - -C /opt/waar-connect && cd /opt/waar-connect && sudo npm ci --no-audit --no-fund && sudo env WC_COMMIT=$C npm run -s build && sudo chown -R waarconnect:waarconnect /opt/waar-connect && (cd apps/api && sudo -u waarconnect node --env-file=.env dist/db/migrate.js) && sudo systemctl restart waar-connect-api waar-connect-phase0 waar-connect-gateway"
+
+The commit hash is read on this PC first: the VM holds no git checkout, so inside the quoted remote command it would come out empty.
 ```
