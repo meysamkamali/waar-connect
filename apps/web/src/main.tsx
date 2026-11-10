@@ -1,6 +1,7 @@
 import { LocationProvider, Route, Router } from 'preact-iso';
 import { render } from 'preact';
 import { GuestPage } from './guest/GuestPage.tsx';
+import { Home } from './home/Home.tsx';
 import { OutPage } from './out/OutPage.tsx';
 import { ReturnPage } from './return/ReturnPage.tsx';
 import { StaffApp } from './staff/StaffApp.tsx';
@@ -11,37 +12,6 @@ const Engineer = (props: { id?: string }) => <StaffApp id={props.id} page="engin
 const Contacts = () => <StaffApp page="contacts" />;
 const Admin = () => <StaffApp page="admin" />;
 const Station = () => <StaffApp page="station" />;
-
-function Home() {
-  return (
-    <div class="screen center">
-      <div class="card">
-        <img class="logo" src="/app/logo.svg" alt="waar Connect" />
-        <h1>waar Connect</h1>
-        <p class="muted">Guests arrive through the link the producer sent them.</p>
-        <p class="row">
-          <a class="btn" href="/app/producer">
-            Producer
-          </a>
-          <a class="btn secondary" href="/app/engineer">
-            Engineer
-          </a>
-          <a class="btn secondary" href="/app/contacts">
-            Contacts
-          </a>
-          <a class="btn secondary" href="/app/admin">
-            Admin
-          </a>
-        </p>
-        <p class="muted small">
-          <a href="https://github.com/meysamkamali/waar-connect" rel="noopener" target="_blank">
-            Source code
-          </a>
-        </p>
-      </div>
-    </div>
-  );
-}
 
 function NotFound() {
   return (

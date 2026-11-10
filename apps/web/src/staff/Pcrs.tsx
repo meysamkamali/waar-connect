@@ -1,12 +1,12 @@
-// The PCRs (studios) a producer or engineer can sit in. The admin builds them on /app/admin.
-// The same list serves both desks: /app/producer leads with the producer's seat, /app/engineer with the engineer's.
+// The PCRs (studios) a producer can sit in. The admin builds them on /app/admin.
+// The engineer has no list: /app/engineer shows every studio at once.
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { ApiError, listPcrs, type Pcr, type User } from '../api.ts';
 import { describeStation, loadStation } from '../lib/station.ts';
 
-export function Pcrs({ user, nav, engineer = false }: { user: User; nav: ComponentChildren; engineer?: boolean }) {
+export function Pcrs({ user, nav }: { user: User; nav: ComponentChildren }) {
   const { route } = useLocation();
   const [pcrs, setPcrs] = useState<Pcr[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -39,12 +39,9 @@ export function Pcrs({ user, nav, engineer = false }: { user: User; nav: Compone
               <div class="muted small">
                 IFB {p.settings.ifbAllowed ? 'allowed' : 'off'} · room {p.livekitRoom}
               </div>
-              <p class="row">
-                <button class={`btn ${engineer ? 'secondary' : ''}`} onClick={() => route(`/app/producer/${p.id}`)}>
+              <p>
+                <button class="btn" onClick={() => route(`/app/producer/${p.id}`)}>
                   Sit here as producer
-                </button>
-                <button class={`btn ${engineer ? '' : 'secondary'}`} onClick={() => route(`/app/engineer/${p.id}`)}>
-                  Open as engineer
                 </button>
               </p>
             </article>

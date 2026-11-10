@@ -1,5 +1,6 @@
-// /app/engineer/:id — the engineer's view of one PCR.
-// Every feed in the room is a tile: the studio return, the producer, and every guest from the moment
+// /app/engineer — the engineer's view of the whole station. There is no studio to sit in first:
+// every PCR is on the page (/app/engineer/:id shows one alone).
+// Every feed in a room is a tile: the studio return, the producer, and every guest from the moment
 // they open their link (still at the door). Sound is on demand, per feed; listening to a guest also
 // lets through the producer's voice while the producer talks to that guest. Selecting a feed opens
 // its technical side: a guest's phone settings, the producer's face camera, or the return feed's
@@ -40,9 +41,8 @@ import {
 } from '@waar-connect/shared';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { useLocation } from 'preact-iso';
 import { returnLine, SourcePicker } from '../admin/Admin.tsx';
-import { act, ApiError, gatewayStatus, getPcr, getRoom, joinPcr, updatePcr, type GatewayView, type Pcr, type PcrSettings, type PcrView, type RoomSnapshot, type User } from '../api.ts';
+import { act, ApiError, gatewayStatus, getPcr, getRoom, joinPcr, listPcrs, updatePcr, type GatewayView, type Pcr, type PcrSettings, type PcrView, type RoomSnapshot, type User } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { DEGRADE_LABELS, phoneModel, type GuestReport } from '../lib/report.ts';
 import { formatSummary } from '../lib/stats.ts';
@@ -258,7 +258,7 @@ function ReturnEditor({ pcr, gateway, tile, onSave }: { pcr: Pcr; gateway: Gatew
  * How a guest's phone connects when nothing else was pushed to it: the codec order (tried from the
  * top), picture, frame rate, bitrate cap and what gives way first on a short line.
  */
-function GuestPrefsEditor({ pcr, phones, onSave }: { pcr: Pcr; phones: { name: string; codecs: GuestReport['codecs'] }[]; onSave: Save }) {
+function GuestPrefsEditor({ pcr, phones, onSave, onSaveAll }: { pcr: Pcr; phones: { name: string; codecs: GuestReport['codecs'] }[]; onSave: Save; onSaveAll: Save | undefined }) {
   const saved = normalizeGuestPrefs(pcr.settings.guest);
   const [draft, setDraft] = useState<GuestPrefs | null>(null);
   const [busy, setBusy] = useState(false);
@@ -401,6 +401,21 @@ function GuestPrefsEditor({ pcr, phones, onSave }: { pcr: Pcr; phones: { name: s
         >
           Save
         </button>
+        {onSaveAll && (
+          <button
+            class="btn secondary small"
+            title="Write this order, picture and bitrate to every studio on this page"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void onSaveAll({ guest: p })
+                .then(() => setDraft(null))
+                .finally(() => setBusy(false));
+            }}
+          >
+            Save for every studio
+          </button>
+        )}
         <button class="btn secondary small" disabled={draft === null} onClick={() => setDraft(null)}>
           Undo changes
         </button>
@@ -415,48 +430,75 @@ function GuestPrefsEditor({ pcr, phones, onSave }: { pcr: Pcr; phones: { name: s
   );
 }
 
-export function EngineerScreen({ id, user, nav }: { id: string; user: User; nav: ComponentChildren }) {
-  const { route } = useLocation();
+/** The codec order and the picture of a studio's guest preferences in one line. */
+function prefsLine(p: GuestPrefs): string {
+  return `${p.codecs.map(describeChoice).join(' › ')} · ${p.height}p${p.fps} · ${p.kbps} kbit/s`;
+}
+
+/**
+ * One studio on the engineer's page: its own connection to that studio's room (receive only), its
+ * feeds, the technical side of the selected feed, and folded away how its guests connect.
+ */
+function PcrDesk({
+  pcrId,
+  gateway,
+  selected,
+  onSelect,
+  onError,
+  reloadKey,
+  saveAll,
+}: {
+  pcrId: string;
+  gateway: GatewayView | null;
+  /** The selected feed when it is one of this studio's, else null. */
+  selected: string | null;
+  onSelect: (identity: string | null) => void;
+  onError: (text: string) => void;
+  /** Changes when a save in another studio wrote to this one too: read the settings again. */
+  reloadKey: number;
+  /** Saves a setting to every studio on the page; absent when this is the only one. */
+  saveAll: Save | undefined;
+}) {
   const session = useMemo(() => new StaffSession(), []);
   const [view, setView] = useState<PcrView | null>(null);
   const [snap, setSnap] = useState<RoomSnapshot | null>(null);
-  const [gateway, setGateway] = useState<GatewayView | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
   const [listening, setListening] = useState<string[]>([]);
 
   const refresh = () =>
-    getPcr(id)
+    getPcr(pcrId)
       .then(setView)
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Server not reachable.'));
+      .catch((err: unknown) => onError(message(err)));
 
   useEffect(() => {
     void refresh();
+  }, [pcrId, reloadKey]);
+
+  useEffect(() => {
     const pollRoom = () =>
-      void getRoom(id)
+      void getRoom(pcrId)
         .then((r) => setSnap(r.snapshot))
-        .catch((err: unknown) => {
-          if (err instanceof ApiError && err.status === 409) setError(err.message);
-        });
-    const pollGateway = () => void gatewayStatus().then(setGateway).catch(() => undefined);
+        .catch(() => undefined);
     pollRoom();
-    pollGateway();
     const room = setInterval(pollRoom, 2000);
-    const gw = setInterval(pollGateway, 5000);
     // Nothing to ask the browser for (no microphone, no camera): join at once.
-    joinPcr(id)
+    joinPcr(pcrId)
       .then((j) => session.connect(j))
-      .catch((err: unknown) => setError(message(err)));
+      .catch((err: unknown) => onError(message(err)));
     return () => {
       clearInterval(room);
-      clearInterval(gw);
       void session.leave();
     };
-  }, [id, session]);
+  }, [pcrId, session]);
 
   useEffect(() => session.setFocus(selected), [selected, session]);
 
-  if (!view) return <div class="screen center">{error ? <p class="help bad">{error}</p> : <p>Loading…</p>}</div>;
+  if (!view) {
+    return (
+      <section class="eng-pcr">
+        <p class="muted">Loading…</p>
+      </section>
+    );
+  }
 
   const pcr = view.pcr;
   const guests = snap?.guests ?? [];
@@ -529,29 +571,33 @@ export function EngineerScreen({ id, user, nav }: { id: string; user: User; nav:
   };
 
   const save: Save = (patch) =>
-    updatePcr(id, { settings: patch })
+    updatePcr(pcrId, { settings: patch })
       .then(() => refresh())
       .catch((err: unknown) => {
-        setError(message(err));
+        onError(message(err));
         throw err;
       });
 
   const sel = feeds.find((f) => f.identity === selected);
   const selReport = sel?.kind === 'guest' ? reportFor(sel.identity) : undefined;
   const phones = guests.filter((g) => reportFor(g.identity)?.codecs).map((g) => ({ name: nameOf(g.identity), codecs: reportFor(g.identity)!.codecs }));
+  const online = guests.filter((g) => connected.has(g.identity)).length;
+  const close = (
+    <button class="link" onClick={() => onSelect(null)}>
+      close ✕
+    </button>
+  );
 
   return (
-    <div class="screen page staff engineer">
-      {nav}
-      <header class="row between">
-        <div class="row" style={{ alignItems: 'center', gap: '12px' }}>
-          <button class="link" onClick={() => route('/app/engineer')}>
-            ← studios
-          </button>
-          <h1>{pcr.name}</h1>
-          <span class="muted small">engineer · {pcr.livekitRoom}</span>
+    <section class="eng-pcr">
+      <header class="row between eng-pcr-head">
+        <div class="row" style={{ alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <h2 class="eng-pcr-name">{pcr.name}</h2>
           <span class={`badge ${snap?.studioConnected ? 'live' : ''}`}>{snap?.studioConnected ? 'return feed on' : 'no return feed'}</span>
           <span class={`status ${session.status.value === 'connected' ? 'ok' : 'warn'}`}>{session.status.value}</span>
+          <span class="muted small">
+            {online === 1 ? '1 guest connected' : `${online} guests connected`} · {producers.length ? 'producer at the desk' : 'no producer'}
+          </span>
         </div>
         <div class="row" style={{ alignItems: 'center' }}>
           <span class="muted small">{listening.length ? `listening to ${listening.length}` : 'sound off'}</span>
@@ -563,78 +609,159 @@ export function EngineerScreen({ id, user, nav }: { id: string; user: User; nav:
           </button>
         </div>
       </header>
+
+      <div class={`eng-layout ${sel ? '' : 'solo'}`}>
+        <div class="feeds">
+          {feeds.map((f) => (
+            <FeedTile
+              key={f.identity}
+              feed={f}
+              selected={selected === f.identity}
+              level={session.levels.value[f.identity] ?? 0}
+              listening={listening.includes(f.identity)}
+              onSelect={() => onSelect(selected === f.identity ? null : f.identity)}
+              onListen={() => toggleListen(f.identity)}
+            />
+          ))}
+        </div>
+
+        {sel && (
+          <aside class="eng-side">
+            {sel.kind === 'guest' && (
+              <>
+                <div class="row between">
+                  <h3 class="eng-side-title">{sel.name}</h3>
+                  {close}
+                </div>
+                <div class="muted small">
+                  {pcr.name} · {sel.badge}
+                  {selReport ? ` · ${phoneModel(selReport.ua)}` : ''}
+                  {sel.connected ? '' : ' · not connected'}
+                </div>
+                {sel.connected ? (
+                  <div class="guest-controls">
+                    <PhonePanel tile={sel.tile} report={selReport} cmd={(command) => void act(pcrId, { type: 'command', guest: sel.identity, command }).catch((err: unknown) => onError(message(err)))} />
+                  </div>
+                ) : (
+                  <p class="muted">This guest is not connected right now.</p>
+                )}
+              </>
+            )}
+            {sel.kind === 'producer' && (
+              <>
+                <div class="row between">
+                  <h3 class="eng-side-title">Producer camera · {pcr.name}</h3>
+                  {close}
+                </div>
+                <div class="muted small">{sel.sub}</div>
+                <FaceEditor key={`${pcr.settings.face?.height}-${pcr.settings.face?.fps}-${pcr.settings.face?.kbps}`} pcr={pcr} tile={sel.tile} onSave={save} />
+              </>
+            )}
+            {sel.kind === 'studio' && (
+              <>
+                <div class="row between">
+                  <h3 class="eng-side-title">Studio return · {pcr.name}</h3>
+                  {close}
+                </div>
+                <ReturnEditor key={`${pcr.settings.returnSource}-${pcr.settings.returnHeight}-${pcr.settings.returnKbps}`} pcr={pcr} gateway={gateway} tile={sel.tile} onSave={save} />
+              </>
+            )}
+          </aside>
+        )}
+      </div>
+
+      <details class="eng-fold">
+        <summary>
+          How a guest's phone connects in {pcr.name}
+          <span class="muted small"> · {prefsLine(normalizeGuestPrefs(pcr.settings.guest))}</span>
+        </summary>
+        <GuestPrefsEditor key={JSON.stringify(pcr.settings.guest ?? null)} pcr={pcr} phones={phones} onSave={save} onSaveAll={saveAll} />
+      </details>
+
+      <AudioSinks tracks={audible} />
+    </section>
+  );
+}
+
+/**
+ * The engineer's page. No studio to sit in first: every studio is on the page, each with its own
+ * receive-only connection, so every guest of the station shows the moment they open their link.
+ * With an id in the address only that studio is shown.
+ */
+export function EngineerScreen({ id, user, nav }: { id?: string | undefined; user: User; nav: ComponentChildren }) {
+  const [pcrs, setPcrs] = useState<Pcr[] | null>(null);
+  const [gateway, setGateway] = useState<GatewayView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{ pcr: string; identity: string } | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    const load = () =>
+      void listPcrs()
+        .then((r) => setPcrs(r.pcrs))
+        .catch((err: unknown) => setError(err instanceof ApiError ? err.message : 'Server not reachable.'));
+    const pollGateway = () => void gatewayStatus().then(setGateway).catch(() => undefined);
+    load();
+    pollGateway();
+    const list = setInterval(load, 15_000); // a studio the admin just built or closed
+    const gw = setInterval(pollGateway, 5000);
+    return () => {
+      clearInterval(list);
+      clearInterval(gw);
+    };
+  }, []);
+
+  const shown = (pcrs ?? []).filter((p) => !id || p.id === id);
+  const saveAll: Save | undefined =
+    shown.length > 1
+      ? (patch) =>
+          Promise.all(shown.map((p) => updatePcr(p.id, { settings: patch })))
+            .then(() => setReloadKey((k) => k + 1))
+            .catch((err: unknown) => {
+              setError(message(err));
+              throw err;
+            })
+      : undefined;
+
+  return (
+    <div class="screen page staff engineer">
+      {nav}
+      <header class="row between">
+        <div class="row" style={{ alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <h1>Engineer</h1>
+          <span class="muted small">
+            {pcrs === null ? 'loading…' : id ? 'one studio' : shown.length === 1 ? 'every connection in 1 studio' : `every connection in ${shown.length} studios`}
+          </span>
+          {id && (
+            <a class="link" href="/app/engineer">
+              show every studio
+            </a>
+          )}
+        </div>
+        <span class="muted small">Click a feed for its technical side. Sound plays only where you press listen.</span>
+      </header>
       {error && (
         <p class="help bad" onClick={() => setError(null)}>
           {error}
         </p>
       )}
 
-      <div class="eng-layout">
-        <section>
-          <h2>Feeds</h2>
-          <div class="feeds">
-            {feeds.map((f) => (
-              <FeedTile
-                key={f.identity}
-                feed={f}
-                selected={selected === f.identity}
-                level={session.levels.value[f.identity] ?? 0}
-                listening={listening.includes(f.identity)}
-                onSelect={() => setSelected(f.identity)}
-                onListen={() => toggleListen(f.identity)}
-              />
-            ))}
-          </div>
-          {guests.length === 0 && <p class="muted">No guest has opened their link yet. Each one appears here the moment they do, still at the door.</p>}
-        </section>
+      {pcrs !== null && shown.length === 0 && <p class="muted">{id ? 'This studio does not exist or is closed.' : 'No studio built yet. The admin builds them under Admin.'}</p>}
 
-        <aside class="eng-side">
-          {!sel && (
-            <>
-              <h2>Technical side</h2>
-              <p class="muted">Select a feed: a guest for the phone's settings, the producer for the face camera, the studio return for its source, picture and bitrate.</p>
-            </>
-          )}
-          {sel?.kind === 'guest' && (
-            <>
-              <h2>{sel.name}</h2>
-              <div class="muted small">
-                {sel.badge}
-                {selReport ? ` · ${phoneModel(selReport.ua)}` : ''}
-                {sel.connected ? '' : ' · not connected'}
-              </div>
-              {sel.connected ? (
-                <div class="guest-controls">
-                  <PhonePanel tile={sel.tile} report={selReport} cmd={(command) => void act(id, { type: 'command', guest: sel.identity, command }).catch((err: unknown) => setError(message(err)))} />
-                </div>
-              ) : (
-                <p class="muted">This guest is not connected right now.</p>
-              )}
-            </>
-          )}
-          {sel?.kind === 'producer' && (
-            <>
-              <h2>Producer camera</h2>
-              <div class="muted small">{sel.sub}</div>
-              <FaceEditor key={`${pcr.settings.face?.height}-${pcr.settings.face?.fps}-${pcr.settings.face?.kbps}`} pcr={pcr} tile={sel.tile} onSave={save} />
-            </>
-          )}
-          {sel?.kind === 'studio' && (
-            <>
-              <h2>Studio return</h2>
-              <ReturnEditor key={`${pcr.settings.returnSource}-${pcr.settings.returnHeight}-${pcr.settings.returnKbps}`} pcr={pcr} gateway={gateway} tile={sel.tile} onSave={save} />
-            </>
-          )}
-        </aside>
-      </div>
-
-      <section>
-        <h2>How a guest's phone connects</h2>
-        <GuestPrefsEditor pcr={pcr} phones={phones} onSave={save} />
-      </section>
+      {shown.map((p) => (
+        <PcrDesk
+          key={p.id}
+          pcrId={p.id}
+          gateway={gateway}
+          selected={selected?.pcr === p.id ? selected.identity : null}
+          onSelect={(identity) => setSelected(identity === null ? null : { pcr: p.id, identity })}
+          onError={setError}
+          reloadKey={reloadKey}
+          saveAll={saveAll}
+        />
+      ))}
 
       <p class="muted small">{user.name}: this page only receives. It never asks for a microphone or a camera.</p>
-      <AudioSinks tracks={audible} />
     </div>
   );
 }

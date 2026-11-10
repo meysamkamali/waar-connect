@@ -48,8 +48,10 @@ reload). No tables in the green room: since 2026-11-09 the producer picks, per g
 green-room guests they see and hear. No slot choice: "send to studio" takes the first free slot,
 "bring back" frees it. The engineer role stays in the API for a later phase.
 
-**Decided 2026-11-10:** the engineer has a page of their own, `/app/engineer/<pcr>`. It shows every
-feed in the PCR as a tile: the studio return, the producer, and every guest from the moment they open
+**Decided 2026-11-10:** the engineer has a page of their own, `/app/engineer`. There is no studio to
+sit in first: every PCR is on the page, each with its own receive-only connection
+(`/app/engineer/<pcr>` shows one alone). For each PCR it shows every
+feed as a tile: the studio return, the producer, and every guest from the moment they open
 their link. The engineer only receives (no microphone, no camera), listens to any feed on demand, and
 hears the producer's voice while it goes to a guest they listen to. Selecting a feed opens its
 technical side: a guest's phone settings (the same panel the producer has), the producer's face camera
@@ -66,6 +68,9 @@ The same day: the guest's link has **no join button**. Opening it connects at on
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch (browsers allow it only from a touch, and an iPhone not at
 all), with a button to leave and return.
+
+The first page, `/app`, shows the station now (studios, guests connected, on air, return feeds, one
+line per studio) above the way to each desk: producer, engineer, contacts, admin.
 
 ## The places
 

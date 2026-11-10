@@ -43,7 +43,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
   const nav = <Nav user={user} open={open} page={page} onLogout={() => setUser(null)} />;
   let body;
   if (page === 'pcrs' && id) body = <RoomScreen id={id} user={user} />;
-  else if (page === 'engineer' && id) body = <EngineerScreen id={id} user={user} nav={nav} />;
+  else if (page === 'engineer') body = <EngineerScreen id={id} user={user} nav={nav} />;
   else if (page === 'contacts') body = <Contacts user={user} nav={nav} />;
   else if (page === 'admin' || page === 'station') {
     if (user.role !== 'admin') {
@@ -54,7 +54,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
         </div>
       );
     } else body = page === 'admin' ? <Admin nav={nav} /> : <Station nav={nav} />;
-  } else body = <Pcrs user={user} nav={nav} engineer={page === 'engineer'} />;
+  } else body = <Pcrs user={user} nav={nav} />;
   return (
     <>
       {banner}
