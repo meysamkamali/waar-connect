@@ -2,7 +2,8 @@
 // panel with the phone's own report and the settings the producer can push to it.
 // In the green room the producer chooses what the guest sees (nothing, the producer, the studio
 // return), hears (the producer, the studio mix-minus) and which other guests they see and hear, then
-// sends them to the studio; the server takes the first free slot. The same pieces build the full-screen view (GuestFocus).
+// sends them to the studio; the server takes the first free slot. The full-screen view (GuestFocus)
+// lays out the same switches on their own, without the connection panel.
 import type { GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
@@ -312,10 +313,91 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
   );
 }
 
-/** Everything the producer can do with this guest; `openConn` shows the connection panel unfolded. */
-export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
+// The producer's switches for one guest, each on its own, so the card (one line each, compact) and
+// the full-screen view (stacked, full width) can lay them out differently. `wide` fills the row.
+
+/** What the guest sees in the green room: nothing, the producer's camera, or the studio return. */
+export function SeesSwitch({ p, wide = false }: { p: GuestCardProps; wide?: boolean }) {
+  return (
+    <span class={`seg ${wide ? 'wide' : ''}`}>
+      <button class={p.sees === 'none' ? 'on' : ''} onClick={() => p.onSee('none')}>
+        nothing
+      </button>
+      <button class={p.sees === 'me' ? 'on' : ''} onClick={() => p.onSee('me')}>
+        me
+      </button>
+      <button class={p.sees === 'studio' ? 'on' : ''} onClick={() => p.onSee('studio')}>
+        studio
+      </button>
+    </span>
+  );
+}
+
+/** What the guest hears in the green room: the producer, the studio mix-minus, both or neither. */
+export function HearsSwitch({ p, wide = false }: { p: GuestCardProps; wide?: boolean }) {
+  const g = p.state;
+  return (
+    <span class={`seg ${wide ? 'wide' : ''}`}>
+      <button class={p.hearsMe ? 'on' : ''} onClick={() => p.onHearMe(!p.hearsMe)}>
+        {p.hearsMe ? 'me ●' : 'me'}
+      </button>
+      <button class={g.studioSound ? 'on' : ''} onClick={() => p.onAction({ type: 'studioSound', guest: g.identity, on: !g.studioSound })}>
+        {g.studioSound ? 'studio ●' : 'studio'}
+      </button>
+    </span>
+  );
+}
+
+/** Which other green-room guests this guest sees and hears. `chips` lets many names wrap. */
+export function PeersSwitch({ p, chips = false }: { p: GuestCardProps; chips?: boolean }) {
+  const g = p.state;
+  const buttons = p.others.map((o) => {
+    const on = g.peers.includes(o.identity);
+    return (
+      <button
+        key={o.identity}
+        class={`${chips ? 'chip' : ''} ${on ? 'on' : ''}`}
+        title={on ? `This guest sees and hears ${o.name}. One way: ${o.name}'s own card says what they get.` : `Let this guest see and hear ${o.name}`}
+        onClick={() => p.onAction({ type: 'peer', guest: g.identity, other: o.identity, on: !on })}
+      >
+        {on ? `${o.name} ●` : o.name}
+      </button>
+    );
+  });
+  return chips ? <div class="focus-chips">{buttons}</div> : <span class="seg">{buttons}</span>;
+}
+
+/** Text cues for the guest's screen: the ready-made ones and a line to type. */
+export function CueBox({ p }: { p: GuestCardProps }) {
   const g = p.state;
   const [cue, setCue] = useState('');
+  return (
+    <div class="cues">
+      {QUICK_CUES.map((text) => (
+        <button class="chip" key={text} onClick={() => p.onAction({ type: 'cue', to: g.identity, text })}>
+          {text}
+        </button>
+      ))}
+      <form
+        class="row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (cue.trim()) p.onAction({ type: 'cue', to: g.identity, text: cue.trim() });
+          setCue('');
+        }}
+      >
+        <input placeholder="Cue text…" value={cue} onInput={(e) => setCue((e.currentTarget as HTMLInputElement).value)} />
+        <button class="btn secondary small" type="submit">
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/** Everything the producer can do with this guest on its card in the room, with the connection panel folded. */
+export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
+  const g = p.state;
   const inLobby = g.place === 'lobby';
   const inGreen = g.place === 'green';
   const inStudio = g.place === 'studio';
@@ -333,47 +415,16 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
         <>
           <div class="inline">
             guest sees
-            <span class="seg">
-              <button class={p.sees === 'none' ? 'on' : ''} onClick={() => p.onSee('none')}>
-                nothing
-              </button>
-              <button class={p.sees === 'me' ? 'on' : ''} onClick={() => p.onSee('me')}>
-                me
-              </button>
-              <button class={p.sees === 'studio' ? 'on' : ''} onClick={() => p.onSee('studio')}>
-                studio
-              </button>
-            </span>
+            <SeesSwitch p={p} />
           </div>
           <div class="inline">
             guest hears
-            <span class="seg">
-              <button class={p.hearsMe ? 'on' : ''} onClick={() => p.onHearMe(!p.hearsMe)}>
-                {p.hearsMe ? 'me ●' : 'me'}
-              </button>
-              <button class={g.studioSound ? 'on' : ''} onClick={() => p.onAction({ type: 'studioSound', guest: g.identity, on: !g.studioSound })}>
-                {g.studioSound ? 'studio ●' : 'studio'}
-              </button>
-            </span>
+            <HearsSwitch p={p} />
           </div>
           {p.others.length > 0 && (
             <div class="inline">
               guest sees &amp; hears
-              <span class="seg">
-                {p.others.map((o) => {
-                  const on = g.peers.includes(o.identity);
-                  return (
-                    <button
-                      key={o.identity}
-                      class={on ? 'on' : ''}
-                      title={on ? `This guest sees and hears ${o.name}. One way: ${o.name}'s own card says what they get.` : `Let this guest see and hear ${o.name}`}
-                      onClick={() => p.onAction({ type: 'peer', guest: g.identity, other: o.identity, on: !on })}
-                    >
-                      {on ? `${o.name} ●` : o.name}
-                    </button>
-                  );
-                })}
-              </span>
+              <PeersSwitch p={p} />
             </div>
           )}
           <button class="btn" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
@@ -406,28 +457,7 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
         </>
       )}
 
-      {(inGreen || inStudio) && (
-        <div class="cues">
-          {QUICK_CUES.map((text) => (
-            <button class="chip" key={text} onClick={() => p.onAction({ type: 'cue', to: g.identity, text })}>
-              {text}
-            </button>
-          ))}
-          <form
-            class="row"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (cue.trim()) p.onAction({ type: 'cue', to: g.identity, text: cue.trim() });
-              setCue('');
-            }}
-          >
-            <input placeholder="Cue text…" value={cue} onInput={(e) => setCue((e.currentTarget as HTMLInputElement).value)} />
-            <button class="btn secondary small" type="submit">
-              Send
-            </button>
-          </form>
-        </div>
-      )}
+      {(inGreen || inStudio) && <CueBox p={p} />}
 
       {p.connected && (
         <details class="conn" open={p.openConn === true}>

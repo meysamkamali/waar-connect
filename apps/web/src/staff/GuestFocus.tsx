@@ -1,8 +1,10 @@
 // Full-screen view of one guest on the producer's monitor: the picture as large as the screen allows,
-// the controls and the open connection panel beside it, the guest's sound alone if wanted, and a
-// switch to take the browser itself full screen. Esc or the close button returns to the room.
+// and beside it only what the producer does with this guest: whose sound is in the headphones, what
+// the guest sees and hears, the move to the studio (or tally and bring back), and cues.
+// The connection and phone settings are not here: they are on the guest's card in the room and on the
+// engineer's page. Esc or the close button returns to the room.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { GuestControls, GuestVideo, guestName, type GuestCardProps } from './GuestCard.tsx';
+import { CueBox, GuestVideo, guestName, HearsSwitch, PeersSwitch, SeesSwitch, type GuestCardProps } from './GuestCard.tsx';
 
 export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boolean) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -28,33 +30,113 @@ export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boo
   };
 
   const g = p.state;
-  const place = g.place === 'lobby' ? 'at the door' : g.place === 'green' ? 'in the green room' : g.place === 'studio' ? 'in the studio' : 'left';
+  const inLobby = g.place === 'lobby';
+  const inGreen = g.place === 'green';
+  const inStudio = g.place === 'studio';
+  const place = inLobby ? 'at the door' : inGreen ? 'in the green room' : inStudio ? 'in the studio' : 'left';
 
   return (
     <div class="focus" ref={ref}>
       <GuestVideo {...p} onFocus={undefined} className="focus-video" />
       <aside class="focus-panel">
-        <header class="row between">
+        <header class="focus-head">
           <div>
-            <h2 style={{ margin: 0 }}>{guestName(p)}</h2>
-            <div class="muted small">
+            <h2 class="focus-name">{guestName(p)}</h2>
+            <div class="focus-place">
+              <span class={`dot ${p.connected ? 'ok' : ''}`} />
               {place}
               {!p.connected && ' · not connected'}
+              {inStudio && g.tally !== 'off' && <span class={`tally ${g.tally}`}>{g.tally === 'onair' ? 'ON AIR' : 'STAND BY'}</span>}
             </div>
           </div>
-          <div class="row">
+          <div class="focus-tools">
             <button class="btn secondary small" onClick={toggleFullscreen}>
-              {fullscreen ? 'Leave monitor full screen' : 'Monitor full screen'}
+              {fullscreen ? 'Leave full screen' : 'Monitor full screen'}
             </button>
             <button class="btn secondary small" onClick={p.onClose} title="Esc">
               Close ✕
             </button>
           </div>
         </header>
-        <label class="inline">
-          <input type="checkbox" checked={p.solo} onChange={(e) => p.onSolo((e.currentTarget as HTMLInputElement).checked)} /> only this guest's sound in my headphones
-        </label>
-        <GuestControls {...p} openConn />
+
+        <section class="focus-block">
+          <h3>My headphones</h3>
+          <span class="seg wide">
+            <button class={p.solo ? 'on' : ''} onClick={() => p.onSolo(true)}>
+              this guest only
+            </button>
+            <button class={p.solo ? '' : 'on'} onClick={() => p.onSolo(false)}>
+              all guests
+            </button>
+          </span>
+        </section>
+
+        {inLobby && (
+          <button class="btn focus-main" onClick={() => p.onAction({ type: 'admit', guest: g.identity })}>
+            Receive into green room
+          </button>
+        )}
+
+        {inGreen && (
+          <>
+            <section class="focus-block">
+              <h3>Guest sees</h3>
+              <SeesSwitch p={p} wide />
+            </section>
+            <section class="focus-block">
+              <h3>Guest hears</h3>
+              <HearsSwitch p={p} wide />
+            </section>
+            {p.others.length > 0 && (
+              <section class="focus-block">
+                <h3>Guest sees and hears these guests</h3>
+                <PeersSwitch p={p} chips />
+              </section>
+            )}
+            <button class="btn focus-main" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
+              Send to studio →
+            </button>
+          </>
+        )}
+
+        {inStudio && (
+          <>
+            <section class="focus-block">
+              <h3>Tally on the guest's screen</h3>
+              <div class="focus-pair">
+                <button class={`btn ${g.tally === 'standby' ? 'warn' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'standby' })}>
+                  Stand by
+                </button>
+                <button class={`btn ${g.tally === 'onair' ? 'danger' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'onair' })}>
+                  On air
+                </button>
+              </div>
+            </section>
+            {p.ifbAllowed && (
+              <section class="focus-block">
+                <h3>Talk to this guest on air (IFB)</h3>
+                <div class="focus-pair">
+                  <button class={`btn ${p.ifb ? 'warn' : 'secondary'}`} onClick={() => p.onAction({ type: 'ifb', guest: g.identity, on: !p.ifb })}>
+                    {p.ifb ? 'IFB open' : 'Open IFB'}
+                  </button>
+                  <button class={`btn ${p.ifb && p.hearsMe ? 'live' : 'secondary'}`} disabled={!p.ifb} onClick={() => p.onHearMe(!p.hearsMe)}>
+                    {p.ifb && p.hearsMe ? 'Talking' : 'Talk'}
+                  </button>
+                </div>
+              </section>
+            )}
+            <button class="btn secondary focus-main" onClick={() => p.onAction({ type: 'bringBack', guest: g.identity })}>
+              ← Bring back to the green room
+            </button>
+          </>
+        )}
+
+        {(inGreen || inStudio) && (
+          <section class="focus-block">
+            <h3>Cue on the guest's screen</h3>
+            <CueBox p={p} />
+          </section>
+        )}
       </aside>
     </div>
   );
