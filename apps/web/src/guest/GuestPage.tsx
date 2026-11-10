@@ -7,6 +7,7 @@ import { setLanguage, t } from '../i18n/index.ts';
 import { Call } from './Call.tsx';
 import { DeviceCheck } from './DeviceCheck.tsx';
 import { GuestSession, type DeviceChoice } from './session.ts';
+import { useAutoFullscreen } from '../lib/fullscreen.ts';
 import { watchBuild } from '../lib/version.ts';
 
 // A guest who joined once stays joined across a reload of the same tab (a codec change pushed by the
@@ -129,6 +130,8 @@ export function GuestPage({ token }: { token?: string }) {
   const status = session.status.value;
   const place = session.state.value.place;
   const over = status === 'removed' || place === 'left';
+  // Full screen from the guest's first touch anywhere, whatever the page shows at that moment.
+  const fullscreen = useAutoFullscreen(!over && !error);
   useEffect(() => {
     if (over) clearJoin(); // sent out or removed: a reload shows the device check, not a silent return
   }, [over]);
@@ -137,5 +140,5 @@ export function GuestPage({ token }: { token?: string }) {
   if (!info) return <Message title={t('appName')} text={t('loading')} />;
   if (over) return <Message title={t('exitTitle')} text={t('exitText')} />;
   if (!joined) return <DeviceCheck info={info} onJoin={(devices) => start(info, devices, false)} />;
-  return <Call session={session} info={info} />;
+  return <Call session={session} info={info} fullscreen={fullscreen} />;
 }

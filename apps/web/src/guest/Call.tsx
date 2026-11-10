@@ -1,54 +1,21 @@
 // The one layout for lobby, green room and studio: big picture, self view, tally, cue, three buttons.
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import type { JoinInfo } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { t } from '../i18n/index.ts';
-import { canFullscreen, enterFullscreen, exitFullscreen, isFullscreen, onFullscreenChange } from '../lib/fullscreen.ts';
+import type { AutoFullscreen } from '../lib/fullscreen.ts';
 import { formatSummary } from '../lib/stats.ts';
 import type { GuestSession } from './session.ts';
 
-export function Call({ session, info }: { session: GuestSession; info: JoinInfo }) {
+export function Call({ session, info, fullscreen: fs }: { session: GuestSession; info: JoinInfo; fullscreen: AutoFullscreen }) {
   const state = session.state.value;
   const status = session.status.value;
   const main = session.mainVideo.value;
   const cue = session.cue.value;
   const [showInfo, setShowInfo] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(true);
-  const [full, setFull] = useState(isFullscreen());
-  // No browser lets a page go full screen by itself: it takes a touch, or the phone being turned. So
-  // the page asks at once (in case the browser allows it), again when the phone is turned, and on any
-  // touch, and says so in a line until it has it. Once the guest leaves full screen on purpose (the
-  // button, or the phone's back gesture) it is not taken back; the button brings it back.
-  const [declined, setDeclined] = useState(false);
-  const declinedRef = useRef(false);
-  declinedRef.current = declined;
-
-  useEffect(() => {
-    let was = isFullscreen();
-    const wanted = () => !declinedRef.current && !isFullscreen();
-    void enterFullscreen();
-    const off = onFullscreenChange(() => {
-      const now = isFullscreen();
-      if (was && !now) setDeclined(true);
-      was = now;
-      setFull(now);
-    });
-    const onTurn = () => {
-      if (wanted()) void enterFullscreen();
-    };
-    screen.orientation?.addEventListener?.('change', onTurn);
-    window.addEventListener('orientationchange', onTurn);
-    return () => {
-      off();
-      screen.orientation?.removeEventListener?.('change', onTurn);
-      window.removeEventListener('orientationchange', onTurn);
-    };
-  }, []);
-
-  const onTouch = () => {
-    void session.unlockAudio();
-    if (!declinedRef.current && !isFullscreen()) void enterFullscreen();
-  };
+  // Full screen itself is the guest page's business (lib/fullscreen.ts takes it on the first touch
+  // anywhere); this screen shows the line that says so, and the button to leave and come back.
 
   useEffect(() => {
     const check = () => setAudioUnlocked(session.room.canPlaybackAudio);
@@ -80,7 +47,7 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
   }
 
   return (
-    <div class="screen stage" onClick={onTouch}>
+    <div class="screen stage" onClick={() => void session.unlockAudio()}>
       {main ? (
         <VideoView track={main} className="stage-video" />
       ) : (
@@ -110,7 +77,7 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
         {statusText && <span class={`status ${statusTone}`}>{statusText}</span>}
       </div>
 
-      {canFullscreen() && !full && !declined && <div class="fs-hint">{t('tapFullScreen')}</div>}
+      {fs.can && !fs.full && !fs.declined && <div class="fs-hint">{t('tapFullScreen')}</div>}
 
       {cue && (
         <button class="cue" onClick={() => session.dismissCue()}>
@@ -148,18 +115,17 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
           {t('help')}
         </button>
         <span class="spacer" />
-        {canFullscreen() && (
+        {fs.can && (
           <button
             class="btn secondary small"
-            title={full ? t('exitFullScreen') : t('fullScreen')}
-            aria-label={full ? t('exitFullScreen') : t('fullScreen')}
+            title={fs.full ? t('exitFullScreen') : t('fullScreen')}
+            aria-label={fs.full ? t('exitFullScreen') : t('fullScreen')}
             onClick={(e) => {
               e.stopPropagation();
-              setDeclined(full);
-              void (full ? exitFullscreen() : enterFullscreen());
+              fs.toggle();
             }}
           >
-            {full ? '⤡' : '⛶'}
+            {fs.full ? '⤡' : '⛶'}
           </button>
         )}
         <button class="btn secondary small" onClick={() => setShowInfo(!showInfo)}>
