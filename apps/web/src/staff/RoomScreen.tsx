@@ -104,10 +104,15 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   const talkTo = me?.talkTo ?? 'none';
   const talkList = talkTo === 'all' ? null : talkTo === 'none' ? [] : [...talkTo];
 
+  /** The multiview group is one conversation: talk on one of its guests reaches all, and switching it off takes it off all. */
+  const mvIds = (snap?.guests ?? []).filter((x) => x.place === 'green' && x.mv).map((x) => x.identity);
+  const mvTalk = talkList !== null && mvIds.some((x) => talkList.includes(x));
+
   function hearMe(guest: string, on: boolean): void {
+    const group = mvIds.includes(guest) ? mvIds : [guest];
     let next: 'none' | 'all' | string[];
     if (talkList === null) next = on ? 'all' : 'none';
-    else next = on ? [...talkList, guest] : talkList.filter((x) => x !== guest);
+    else next = on ? [...talkList.filter((x) => x !== guest), guest] : talkList.filter((x) => !group.includes(x));
     doAction({ type: 'talk', to: Array.isArray(next) && next.length === 0 ? 'none' : next });
     void session.setTalking(next !== 'none' && (next === 'all' || next.length > 0));
   }
@@ -171,11 +176,13 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     outputNames: settings.outputNames,
     ifbAllowed: settings.ifbAllowed,
     ifb: snap?.ifbOverride.includes(g.identity) ?? false,
-    hearsMe: talkList === null || talkList.includes(g.identity),
+    hearsMe: talkList === null || talkList.includes(g.identity) || (mvTalk && mvIds.includes(g.identity)),
     sees: me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none',
-    others: guestsByPlace('green')
-      .filter((o) => o.identity !== g.identity)
-      .map((o) => ({ identity: o.identity, name: guestName({ record: recordFor(o.identity), state: o }) })),
+    mvWith: g.mv
+      ? guestsByPlace('green')
+          .filter((o) => o.mv && o.identity !== g.identity)
+          .map((o) => guestName({ record: recordFor(o.identity), state: o }))
+      : [],
     hand: session.hands.value[g.identity] === true,
     help: session.helps.value[g.identity] !== undefined,
     onAction: doAction,

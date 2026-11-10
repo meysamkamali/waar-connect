@@ -531,3 +531,13 @@ body.stage {
 .focus-panel .cues { gap: 8px; }
 .focus-panel .cues form.row { width: 100%; flex-wrap: nowrap; gap: 8px; margin-top: 2px; }
 .focus-panel .cues form.row input { flex: 1 1 auto; min-width: 0; }
+
+/* Multiview tick: beside "guest sees" on the card, a button beside the switch in the full-screen view. */
+.guest-controls .mv-tick { margin-inline-start: 6px; color: var(--fg); cursor: pointer; }
+.guest-controls .mv-tick input { width: 18px; height: 18px; margin: 0; padding: 0; accent-color: var(--ok); cursor: pointer; }
+.guest-overlay .slot.mv { background: var(--ok); color: #000; font-weight: 700; }
+.focus-sees { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.focus-sees .mv-toggle { min-height: 42px; min-width: 72px; padding: 8px 12px; }
+.focus-note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.45; }
+/* Guest's screen: the multiview strip, small pictures side by side along the bottom. */
+.tiles .tile .name { font-size: 0.75rem; left: 4px; bottom: 4px; padding: 1px 6px; }

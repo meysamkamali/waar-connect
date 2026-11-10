@@ -91,8 +91,12 @@ picture, level meter and a connection light. For each guest, independently, they
 - **Talk** (push-to-talk, latch on long press). Producer and engineer each have their own talk track;
   a guest hears both mixed when both are talking.
 - **Face to face**: the producer's camera goes to that guest full-screen for a pre-interview.
-- **Guests**: pick, per guest and by name, which other green-room guests they see and hear. One way:
-  for a conversation, switch it on on both cards. The choice is kept through a trip to the studio.
+- **Multiview (MV)**, since 2026-11-10, in place of the per-guest picks of the day before: tick MV on
+  the guests who belong together. They are one group: each sees the others as small pictures along the
+  bottom of the screen, they hear each other, and when the producer talks to one of them all of them
+  hear it. A guest not ticked is outside. The tick is kept through a trip to the studio. The pictures
+  reach each phone as the senders' smallest copy (180p, at most 150 kbit/s each), forwarded by the
+  media server; nothing is decoded or mixed on the server.
 - **Studio sound** on or off: lets the guest hear the studio mix-minus to get the feel of the show.
 - **Program picture** on or off.
 - **Cue**: a text message that appears on the guest's screen until dismissed.
@@ -120,10 +124,10 @@ the Studio.
 
 | The guest… | Lobby | Green Room | Studio |
 |---|---|---|---|
-| hears producer voice | no | yes | no (IFB override only) |
+| hears producer voice | no | when talked to, or when one of their multiview group is | no (IFB override only) |
 | hears engineer voice | no | yes | no (IFB override only) |
 | hears studio mix-minus | no | if switched on | always |
-| sees and hears other guests | no | the ones the producer picked | only guests in the Studio |
+| sees and hears other guests | no | the multiview group, when ticked MV | only guests in the Studio |
 | sees program picture | no | if switched on | always |
 | sees producer camera | no | in face-to-face | no |
 | gets tally | no | no | standby / ON AIR |
@@ -179,8 +183,8 @@ One layout for every place, so nothing jumps around:
   studio strip with the N slots (each named after its output), and whether the return feed is on.
 - Guests and links: seat a contact from the contact book (search by name, number or handle) or a one-off
   name, copy the link, send it over WhatsApp or Telegram from the contact's details, remove the seat.
-- Per-guest card in the green room: **guest sees** nothing / me / studio, **guest hears** me / studio,
-  **guest sees & hears** the other green-room guests by name, send to studio; in the studio: stand by, on air, bring back; cues everywhere.
+- Per-guest card in the green room: **guest sees** Black / PCR / Studio with the **MV** tick, **guest hears** me / studio,
+  send to studio; in the studio: stand by, on air, bring back; cues everywhere.
 - A "talk to all" button and a sound on/off for the producer's own monitoring.
 - No device pickers: the admin locks the camera, microphone and capture inputs per PC ("This station").
 
@@ -205,7 +209,7 @@ The engineer's screen is the producer's screen plus a detail panel per guest:
   reconnects anything: the output page is already subscribed and simply swaps the slate for the guest.
   Participant identities carry the role: `guest:<id>`, `producer:<user>`, `engineer:<user>`,
   `studio:return`, `out:slot-1`.
-- **State lives in participant attributes** set only by connect-api: `place`, `tally`, `slot`, `peers`,
+- **State lives in participant attributes** set only by connect-api: `place`, `tally`, `slot`, `mv`,
   `studio_sound`, `program`, `ready`. Attributes survive a reconnect, so a guest who drops on air comes
   back on air with the right tally.
 - **Routing is enforced by the server.** Every client runs with automatic subscription off. On each state

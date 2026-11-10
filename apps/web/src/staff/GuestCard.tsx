@@ -1,7 +1,7 @@
 // One guest in the producer's view: picture, state, the controls for their place, and the connection
 // panel with the phone's own report and the settings the producer can push to it.
-// In the green room the producer chooses what the guest sees (nothing, the producer, the studio
-// return), hears (the producer, the studio mix-minus) and which other guests they see and hear, then
+// In the green room the producer chooses what the guest sees (Black, the PCR, the Studio return),
+// hears (the producer, the studio mix-minus) and whether they are in the multiview group (MV), then
 // sends them to the studio; the server takes the first free slot. The full-screen view (GuestFocus)
 // lays out the same switches on their own, without the connection panel.
 import type { GuestState } from '@waar-connect/shared';
@@ -29,8 +29,8 @@ export interface GuestCardProps {
   /** The producer's voice is routed to this guest. */
   hearsMe: boolean;
   sees: Sees;
-  /** The other green-room guests, by name, for the "sees & hears" switches. */
-  others: { identity: string; name: string }[];
+  /** Names of the other guests in the multiview group, when this guest is in it. */
+  mvWith: string[];
   hand: boolean;
   help: boolean;
   onAction: (action: RoomAction) => void;
@@ -58,6 +58,11 @@ export function GuestVideo(p: GuestCardProps & { className?: string }) {
       <div class="guest-overlay">
         <span class="name">{guestName(p)}</span>
         {g.place === 'studio' && <span class={`tally ${g.tally}`}>{g.tally === 'onair' ? 'ON AIR' : 'STAND BY'}</span>}
+        {g.place === 'green' && g.mv && (
+          <span class="slot mv" title={p.mvWith.length ? `In the multiview with ${p.mvWith.join(', ')}` : 'In the multiview, alone so far'}>
+            MV
+          </span>
+        )}
         {p.hand && <span class="flag">✋ hand</span>}
         {p.help && (
           <button class="flag bad" onClick={p.onClearHelp}>
@@ -316,20 +321,40 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
 // The producer's switches for one guest, each on its own, so the card (one line each, compact) and
 // the full-screen view (stacked, full width) can lay them out differently. `wide` fills the row.
 
-/** What the guest sees in the green room: nothing, the producer's camera, or the studio return. */
+/** What fills the guest's screen in the green room: black (the waiting card), the PCR (the producer's camera), or the studio return. */
 export function SeesSwitch({ p, wide = false }: { p: GuestCardProps; wide?: boolean }) {
   return (
     <span class={`seg ${wide ? 'wide' : ''}`}>
-      <button class={p.sees === 'none' ? 'on' : ''} onClick={() => p.onSee('none')}>
-        nothing
+      <button class={p.sees === 'none' ? 'on' : ''} title="No picture: the guest sees the waiting card" onClick={() => p.onSee('none')}>
+        Black
       </button>
-      <button class={p.sees === 'me' ? 'on' : ''} onClick={() => p.onSee('me')}>
-        me
+      <button class={p.sees === 'me' ? 'on' : ''} title="The producer's camera, from the PCR" onClick={() => p.onSee('me')}>
+        PCR
       </button>
-      <button class={p.sees === 'studio' ? 'on' : ''} onClick={() => p.onSee('studio')}>
-        studio
+      <button class={p.sees === 'studio' ? 'on' : ''} title="The studio return: the program picture" onClick={() => p.onSee('studio')}>
+        Studio
       </button>
     </span>
+  );
+}
+
+/**
+ * The multiview tick. The guests ticked MV are one group in the green room: each sees the others as
+ * small pictures along the bottom of the screen, they hear each other, and all of them hear the
+ * producer when one of them is talked to. `big` is the full-screen view's button.
+ */
+export function MvTick({ p, big = false }: { p: GuestCardProps; big?: boolean }) {
+  const g = p.state;
+  const title = 'Multiview: the guests ticked MV see each other as small pictures along the bottom, hear each other, and all hear you when you talk to one of them';
+  const toggle = () => p.onAction({ type: 'mv', guest: g.identity, on: !g.mv });
+  return big ? (
+    <button class={`btn mv-toggle ${g.mv ? 'live' : 'secondary'}`} title={title} aria-pressed={g.mv} onClick={toggle}>
+      {g.mv ? 'MV ✓' : 'MV'}
+    </button>
+  ) : (
+    <label class="inline mv-tick" title={title}>
+      <input type="checkbox" checked={g.mv} onChange={toggle} /> MV
+    </label>
   );
 }
 
@@ -346,25 +371,6 @@ export function HearsSwitch({ p, wide = false }: { p: GuestCardProps; wide?: boo
       </button>
     </span>
   );
-}
-
-/** Which other green-room guests this guest sees and hears. `chips` lets many names wrap. */
-export function PeersSwitch({ p, chips = false }: { p: GuestCardProps; chips?: boolean }) {
-  const g = p.state;
-  const buttons = p.others.map((o) => {
-    const on = g.peers.includes(o.identity);
-    return (
-      <button
-        key={o.identity}
-        class={`${chips ? 'chip' : ''} ${on ? 'on' : ''}`}
-        title={on ? `This guest sees and hears ${o.name}. One way: ${o.name}'s own card says what they get.` : `Let this guest see and hear ${o.name}`}
-        onClick={() => p.onAction({ type: 'peer', guest: g.identity, other: o.identity, on: !on })}
-      >
-        {on ? `${o.name} ●` : o.name}
-      </button>
-    );
-  });
-  return chips ? <div class="focus-chips">{buttons}</div> : <span class="seg">{buttons}</span>;
 }
 
 /** Text cues for the guest's screen: the ready-made ones and a line to type. */
@@ -416,17 +422,12 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
           <div class="inline">
             guest sees
             <SeesSwitch p={p} />
+            <MvTick p={p} />
           </div>
           <div class="inline">
             guest hears
             <HearsSwitch p={p} />
           </div>
-          {p.others.length > 0 && (
-            <div class="inline">
-              guest sees &amp; hears
-              <PeersSwitch p={p} />
-            </div>
-          )}
           <button class="btn" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
             Send to studio →
           </button>

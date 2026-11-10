@@ -33,7 +33,7 @@ export interface RoomSettings {
 
 export type RoomAction =
   | { type: 'admit'; guest: string }
-  | { type: 'peer'; guest: string; other: string; on: boolean }
+  | { type: 'mv'; guest: string; on: boolean }
   | { type: 'studioSound'; guest: string; on: boolean }
   | { type: 'program'; guest: string; on: boolean }
   | { type: 'slot'; guest: string; slot: number | null }
@@ -259,13 +259,9 @@ export class RoomController {
         this.#move(g, ['lobby'], 'green', 'Admit');
         return;
       }
-      case 'peer': {
-        // One way: this guest sees and hears the other; the other's own card has its own switch.
-        const g = this.#guest(action.guest);
-        const other = this.#guest(action.other);
-        if (other === g) throw new ActionError('A guest cannot be shown to themselves.');
-        const rest = g.peers.filter((id) => id !== other.identity);
-        g.peers = action.on ? [...rest, other.identity] : rest;
+      case 'mv': {
+        // In or out of the multiview group; the routing engine does the rest.
+        this.#guest(action.guest).mv = action.on;
         return;
       }
       case 'studioSound': {
@@ -310,7 +306,7 @@ export class RoomController {
         }
         g.place = 'studio';
         g.tally = 'standby';
-        // peers are kept: they count in the green room only, and apply again when the guest comes back
+        // the MV tick is kept: it counts in the green room only, and applies again when the guest comes back
         return;
       }
       case 'tally': {
@@ -334,7 +330,6 @@ export class RoomController {
         await this.control.removeParticipant(this.room, g.identity).catch(() => undefined);
         this.#guests.delete(g.identity);
         this.#ifb.delete(g.identity);
-        for (const o of this.#guests.values()) if (o.peers.includes(g.identity)) o.peers = o.peers.filter((id) => id !== g.identity);
         return;
       }
       case 'ifb': {

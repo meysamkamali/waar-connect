@@ -29,7 +29,7 @@ describe('identities', () => {
 
 describe('attributes', () => {
   it('round trip every field', () => {
-    const g = { ...defaultGuestState('guest:ali'), place: 'studio' as const, tally: 'onair' as const, slot: 2, peers: ['guest:bahar', 'guest:ciwan'], studioSound: true, program: true, ready: true };
+    const g = { ...defaultGuestState('guest:ali'), place: 'studio' as const, tally: 'onair' as const, slot: 2, mv: true, studioSound: true, program: true, ready: true };
     assert.deepEqual(guestFromAttributes('guest:ali', guestAttributes(g)), g);
   });
   it('fall back to the lobby defaults on garbage', () => {

@@ -24,8 +24,11 @@ export interface GuestState {
   tally: Tally;
   /** Studio output slot, 1-based, or null while unassigned. */
   slot: number | null;
-  /** Green room: the other guests this guest sees and hears, picked by the producer. One way. */
-  peers: readonly string[];
+  /**
+   * Green room: in the multiview group (MV). The guests of the group see each other as small pictures,
+   * hear each other, and all hear the producer when one of them is talked to.
+   */
+  mv: boolean;
   /** Green room: hears the studio mix-minus. */
   studioSound: boolean;
   /** Green room: sees the program picture. */
@@ -97,7 +100,7 @@ export const ATTR = {
   place: 'wc.place',
   tally: 'wc.tally',
   slot: 'wc.slot',
-  peers: 'wc.peers',
+  mv: 'wc.mv',
   studioSound: 'wc.studio_sound',
   program: 'wc.program',
   ready: 'wc.ready',
@@ -109,7 +112,7 @@ export function defaultGuestState(identity: string): GuestState {
     place: 'lobby',
     tally: 'off',
     slot: null,
-    peers: [],
+    mv: false,
     studioSound: false,
     program: false,
     ready: false,
@@ -121,7 +124,7 @@ export function guestAttributes(g: GuestState): Record<string, string> {
     [ATTR.place]: g.place,
     [ATTR.tally]: g.tally,
     [ATTR.slot]: g.slot === null ? '' : String(g.slot),
-    [ATTR.peers]: g.peers.join(','),
+    [ATTR.mv]: g.mv ? '1' : '0',
     [ATTR.studioSound]: g.studioSound ? '1' : '0',
     [ATTR.program]: g.program ? '1' : '0',
     [ATTR.ready]: g.ready ? '1' : '0',
@@ -164,7 +167,7 @@ export function guestFromAttributes(identity: string, attrs: Readonly<Record<str
     place: (PLACES as readonly string[]).includes(place ?? '') ? (place as Place) : d.place,
     tally: (TALLIES as readonly string[]).includes(tally ?? '') ? (tally as Tally) : d.tally,
     slot: Number.isInteger(slot) && slot > 0 ? slot : null,
-    peers: (attrs[ATTR.peers] ?? '').split(',').filter((id) => id.length > 0),
+    mv: attrs[ATTR.mv] === '1',
     studioSound: attrs[ATTR.studioSound] === '1',
     program: attrs[ATTR.program] === '1',
     ready: attrs[ATTR.ready] === '1',

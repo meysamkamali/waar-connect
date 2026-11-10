@@ -28,6 +28,11 @@ export function talksTo(staff: StaffState, guestIdentity: string): boolean {
   return staff.talkTo.includes(guestIdentity);
 }
 
+/** The multiview group: the green-room guests the producer ticked MV. One conversation. */
+export function mvGroup(state: Pick<RoomState, 'guests'>): GuestState[] {
+  return state.guests.filter((g) => g.place === 'green' && g.mv);
+}
+
 function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomState): boolean {
   if (track.publisher === guest.identity) return false; // never yourself
 
@@ -40,7 +45,9 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
       switch (track.source) {
         case 'talkback': {
           const staff = staffById(state, track.publisher);
-          return staff !== undefined && talksTo(staff, guest.identity);
+          if (staff === undefined) return false;
+          // Talking to one guest of the multiview group is talking to the group: it is one conversation.
+          return talksTo(staff, guest.identity) || (guest.mv && mvGroup(state).some((o) => talksTo(staff, o.identity)));
         }
         case 'program-video':
           return guest.program;
@@ -51,7 +58,7 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
           const staff = staffById(state, track.publisher);
           if (staff) return track.source === 'camera' && staff.faceTo === guest.identity;
           const other = guestById(state, track.publisher);
-          return other !== undefined && other.place === 'green' && guest.peers.includes(other.identity);
+          return other !== undefined && guest.mv && other.place === 'green' && other.mv;
         }
       }
       return false;

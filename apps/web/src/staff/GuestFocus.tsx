@@ -4,7 +4,7 @@
 // The connection and phone settings are not here: they are on the guest's card in the room and on the
 // engineer's page. Esc or the close button returns to the room.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { CueBox, GuestVideo, guestName, HearsSwitch, PeersSwitch, SeesSwitch, type GuestCardProps } from './GuestCard.tsx';
+import { CueBox, GuestVideo, guestName, HearsSwitch, MvTick, SeesSwitch, type GuestCardProps } from './GuestCard.tsx';
 
 export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boolean) => void; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -81,18 +81,16 @@ export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boo
           <>
             <section class="focus-block">
               <h3>Guest sees</h3>
-              <SeesSwitch p={p} wide />
+              <div class="focus-sees">
+                <SeesSwitch p={p} wide />
+                <MvTick p={p} big />
+              </div>
+              {g.mv && <p class="focus-note">Multiview: {p.mvWith.length ? `with ${p.mvWith.join(', ')}. They see and hear each other, and all hear you when you talk to one.` : 'no other guest is ticked MV yet.'}</p>}
             </section>
             <section class="focus-block">
               <h3>Guest hears</h3>
               <HearsSwitch p={p} wide />
             </section>
-            {p.others.length > 0 && (
-              <section class="focus-block">
-                <h3>Guest sees and hears these guests</h3>
-                <PeersSwitch p={p} chips />
-              </section>
-            )}
             <button class="btn focus-main" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
               Send to studio →
             </button>

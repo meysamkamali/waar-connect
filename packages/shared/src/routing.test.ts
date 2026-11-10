@@ -78,22 +78,30 @@ describe('green room', () => {
     assert.deepEqual(sids(A, s), ['pgm-a']);
     assert.deepEqual(sids(B, s), ['pgm-v']);
   });
-  it('a guest sees and hears the green-room guests the producer picked for them, one way', () => {
-    const s = state({
-      guests: [
-        guest(A, { place: 'green', peers: [B] }),
-        guest(B, { place: 'green', peers: [A, C] }),
-        guest(C, { place: 'green' }),
-      ],
-    });
+  it('multiview: the guests ticked MV see and hear each other; the rest of the green room is outside', () => {
+    const s = state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green', mv: true }), guest(C, { place: 'green' })] });
     assert.deepEqual(sids(A, s), ['b-cam', 'b-mic']);
-    assert.deepEqual(sids(B, s), ['a-cam', 'a-mic', 'c-cam', 'c-mic']);
-    assert.deepEqual(sids(C, s), []);
+    assert.deepEqual(sids(B, s), ['a-cam', 'a-mic']);
+    assert.deepEqual(sids(C, s), [], 'not ticked: sees nobody');
+    const alone = state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green' })] });
+    assert.deepEqual(sids(A, alone), [], 'a group of one');
   });
-  it('a picked guest is received while both are in the green room only', () => {
-    const s = state({ guests: [guest(A, { place: 'green', peers: [B] }), guest(B, { place: 'studio', peers: [A], slot: 1 })] });
+  it('multiview counts in the green room only', () => {
+    const s = state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'studio', mv: true, slot: 1 })] });
     assert.deepEqual(sids(A, s), []);
     assert.deepEqual(sids(B, s), ['pgm-a', 'pgm-v']);
+  });
+  it('talking to one multiview guest is talking to the whole group, and to nobody outside it', () => {
+    const guests = [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green', mv: true }), guest(C, { place: 'green' })];
+    const s = state({ guests, staff: [staff(PROD, 'producer', { talkTo: [A] }), staff(ENG, 'engineer')] });
+    assert.ok(sids(A, s).includes('prod-talk'));
+    assert.ok(sids(B, s).includes('prod-talk'), 'B is in the group with A');
+    assert.ok(!sids(C, s).includes('prod-talk'));
+    assert.deepEqual(talkbackSubscribers(s.staff[0]!, s).sort(), [A, B], 'the talk track lets the whole group in');
+    // talking to a guest outside the group stays with that guest
+    const outside = state({ guests, staff: [staff(PROD, 'producer', { talkTo: [C] }), staff(ENG, 'engineer')] });
+    assert.ok(!sids(A, outside).includes('prod-talk'));
+    assert.ok(sids(C, outside).includes('prod-talk'));
   });
   it('face to face sends the producer camera to that guest only', () => {
     const s = state({ staff: [staff(PROD, 'producer', { faceTo: A, talkTo: [A] }), staff(ENG, 'engineer')] });
@@ -172,7 +180,7 @@ describe('invariants over many states', () => {
       for (const ifb of [[], [A]]) {
         states.push(
           state({
-            guests: [guest(A, { place: pa, slot: 1, peers: [B] }), guest(B, { place: pb, slot: 2, peers: [A] })],
+            guests: [guest(A, { place: pa, slot: 1, mv: true }), guest(B, { place: pb, slot: 2, mv: true })],
             staff: [staff(PROD, 'producer', { talkTo: 'all', faceTo: A }), staff(ENG, 'engineer', { talkTo: 'all' })],
             ifbOverride: ifb,
           }),

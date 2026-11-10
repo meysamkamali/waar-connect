@@ -166,7 +166,7 @@ export interface KioskToken {
 
 export type RoomAction =
   | { type: 'admit'; guest: string }
-  | { type: 'peer'; guest: string; other: string; on: boolean }
+  | { type: 'mv'; guest: string; on: boolean }
   | { type: 'studioSound'; guest: string; on: boolean }
   | { type: 'program'; guest: string; on: boolean }
   | { type: 'slot'; guest: string; slot: number | null }
