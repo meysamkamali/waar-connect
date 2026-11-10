@@ -115,36 +115,47 @@ test('fillRect and blit stay inside the picture', () => {
 });
 
 test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster than asked', () => {
-  const tiles = new Tiles(75);
+  const tiles = new Tiles(75, 2500);
   tiles.add('guest:b');
   tiles.add('guest:a');
   tiles.add('guest:a');
-  assert.deepEqual(tiles.identities(), ['guest:a', 'guest:b']);
-  assert.equal(tiles.size, 2);
+  assert.deepEqual(tiles.identities(1000), [], 'nobody is shown before a frame arrives');
 
   assert.equal(tiles.due('guest:a', 1000), true);
   tiles.update('guest:a', i420(8, 8, () => 235), 8, 8, 0, 1000); // white
+  tiles.update('guest:b', i420(8, 8, () => 16), 8, 8, 0, 1000); // black
   assert.equal(tiles.due('guest:a', 1040), false, 'too soon');
   assert.equal(tiles.due('guest:a', 1080), true);
   assert.equal(tiles.due('guest:nobody', 1080), false);
+  assert.deepEqual(tiles.identities(1100), ['guest:a', 'guest:b'], 'in a fixed order');
+  assert.equal(tiles.count(1100), 2);
 
   const w = 960;
   const h = 540;
   const dst = new Uint8Array(w * h * 4);
-  assert.equal(tiles.compose(dst, w, h), 2);
+  assert.equal(tiles.compose(dst, w, h, 1100), 2);
   const [ra, rb] = layoutTiles(2, w, h) as [{ x: number; y: number; width: number; height: number }, { x: number; y: number; width: number; height: number }];
   const mid = (r: { x: number; y: number; width: number; height: number }, from: Uint8Array = dst) => px(from, w, r.x + (r.width >> 1), r.y + (r.height >> 1));
   assert.deepEqual(mid(ra), [255, 255, 255, 255], "guest a's white picture is in the first place");
-  assert.deepEqual(mid(rb), [16, 16, 16, 255], 'guest b has no frame yet: near-black');
+  assert.deepEqual(mid(rb), [0, 0, 0, 255], "guest b's black picture is in the second");
   assert.deepEqual(px(dst, w, ra.x - 1, ra.y - 1), [12, 12, 12, 255], 'the dark edge');
   assert.deepEqual(px(dst, w, 10, 10), [0, 0, 0, 0], 'the programme above is untouched');
 
-  tiles.remove('guest:a');
+  // Guest a's frames stop (the server ended the subscription; no event says so): after the stale time only b is left.
+  tiles.update('guest:b', i420(8, 8, () => 16), 8, 8, 0, 3000);
+  assert.deepEqual(tiles.identities(3400), ['guest:a', 'guest:b'], 'a is still within the stale time');
+  assert.deepEqual(tiles.identities(3600), ['guest:b'], 'a went quiet 2.6 s ago');
   const again = new Uint8Array(w * h * 4);
-  assert.equal(tiles.compose(again, w, h), 1);
+  assert.equal(tiles.compose(again, w, h, 3600), 1);
   const [only] = layoutTiles(1, w, h);
-  assert.deepEqual(mid(only!, again), [16, 16, 16, 255], 'guest b moved to the middle');
+  assert.deepEqual(mid(only!, again), [0, 0, 0, 255], 'guest b moved to the middle');
+  // and a comes back the moment a frame arrives again
+  tiles.update('guest:a', i420(8, 8, () => 235), 8, 8, 0, 3700);
+  assert.equal(tiles.count(3700), 2);
+  tiles.remove('guest:a');
+  assert.equal(tiles.count(3700), 1);
   tiles.clear();
-  assert.equal(tiles.compose(again, w, h), 0);
+  assert.equal(tiles.compose(again, w, h, 3700), 0);
+  assert.equal(tiles.count(9000), 0);
   assert.equal(THUMB.width / THUMB.height, 16 / 9);
 });

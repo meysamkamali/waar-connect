@@ -94,9 +94,15 @@ picture, level meter and a connection light. For each guest, independently, they
 - **Multiview (MV)**, since 2026-11-10, in place of the per-guest picks of the day before: tick MV on
   the guests who belong together. They are one group: each sees the others as small pictures along the
   bottom of the screen, they hear each other, and when the producer talks to one of them all of them
-  hear it. A guest not ticked is outside. The tick is kept through a trip to the studio. The pictures
-  reach each phone as the senders' smallest copy (180p, at most 150 kbit/s each), forwarded by the
-  media server; nothing is decoded or mixed on the server.
+  hear it. A guest not ticked is outside. The tick is kept through a trip to the studio.
+  **Burn-in** (same day): where the gateway publishes the return and the guest watches Studio, the
+  other guests' pictures are not sent to the phone at all. The gateway receives the group's cameras
+  (their smallest copy), draws them side by side along the bottom of a second copy of the return, and
+  the multiview guests get that one picture in place of the clean return. It costs the phone no extra
+  bandwidth and the VM about a tenth of a core. A multiview guest on Black or the PCR, a PCR without
+  a gateway return, and the first moment before the second copy exists, use the small direct copies
+  instead (180p, at most 150 kbit/s per guest shown), which the phone lays along the bottom itself.
+  The sound of the group always goes direct.
 - **Studio sound** on or off: lets the guest hear the studio mix-minus to get the feel of the show.
 - **Program picture** on or off.
 - **Cue**: a text message that appears on the guest's screen until dismissed.

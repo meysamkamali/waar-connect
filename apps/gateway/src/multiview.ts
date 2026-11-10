@@ -169,25 +169,35 @@ interface Tile {
  * The guests in the multiview and their latest pictures. A guest's frame is drawn into a small
  * picture when it arrives (at most `everyMs` apart: these are thumbnails, half the frame rate is
  * plenty); composing copies those into the return picture and scales one only when it changed.
+ *
+ * A guest is shown while frames arrive: from the first frame until `staleMs` after the last one.
+ * That is how a guest leaves the multiview here. The media library does not report the server
+ * ending a subscription; the frames simply stop.
  */
 export class Tiles {
   readonly #tiles = new Map<string, Tile>();
   readonly everyMs: number;
+  readonly staleMs: number;
 
-  constructor(everyMs = 75) {
+  constructor(everyMs = 75, staleMs = 2500) {
     this.everyMs = everyMs;
+    this.staleMs = staleMs;
   }
 
-  get size(): number {
-    return this.#tiles.size;
+  /** The guests whose pictures are live right now, in a fixed order, so a picture does not jump places when someone else's frame arrives. */
+  identities(now: number): string[] {
+    return [...this.#tiles]
+      .filter(([, t]) => t.at > 0 && now - t.at < this.staleMs)
+      .map(([id]) => id)
+      .sort();
   }
 
-  /** In a fixed order, so a picture does not jump to another place when someone else's frame arrives. */
-  identities(): string[] {
-    return [...this.#tiles.keys()].sort();
+  /** How many guests are shown right now. */
+  count(now: number): number {
+    return this.identities(now).length;
   }
 
-  /** A guest joined the multiview: their place shows near-black until the first frame. */
+  /** A camera we may get frames from. It shows from its first frame. */
   add(identity: string): void {
     if (this.#tiles.has(identity)) return;
     const thumb = new Uint8Array(THUMB.width * THUMB.height * 4);
@@ -223,9 +233,9 @@ export class Tiles {
     t.at = now;
   }
 
-  /** Draws every guest's picture into the BGRA picture `dst` (width x height). Returns how many. */
-  compose(dst: Uint8Array, width: number, height: number): number {
-    const ids = this.identities().slice(0, MAX_TILES);
+  /** Draws the live guests' pictures into the BGRA picture `dst` (width x height). Returns how many. */
+  compose(dst: Uint8Array, width: number, height: number, now: number): number {
+    const ids = this.identities(now).slice(0, MAX_TILES);
     const rects = layoutTiles(ids.length, width, height);
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i] as Rect;

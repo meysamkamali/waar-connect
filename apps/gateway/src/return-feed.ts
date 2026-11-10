@@ -194,7 +194,7 @@ export class ReturnFeed {
             height: this.#outSize?.height ?? 0,
           }
         : null,
-      mv: this.#mvPub ? { tiles: this.#tiles.size } : null,
+      mv: this.#mvPub ? { tiles: this.#tiles.count(Date.now()) } : null,
       since: this.#since,
     };
   }
@@ -287,7 +287,7 @@ export class ReturnFeed {
         lastBlackAt = now;
       }
       // Without programme video the multiview guests still see each other: their pictures on black.
-      if (this.#state === 'no-signal' && this.#outSize && (this.#tiles.size > 0 || this.#mvPub) && now - this.#mvBlackAt > MV_BLACK_EVERY_MS) {
+      if (this.#state === 'no-signal' && this.#outSize && (this.#mvPub || this.#tiles.count(now) > 0) && now - this.#mvBlackAt > MV_BLACK_EVERY_MS) {
         this.#multiview(this.#black(this.#outSize), this.#outSize);
         this.#mvBlackAt = now;
       }
@@ -364,12 +364,13 @@ export class ReturnFeed {
 
   /**
    * The burned-in copy: the frame that just went out, with the multiview guests' pictures drawn along
-   * its bottom, sent as a second track. It runs only while the API has this feed subscribed to at
-   * least one guest's camera; a few seconds after the last one goes, the track is unpublished.
+   * its bottom, sent as a second track. It runs only while frames arrive from at least one guest's
+   * camera (the API subscribes this feed to the multiview group); a few seconds after the last
+   * picture went quiet, the track is unpublished.
    */
   #multiview(frame: Uint8Array, size: { width: number; height: number }): void {
     const now = Date.now();
-    if (this.#tiles.size === 0) {
+    if (this.#tiles.count(now) === 0) {
       if (!this.#mvPub && !this.#mvSource) return;
       if (!this.#mvIdleSince) this.#mvIdleSince = now;
       else if (now - this.#mvIdleSince > MV_IDLE_MS) {
@@ -386,7 +387,7 @@ export class ReturnFeed {
     // captureFrame copies the pixels before it returns, so two buffers in turn are enough.
     const picture = this.#mvFrames.take(size);
     picture.set(frame.length === picture.length ? frame : frame.subarray(0, picture.length));
-    this.#tiles.compose(picture, size.width, size.height);
+    this.#tiles.compose(picture, size.width, size.height, now);
     this.#mvSource.captureFrame(new VideoFrame(picture, size.width, size.height, VideoBufferType.BGRA));
   }
 
@@ -406,13 +407,21 @@ export class ReturnFeed {
         void reader.cancel().catch(() => undefined);
       },
     });
-    log('info', 'multiview: guest added', { pcr: this.target.pcrName, guest: identity, guests: this.#tiles.size, smallCopyAsked: small });
+    log('info', 'multiview: camera subscribed', {
+      pcr: this.target.pcrName,
+      guest: identity,
+      smallCopyAsked: small,
+      simulcast: pub.simulcasted ?? null,
+      published: pub.width && pub.height ? `${pub.width}x${pub.height}` : null,
+    });
     void (async () => {
       let seen = '';
       try {
         while (!cancelled) {
           const { value, done } = await reader.read();
           if (done || !value) break;
+          // A subscription the server ended leaves the track here, sending nothing or 8x8 placeholders: not a picture.
+          if (value.frame.width < 16 || value.frame.height < 16) continue;
           const now = Date.now();
           if (!this.#tiles.due(identity, now)) continue; // thumbnails: about half the frames are enough
           const frame = value.frame.type === VideoBufferType.I420 ? value.frame : value.frame.convert(VideoBufferType.I420);
@@ -437,7 +446,7 @@ export class ReturnFeed {
     reading.cancel();
     this.#guestReaders.delete(identity);
     this.#tiles.remove(identity);
-    log('info', 'multiview: guest removed', { pcr: this.target.pcrName, guest: identity, guests: this.#tiles.size });
+    log('info', 'multiview: camera gone', { pcr: this.target.pcrName, guest: identity });
   }
 
   #dropAllGuests(): void {
@@ -449,7 +458,7 @@ export class ReturnFeed {
   /** Takes the burned-in track down, in line with any publish that is under way. */
   #unpublishMultiview(): Promise<void> {
     const run = async () => {
-      if (this.#tiles.size > 0) return; // someone joined the multiview meanwhile
+      if (this.#tiles.count(Date.now()) > 0) return; // someone joined the multiview meanwhile
       const pub = this.#mvPub;
       const source = this.#mvSource;
       if (!pub && !source) return;
@@ -569,7 +578,7 @@ export class ReturnFeed {
           videoEncoding: { maxBitrate: BigInt(this.#kbps() * 1000), maxFramerate: this.#targetFps() },
         });
         this.#mvPub = await me.publishTrack(track, opts);
-        log('info', 'multiview: burned-in return published', { pcr: this.target.pcrName, codec: this.#mvPub.mimeType, guests: this.#tiles.size, maxKbps: this.#kbps() });
+        log('info', 'multiview: burned-in return published', { pcr: this.target.pcrName, codec: this.#mvPub.mimeType, guests: this.#tiles.count(Date.now()), maxKbps: this.#kbps() });
       }
     };
     const next = (this.#publishing ?? Promise.resolve()).then(run).catch((err: unknown) => {

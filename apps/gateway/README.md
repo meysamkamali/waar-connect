@@ -69,7 +69,32 @@ Measured 2026-11-09 on the VM (Xeon E5-2680 v2, 2013, no AVX2), one 1080p25 prog
 | 1080p (source size) | 2.2 cores | OpenH264 encode about 1.5, NDI decode 0.5 |
 | 540p (default) | 1.7 cores | main thread 0.9 (frame copy, 9 ms box filter, audio), NDI decode 0.5, encode 0.16 |
 
-At 360p the sender's proxy stream is taken, so the NDI decode shrinks as well (not measured yet). Two
-or three returns fit the 8-core VM beside LiveKit. Guests' phones decode H.264 in hardware.
+At 360p the sender's proxy stream is taken, so the NDI decode shrinks as well (not measured yet).
+Guests' phones decode H.264 in hardware.
+
+**More than one return at a time** (seen 2026-11-10 with two live 1080p25 returns): the scaling and
+the frame copies of every feed run on the one JavaScript thread of this process. One feed takes about
+0.9 of it; two saturate it, and each feed then sends 10 to 19 frames a second instead of 25. Until the
+feeds run on threads of their own, a second live return should be set to 360p (the proxy stream needs
+no scaling) or the returns kept to one.
+
+## Multiview burn-in
+
+While two or more green-room guests are ticked MV and at least one of them watches Studio, the API
+subscribes this feed's participant (`studio`) to the cameras of the group. The feed asks the media
+server for each guest's smallest copy (320x180; rtc-node has no call for that yet, so the request goes
+to its bindings, `requestSmallCopy` in `return-feed.ts`), draws every guest's latest frame into a small
+picture (`multiview.ts`: I420 to BGRA, the phone's rotation applied, letterboxed, about half the frame
+rate) and lays the pictures side by side along the bottom of a copy of each return frame. That copy
+goes out as a second track, `program-mv`, with the return's size, codec and caps. The routing engine
+sends it to the multiview guests who watch Studio in place of the clean return and of each other's
+cameras; nobody else ever gets it. A few seconds after the last picture went quiet the track is
+unpublished again.
+
+A guest counts as present while frames arrive from them: the media library does not report the server
+ending a subscription, the frames just stop (or shrink to 8x8 placeholders, which are ignored).
+
+Measured 2026-11-10 on the VM with three guests on a 540p return: about 0.1 core for the three small
+decodes, the drawing and the second encode together.
 
 NDI® is a registered trademark of Vizrt NDI AB.
