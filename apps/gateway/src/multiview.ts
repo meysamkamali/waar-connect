@@ -1,7 +1,14 @@
-// The multiview burn-in: the pictures of the guests the producer ticked MV, drawn side by side along
-// the bottom of a copy of the return picture. The guests of the group then get that one picture
-// instead of one small stream per guest. Pure pixel work on BGRA buffers, in plain JavaScript; the
-// tiles are small (about 210x118 on a 540p return), so drawing them costs a few percent of a core.
+// The multiview burn-in: the pictures of the guests the producer ticked MV, drawn into a copy of the
+// return picture. There is one multiview for the whole group, every guest's own picture included, and
+// the group gets that one stream instead of one small stream per guest.
+//
+// Its place is fixed. Cut the picture into nine equal parts: the bottom-left part is where the phone
+// shows the guest's own camera, so the multiview has the bottom-centre and the bottom-right part, as
+// one dark panel with one to eight pictures inside. A phone that must not show the programme (the
+// guest is on Black or on the PCR) shows that panel alone, so the panel is always opaque.
+//
+// Pure pixel work on BGRA buffers, in plain JavaScript; the pictures are small, so drawing them costs
+// a few percent of a core.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { scaleBgraInto } from './scale.ts';
@@ -18,26 +25,45 @@ export const THUMB = { width: 320, height: 180 } as const;
 /** More pictures than this would be too small to recognise on a phone. */
 export const MAX_TILES = 8;
 
+/** The multiview's panel: the bottom-centre and bottom-right ninths of the picture (two thirds wide, one third high). */
+export function mvPanel(width: number, height: number): Rect {
+  const x = Math.round(width / 3) & ~1;
+  const y = Math.round((height * 2) / 3) & ~1;
+  return { x, y, width: width - x, height: height - y };
+}
+
 /**
- * Where the pictures go: one row along the bottom, side by side, centred. Each is about a fifth of
- * the picture's height; with many guests they shrink so the row still fits. Even numbers throughout.
+ * Where one to eight 16:9 pictures go inside the panel: the grid that makes them largest (two side
+ * by side fill it; three in a row; then rows of three or four), the whole block centred, a shorter
+ * last row centred too. Even numbers throughout.
  */
-export function layoutTiles(count: number, width: number, height: number): Rect[] {
+export function layoutTiles(count: number, panel: Rect): Rect[] {
   const n = Math.min(Math.max(0, Math.floor(count)), MAX_TILES);
-  if (n === 0 || width < 64 || height < 36) return [];
-  const margin = Math.max(4, Math.round(height * 0.03)) & ~1;
-  const gap = Math.max(2, Math.round(width * 0.008)) & ~1;
-  let th = Math.round(height * 0.22) & ~1;
-  let tw = Math.round((th * 16) / 9) & ~1;
-  const room = width - 2 * margin - (n - 1) * gap;
-  if (tw * n > room) {
-    tw = Math.floor(room / n) & ~1;
-    th = Math.round((tw * 9) / 16) & ~1;
+  if (n === 0 || panel.width < 32 || panel.height < 18) return [];
+  const gap = Math.max(2, Math.round(panel.width * 0.006)) & ~1;
+  let best = { cols: 1, rows: n, tw: 0, waste: 0 };
+  for (let cols = 1; cols <= n; cols++) {
+    const rows = Math.ceil(n / cols);
+    const byWidth = (panel.width - gap * (cols + 1)) / cols;
+    const byHeight = (((panel.height - gap * (rows + 1)) / rows) * 16) / 9;
+    const tw = Math.floor(Math.min(byWidth, byHeight)) & ~1;
+    const waste = cols * rows - n;
+    // the largest picture wins; between equals, the grid with the fewest empty places
+    if (tw > best.tw || (tw === best.tw && waste < best.waste)) best = { cols, rows, tw, waste };
   }
-  const total = tw * n + gap * (n - 1);
-  const x0 = Math.floor((width - total) / 2) & ~1;
-  const y = height - margin - th;
-  return Array.from({ length: n }, (_, i) => ({ x: x0 + i * (tw + gap), y, width: tw, height: th }));
+  const { cols, rows, tw } = best;
+  if (tw < 8) return [];
+  const th = Math.round((tw * 9) / 16) & ~1;
+  const blockH = rows * th + (rows - 1) * gap;
+  const y0 = panel.y + (((panel.height - blockH) / 2) & ~1);
+  const out: Rect[] = [];
+  for (let r = 0; r < rows; r++) {
+    const inRow = Math.min(cols, n - r * cols);
+    const rowW = inRow * tw + (inRow - 1) * gap;
+    const x0 = panel.x + (((panel.width - rowW) / 2) & ~1);
+    for (let c = 0; c < inRow; c++) out.push({ x: x0 + c * (tw + gap), y: y0 + r * (th + gap), width: tw, height: th });
+  }
+  return out;
 }
 
 /** Degrees the decoded frame must be turned clockwise to stand upright (a phone held on its side). */
@@ -233,10 +259,15 @@ export class Tiles {
     t.at = now;
   }
 
-  /** Draws the live guests' pictures into the BGRA picture `dst` (width x height). Returns how many. */
+  /**
+   * Draws the multiview into the BGRA picture `dst` (width x height): the dark panel over the
+   * bottom-centre and bottom-right ninths, and the live guests' pictures in it. Returns how many.
+   */
   compose(dst: Uint8Array, width: number, height: number, now: number): number {
     const ids = this.identities(now).slice(0, MAX_TILES);
-    const rects = layoutTiles(ids.length, width, height);
+    const panel = mvPanel(width, height);
+    fillRect(dst, width, height, panel, 12, 12, 12);
+    const rects = layoutTiles(ids.length, panel);
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i] as Rect;
       const t = this.#tiles.get(ids[i] as string) as Tile;
@@ -251,8 +282,6 @@ export class Tiles {
         if (out !== t.scaled) t.scaled.set(out); // same size: the scaler hands the source back
         t.scaledSeq = t.seq;
       }
-      // a dark edge two pixels wide, so a picture stands off the programme behind it
-      fillRect(dst, width, height, { x: r.x - 2, y: r.y - 2, width: r.width + 4, height: r.height + 4 }, 12, 12, 12);
       blit(dst, width, height, t.scaled, r.width, r.height, r.x, r.y);
     }
     return rects.length;

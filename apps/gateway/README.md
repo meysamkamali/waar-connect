@@ -80,21 +80,30 @@ no scaling) or the returns kept to one.
 
 ## Multiview burn-in
 
-While two or more green-room guests are ticked MV and at least one of them watches Studio, the API
-subscribes this feed's participant (`studio`) to the cameras of the group. The feed asks the media
+While a green-room guest is ticked MV, the API subscribes this feed's participant (`studio`) to the
+cameras of the group. The feed asks the media
 server for each guest's smallest copy (320x180; rtc-node has no call for that yet, so the request goes
 to its bindings, `requestSmallCopy` in `return-feed.ts`), draws every guest's latest frame into a small
 picture (`multiview.ts`: I420 to BGRA, the phone's rotation applied, letterboxed, about half the frame
-rate) and lays the pictures side by side along the bottom of a copy of each return frame. That copy
-goes out as a second track, `program-mv`, with the return's size, codec and caps. The routing engine
-sends it to the multiview guests who watch Studio in place of the clean return and of each other's
-cameras; nobody else ever gets it. A few seconds after the last picture went quiet the track is
-unpublished again.
+rate) and draws them into a copy of each return frame. So the programme is decoded once and encoded
+twice: clean (`program`) and with the multiview (`program-mv`), the second with the same size,
+codec and caps as the first.
+
+There is one multiview for the whole group, every guest's own picture included. Its place is fixed:
+of the picture's nine equal parts, the bottom-left one is left for the camera picture the phone shows
+itself, and the multiview is a dark panel over the bottom-centre and bottom-right ones (`mvPanel`),
+with one to eight pictures in the grid that makes them largest (`layoutTiles`). The panel is always
+opaque, because a phone whose guest is on Black or the PCR cuts exactly that part out of the stream.
+
+The routing engine sends `program-mv` to every guest of the multiview group, in place of the clean
+return and of each other's cameras; nobody else ever gets it. A few seconds after the last picture
+went quiet the track is unpublished again.
 
 A guest counts as present while frames arrive from them: the media library does not report the server
 ending a subscription, the frames just stop (or shrink to 8x8 placeholders, which are ignored).
 
-Measured 2026-11-10 on the VM with three guests on a 540p return: about 0.1 core for the three small
-decodes, the drawing and the second encode together.
+Measured 2026-11-10 on the VM with three guests on a 540p return: between 0.1 and 0.3 of a core for
+the three small decodes, the drawing and the second encode together (three runs, on a process whose
+main thread was already full with three returns, so the figure is rough).
 
 NDI® is a registered trademark of Vizrt NDI AB.

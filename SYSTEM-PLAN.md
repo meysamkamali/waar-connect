@@ -95,14 +95,20 @@ picture, level meter and a connection light. For each guest, independently, they
   the guests who belong together. They are one group: each sees the others as small pictures along the
   bottom of the screen, they hear each other, and when the producer talks to one of them all of them
   hear it. A guest not ticked is outside. The tick is kept through a trip to the studio.
-  **Burn-in** (same day): where the gateway publishes the return and the guest watches Studio, the
-  other guests' pictures are not sent to the phone at all. The gateway receives the group's cameras
-  (their smallest copy), draws them side by side along the bottom of a second copy of the return, and
-  the multiview guests get that one picture in place of the clean return. It costs the phone no extra
-  bandwidth and the VM about a tenth of a core. A multiview guest on Black or the PCR, a PCR without
-  a gateway return, and the first moment before the second copy exists, use the small direct copies
-  instead (180p, at most 150 kbit/s per guest shown), which the phone lays along the bottom itself.
-  The sound of the group always goes direct.
+  **One multiview stream** (same day): where the gateway publishes the return, the guests' pictures
+  are not sent to each other at all. The gateway receives the group's cameras (their smallest copy)
+  and draws them into a second copy of the return: the programme is decoded once and encoded twice,
+  clean and with the multiview, both with the size, codec, bitrate and frame rate set for the PCR's
+  return. There is one multiview for the whole group, each guest's own picture in it too.
+  Its place is fixed. Think of the picture as nine equal parts: the bottom-left part is where the
+  phone shows the guest's own camera, and the multiview is a dark panel over the bottom-centre and
+  bottom-right parts, with one to eight pictures laid out to be as large as fits (two fill it, then
+  three or four in a row, then two rows). Every multiview guest gets this one stream in place of the
+  clean return: a guest on Studio sees all of it, a guest on Black or the PCR sees only its multiview
+  part, cut out by the phone and laid over black or the producer's face. The sound of the group
+  always goes direct. A PCR without a gateway return, and the first moment before the second copy
+  runs, fall back to the small direct copies (180p, at most 150 kbit/s per guest shown), which the
+  phone lays to the right of the guest's own picture.
 - **Studio sound** on or off: lets the guest hear the studio mix-minus to get the feel of the show.
 - **Program picture** on or off.
 - **Cue**: a text message that appears on the guest's screen until dismissed.

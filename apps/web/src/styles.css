@@ -542,6 +542,21 @@ body.stage {
 /* Guest's screen: the multiview strip, small pictures side by side along the bottom. */
 .tiles .tile .name { font-size: 0.75rem; left: 4px; bottom: 4px; padding: 1px 6px; }
 
-/* Guest: the picture carries the multiview along its bottom (burned in by the server). It ends above the buttons, and the self view moves up. */
-.stage.mv-burn .stage-video { bottom: 60px; height: calc(100% - 60px); }
-.stage.mv-burn .pip { bottom: auto; top: 48px; }
+/* Guest: the phone's own picture is always bottom left, in every language direction. Pictures of other
+   guests that arrive as separate streams (a studio without the gateway's multiview) sit to its right. */
+.pip, [dir='rtl'] .pip { left: 12px; right: auto; }
+.tiles { left: calc(12px + min(28vw, 220px) + 8px); right: 12px; max-width: none; }
+
+/* Guest with the multiview stream. The picture is a 16:9 frame above the buttons, thought of as nine
+   equal parts: the phone's own picture fills the bottom-left part, and the server drew the multiview
+   into the bottom-centre and bottom-right parts. A guest on Black or the PCR gets the same stream but
+   is shown only that multiview part of it, cut out and laid over black or the producer's face.
+   (A return that is not 16:9 is letterboxed in the frame and the parts no longer line up exactly.) */
+.mv-frame { position: fixed; left: 50%; top: calc((100dvh - 60px) / 2); transform: translate(-50%, -50%); width: min(100vw, calc((100dvh - 60px) * 16 / 9)); aspect-ratio: 16 / 9; background: #000; overflow: hidden; }
+.mv-fill { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.slate.mv-slate { position: absolute; inset: 0 0 33.3333% 0; }
+.mv-panel { position: absolute; left: 33.3333%; top: 66.6667%; width: 66.6667%; height: 33.3333%; overflow: hidden; background: #0c0c0c; }
+.mv-panel video { position: absolute; left: -50%; top: -200%; width: 150%; height: 300%; object-fit: fill; }
+/* Thirds of a frame rarely fall on whole pixels: a dark line two pixels wide hides the sliver of programme at the cut-out's top and left edge. */
+.mv-panel::after { content: ''; position: absolute; inset: 0; border-top: 2px solid #0c0c0c; border-left: 2px solid #0c0c0c; pointer-events: none; }
+.mv-self { position: absolute; left: 0; bottom: 0; width: 33.3333%; height: 33.3333%; object-fit: cover; background: #111; }

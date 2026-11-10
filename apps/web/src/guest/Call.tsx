@@ -26,9 +26,14 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
 
   const inStudio = state.place === 'studio';
   const inLobby = state.place === 'lobby';
-  // The burned-in multiview is a row of guests along the bottom of the picture itself: the buttons and
-  // the self view must not sit on it.
-  const burned = session.programIsMv.value && main !== null && main === session.programVideo.value;
+  // The multiview stream: the studio's picture with the group's pictures drawn into its bottom-centre and
+  // bottom-right ninths by the server (every guest of the group gets this same stream, their own picture
+  // in it too). The bottom-left ninth is left for this phone's own camera. A guest on Studio sees the
+  // whole stream; a guest on Black or on the PCR sees only its multiview part, over black or over the
+  // producer's face.
+  const mv = session.programIsMv.value ? session.programVideo.value : null;
+  const face = session.faceVideo.value;
+  const whole = mv !== null && face === null && state.program;
   const tallyClass = inStudio ? (state.tally === 'onair' ? 'tally onair' : 'tally standby') : 'tally off';
   const placeLabel = inLobby ? t('lobbyTitle') : inStudio ? t('studioTitle') : t('greenTitle');
 
@@ -50,28 +55,51 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
   }
 
   return (
-    <div class={`screen stage ${burned ? 'mv-burn' : ''}`} onClick={() => void session.unlockAudio()}>
-      {main ? (
-        <VideoView track={main} className="stage-video" />
-      ) : (
-        <div class="slate">
-          <img class="logo" src="/app/logo.svg" alt="" />
-          <div class="slate-title">{placeLabel}</div>
-          <div class="slate-text">{inLobby ? t('lobbyText') : inStudio ? info.pcr.name : t('greenText')}</div>
-        </div>
-      )}
-
-      <VideoView track={session.localVideo.value} className="pip" mirror />
-
-      {session.guestVideos.value.length > 0 && (
-        <div class="tiles">
-          {session.guestVideos.value.map((tile) => (
-            <div class="tile" key={tile.identity}>
-              <VideoView track={tile.track} />
-              <div class="name">{tile.name}</div>
+    <div class="screen stage" onClick={() => void session.unlockAudio()}>
+      {mv ? (
+        <div class="mv-frame">
+          {whole ? (
+            <VideoView track={mv} className="mv-fill" />
+          ) : face ? (
+            <VideoView track={face} className="mv-fill" />
+          ) : (
+            <div class="slate mv-slate">
+              <img class="logo" src="/app/logo.svg" alt="" />
+              <div class="slate-title">{placeLabel}</div>
             </div>
-          ))}
+          )}
+          {!whole && (
+            <div class="mv-panel">
+              <VideoView track={mv} />
+            </div>
+          )}
+          <VideoView track={session.localVideo.value} className="mv-self" mirror />
         </div>
+      ) : (
+        <>
+          {main ? (
+            <VideoView track={main} className="stage-video" />
+          ) : (
+            <div class="slate">
+              <img class="logo" src="/app/logo.svg" alt="" />
+              <div class="slate-title">{placeLabel}</div>
+              <div class="slate-text">{inLobby ? t('lobbyText') : inStudio ? info.pcr.name : t('greenText')}</div>
+            </div>
+          )}
+
+          <VideoView track={session.localVideo.value} className="pip" mirror />
+
+          {session.guestVideos.value.length > 0 && (
+            <div class="tiles">
+              {session.guestVideos.value.map((tile) => (
+                <div class="tile" key={tile.identity}>
+                  <VideoView track={tile.track} />
+                  <div class="name">{tile.name}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
       <div class="topbar">

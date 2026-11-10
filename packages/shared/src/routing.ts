@@ -34,17 +34,18 @@ export function mvGroup(state: Pick<RoomState, 'guests'>): GuestState[] {
 }
 
 /**
- * Is there a point in burning the multiview into the return? Two or more guests in the group, and at
- * least one of them watching Studio (there is no return to burn into for a guest on Black or the PCR).
+ * Should the return feed make the multiview? Whenever a guest is ticked MV: the multiview shows every
+ * guest of the group, their own picture included, so even one guest has something in it.
  */
-export function wantsBurnIn(state: Pick<RoomState, 'guests'>): boolean {
-  const group = mvGroup(state);
-  return group.length >= 2 && group.some((g) => g.program);
+export function wantsMultiview(state: Pick<RoomState, 'guests'>): boolean {
+  return mvGroup(state).length >= 1;
 }
 
 /**
- * `burnIn`: the return feed publishes the burned-in copy right now. A multiview guest who watches
- * Studio then gets that one picture, and neither the clean return nor the other guests' cameras.
+ * `burnIn`: the return feed publishes the burned-in copy right now (the return with the multiview in
+ * its bottom-centre and bottom-right ninths). Every multiview guest then gets that one stream, and
+ * neither the clean return nor the other guests' cameras. A guest on Studio shows all of it; a guest
+ * on Black or the PCR shows its multiview part only (the page does that from its own `program` flag).
  */
 function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomState, burnIn: boolean): boolean {
   if (track.publisher === guest.identity) return false; // never yourself
@@ -65,7 +66,7 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
         case 'program-video':
           return guest.program && !(burnIn && guest.mv);
         case 'program-mv':
-          return guest.program && guest.mv;
+          return guest.mv;
         case 'program-audio':
           return guest.studioSound;
         case 'camera':
@@ -74,8 +75,8 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
           if (staff) return track.source === 'camera' && staff.faceTo === guest.identity;
           const other = guestById(state, track.publisher);
           if (other === undefined || !guest.mv || other.place !== 'green' || !other.mv) return false;
-          // The others' pictures are inside the burned-in return this guest watches; their sound still comes direct.
-          return !(track.source === 'camera' && burnIn && guest.program);
+          // The others' pictures are inside the burned-in stream this guest gets; their sound still comes direct.
+          return !(track.source === 'camera' && burnIn);
         }
       }
       return false;
@@ -159,8 +160,8 @@ export function canReceive(subscriber: string, track: PublishedTrack, state: Roo
       return track.source !== 'talkback' && track.source !== 'program-mv';
     case 'studio': {
       // The return feed publishes. All it ever receives is the cameras of the multiview group, to draw
-      // them into the burned-in return, and only while that has a point.
-      if (track.source !== 'camera' || !wantsBurnIn(state)) return false;
+      // them into the burned-in return.
+      if (track.source !== 'camera') return false;
       const guest = guestById(state, track.publisher);
       return guest !== undefined && guest.place === 'green' && guest.mv;
     }

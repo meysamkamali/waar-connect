@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { defaultGuestState, outputIdentity, STUDIO_IDENTITY, type GuestState, type PublishedTrack, type RoomState, type StaffState } from './model.ts';
-import { allowedTracks, canReceive, subscriptionPlan, talkbackSubscribers, wantsBurnIn } from './routing.ts';
+import { allowedTracks, canReceive, subscriptionPlan, talkbackSubscribers, wantsMultiview } from './routing.ts';
 
 // ---- fixtures ------------------------------------------------------------------------------------
 
@@ -180,29 +180,27 @@ describe('multiview burned into the return', () => {
   const room = (over: Partial<RoomState> = {}) =>
     state({ guests: [guest(A, { place: 'green', mv: true, program: true }), guest(B, { place: 'green', mv: true }), guest(C, { place: 'green', program: true })], ...over });
 
-  it('is wanted only with two or more multiview guests, one of them watching Studio', () => {
-    assert.equal(wantsBurnIn(room()), true);
-    assert.equal(wantsBurnIn(state({ guests: [guest(A, { place: 'green', mv: true, program: true }), guest(B, { place: 'green' })] })), false, 'a group of one');
-    assert.equal(wantsBurnIn(state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green', mv: true })] })), false, 'nobody watches Studio');
-    assert.equal(wantsBurnIn(state({ guests: [guest(A, { place: 'studio', mv: true, program: true, slot: 1 }), guest(B, { place: 'green', mv: true })] })), false, 'the studio is not the green room');
+  it('is made whenever a green-room guest is ticked MV, even one alone (they see themselves in it)', () => {
+    assert.equal(wantsMultiview(room()), true);
+    assert.equal(wantsMultiview(state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green' })] })), true);
+    assert.equal(wantsMultiview(state({ guests: [guest(A, { place: 'green' }), guest(B, { place: 'green' })] })), false);
+    assert.equal(wantsMultiview(state({ guests: [guest(A, { place: 'studio', mv: true, slot: 1 }), guest(B, { place: 'lobby', mv: true })] })), false, 'the multiview is a green-room thing');
   });
-  it('the return feed receives the cameras of the group, nothing else, and only while it is wanted', () => {
+  it('the return feed receives the cameras of the group and nothing else', () => {
     assert.deepEqual(got(STUDIO_IDENTITY, tracks, room()), ['a-cam', 'b-cam']);
     assert.deepEqual(got(STUDIO_IDENTITY, burned, room()), ['a-cam', 'b-cam']);
-    assert.deepEqual(got(STUDIO_IDENTITY, tracks, state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green', mv: true })] })), []);
+    assert.deepEqual(got(STUDIO_IDENTITY, tracks, state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green' })] })), ['a-cam'], 'one guest alone');
     assert.deepEqual(got(STUDIO_IDENTITY, tracks, state()), []);
   });
-  it('before the burned-in copy exists, the group gets each other directly as before', () => {
+  it('before the burned-in stream exists (or without a gateway return), the group gets each other directly', () => {
     assert.deepEqual(got(A, tracks, room()), ['b-cam', 'b-mic', 'pgm-v']);
     assert.deepEqual(got(B, tracks, room()), ['a-cam', 'a-mic']);
   });
-  it('once it exists, a multiview guest on Studio gets that one picture: no clean return, no cameras, the sound still direct', () => {
-    assert.deepEqual(got(A, burned, room()), ['b-mic', 'pgm-mv']);
+  it('once it exists, every multiview guest gets that one stream: no clean return, no cameras, the sound still direct', () => {
+    assert.deepEqual(got(A, burned, room()), ['b-mic', 'pgm-mv'], 'on Studio');
+    assert.deepEqual(got(B, burned, room()), ['a-mic', 'pgm-mv'], 'on Black: the same stream, of which the page shows the multiview part');
   });
-  it('a multiview guest on Black keeps the small pictures: there is no return to burn into', () => {
-    assert.deepEqual(got(B, burned, room()), ['a-cam', 'a-mic']);
-  });
-  it('nobody else ever gets the burned-in copy', () => {
+  it('nobody else ever gets the burned-in stream', () => {
     const s = room({ guests: [...room().guests, guest(D, { place: 'studio', slot: 1, mv: true, program: true })], outputs: [{ identity: OUT1, slot: 1 }] });
     assert.deepEqual(got(C, burned, s), ['pgm-v'], 'a green-room guest outside the group gets the clean return');
     assert.ok(got(D, burned, s).includes('pgm-v') && !got(D, burned, s).includes('pgm-mv'), 'a guest in the studio gets the clean return');

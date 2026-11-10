@@ -1,37 +1,60 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { blit, drawI420, fillRect, layoutTiles, MAX_TILES, THUMB, Tiles, type Rotation } from './multiview.ts';
+import { blit, drawI420, fillRect, layoutTiles, MAX_TILES, mvPanel, THUMB, Tiles, type Rotation } from './multiview.ts';
 
-test('layout: one row along the bottom, centred, even sizes, inside the picture', () => {
+test('panel: the bottom-centre and bottom-right ninths, the bottom-left ninth left free', () => {
+  assert.deepEqual(mvPanel(960, 540), { x: 320, y: 360, width: 640, height: 180 });
+  assert.deepEqual(mvPanel(1920, 1080), { x: 640, y: 720, width: 1280, height: 360 });
+  const odd = mvPanel(1280, 720); // thirds that are not whole numbers
+  assert.equal(odd.x % 2, 0);
+  assert.equal(odd.x + odd.width, 1280, 'to the right edge');
+  assert.equal(odd.y + odd.height, 720, 'to the bottom edge');
+  assert.ok(Math.abs(odd.x - 1280 / 3) <= 1 && Math.abs(odd.y - 480) <= 1);
+});
+
+test('layout: one to eight pictures inside the panel, as large as fits, 16:9, centred, never overlapping', () => {
   for (const [w, h] of [
     [960, 540],
     [1920, 1080],
     [640, 360],
     [1280, 720],
   ] as const) {
+    const panel = mvPanel(w, h);
     for (let n = 1; n <= MAX_TILES; n++) {
-      const rects = layoutTiles(n, w, h);
+      const rects = layoutTiles(n, panel);
       assert.equal(rects.length, n);
-      const first = rects[0]!;
-      const last = rects[n - 1]!;
       for (const r of rects) {
         assert.equal(r.width % 2, 0);
         assert.equal(r.height % 2, 0);
-        assert.equal(r.y, first.y, 'one row');
-        assert.equal(r.width, first.width);
-        assert.ok(r.x >= 0 && r.x + r.width <= w && r.y >= 0 && r.y + r.height <= h, `${n} tiles fit in ${w}x${h}`);
-        assert.ok(Math.abs(r.width / r.height - 16 / 9) < 0.06, '16:9 tiles');
+        assert.equal(r.width, rects[0]!.width, 'all the same size');
+        assert.ok(r.x >= panel.x && r.x + r.width <= w && r.y >= panel.y && r.y + r.height <= h, `${n} pictures stay inside the panel of ${w}x${h}`);
+        assert.ok(Math.abs(r.width / r.height - 16 / 9) < 0.08, '16:9');
       }
-      assert.ok(first.y > h / 2, 'in the lower half');
-      assert.ok(Math.abs(first.x - (w - (last.x + last.width))) <= 2, 'centred');
-      for (let i = 1; i < n; i++) assert.ok(rects[i]!.x >= rects[i - 1]!.x + rects[i - 1]!.width, 'no overlap');
+      for (let i = 0; i < n; i++)
+        for (let j = i + 1; j < n; j++) {
+          const p = rects[i]!;
+          const q = rects[j]!;
+          assert.ok(p.x + p.width <= q.x || q.x + q.width <= p.x || p.y + p.height <= q.y || q.y + q.height <= p.y, 'no overlap');
+        }
+      // the block is centred in the panel, left to right and top to bottom
+      const left = Math.min(...rects.map((r) => r.x)) - panel.x;
+      const right = w - Math.max(...rects.map((r) => r.x + r.width));
+      const top = Math.min(...rects.map((r) => r.y)) - panel.y;
+      const bottom = h - Math.max(...rects.map((r) => r.y + r.height));
+      assert.ok(Math.abs(top - bottom) <= 2, 'centred top to bottom');
+      if (n !== 5 && n !== 7) assert.ok(Math.abs(left - right) <= 2, 'centred left to right'); // 5 and 7 have a shorter last row, itself centred
     }
   }
-  assert.deepEqual(layoutTiles(0, 960, 540), []);
-  assert.equal(layoutTiles(40, 960, 540).length, MAX_TILES, 'never more than the maximum');
-  const four = layoutTiles(4, 960, 540);
-  assert.equal(four[0]!.height, 118, 'about a fifth of a 540p picture');
-  assert.ok(layoutTiles(8, 960, 540)[0]!.width < four[0]!.width, 'many guests: smaller pictures');
+  const panel = mvPanel(960, 540);
+  const rowsOf = (n: number) => {
+    const rects = layoutTiles(n, panel);
+    return [...new Set(rects.map((r) => r.y))].map((y) => rects.filter((r) => r.y === y).length).join('+');
+  };
+  assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8].map(rowsOf), ['1', '2', '3', '4', '3+2', '3+3', '4+3', '4+4']);
+  assert.ok(layoutTiles(2, panel)[0]!.width > 300, 'two pictures nearly fill the two ninths');
+  assert.ok(layoutTiles(8, panel)[0]!.width >= 140, 'eight are still about a sixth of the picture wide');
+  assert.deepEqual(layoutTiles(0, panel), []);
+  assert.equal(layoutTiles(40, panel).length, MAX_TILES, 'never more than the maximum');
 });
 
 /** An I420 frame whose brightness is given per pixel; colour planes neutral unless set. */
@@ -134,12 +157,17 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   const h = 540;
   const dst = new Uint8Array(w * h * 4);
   assert.equal(tiles.compose(dst, w, h, 1100), 2);
-  const [ra, rb] = layoutTiles(2, w, h) as [{ x: number; y: number; width: number; height: number }, { x: number; y: number; width: number; height: number }];
+  const panel = mvPanel(w, h);
+  const [ra, rb] = layoutTiles(2, panel) as [{ x: number; y: number; width: number; height: number }, { x: number; y: number; width: number; height: number }];
   const mid = (r: { x: number; y: number; width: number; height: number }, from: Uint8Array = dst) => px(from, w, r.x + (r.width >> 1), r.y + (r.height >> 1));
   assert.deepEqual(mid(ra), [255, 255, 255, 255], "guest a's white picture is in the first place");
   assert.deepEqual(mid(rb), [0, 0, 0, 255], "guest b's black picture is in the second");
-  assert.deepEqual(px(dst, w, ra.x - 1, ra.y - 1), [12, 12, 12, 255], 'the dark edge');
+  assert.deepEqual(px(dst, w, ra.x - 1, ra.y - 1), [12, 12, 12, 255], 'the dark panel around the pictures');
+  assert.deepEqual(px(dst, w, panel.x, panel.y), [12, 12, 12, 255], 'the panel starts at the bottom-centre ninth');
+  assert.deepEqual(px(dst, w, w - 1, h - 1), [12, 12, 12, 255], 'and runs to the bottom right corner');
   assert.deepEqual(px(dst, w, 10, 10), [0, 0, 0, 0], 'the programme above is untouched');
+  assert.deepEqual(px(dst, w, panel.x - 1, h - 1), [0, 0, 0, 0], "the bottom-left ninth, the guest's own picture on the phone, is untouched");
+  assert.deepEqual(px(dst, w, w - 1, panel.y - 1), [0, 0, 0, 0], 'and so is the row above the panel');
 
   // Guest a's frames stop (the server ended the subscription; no event says so): after the stale time only b is left.
   tiles.update('guest:b', i420(8, 8, () => 16), 8, 8, 0, 3000);
@@ -147,7 +175,7 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   assert.deepEqual(tiles.identities(3600), ['guest:b'], 'a went quiet 2.6 s ago');
   const again = new Uint8Array(w * h * 4);
   assert.equal(tiles.compose(again, w, h, 3600), 1);
-  const [only] = layoutTiles(1, w, h);
+  const [only] = layoutTiles(1, panel);
   assert.deepEqual(mid(only!, again), [0, 0, 0, 255], 'guest b moved to the middle');
   // and a comes back the moment a frame arrives again
   tiles.update('guest:a', i420(8, 8, () => 235), 8, 8, 0, 3700);
