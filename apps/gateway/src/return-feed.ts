@@ -1,6 +1,11 @@
 // One PCR's return feed: its NDI program source in, the participant `studio` out (track `program`,
 // camera source, H.264; track `mix-minus`, microphone source). The routing engine in the API sends
 // both to every studio guest and to the green-room guests the producer switches to them.
+//
+// The multiview burn-in lives here too. While a multiview group watches Studio, the API subscribes
+// this participant to the cameras of the group; their frames become small pictures drawn along the
+// bottom of a second copy of the return (track `program-mv`), and the group gets that one picture
+// instead of the clean return plus one small stream per guest.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import {
@@ -11,18 +16,25 @@ import {
   LocalVideoTrack,
   Room,
   RoomEvent,
+  TrackKind,
   TrackPublishOptions,
   TrackSource,
   VideoBufferType,
   VideoCodec,
   VideoFrame,
   VideoSource,
+  VideoStream,
   type LocalTrackPublication,
+  type RemoteParticipant,
+  type RemoteTrack,
+  type RemoteTrackPublication,
 } from '@livekit/rtc-node';
-import type { ReturnFeedStatus, ReturnState } from '@waar-connect/shared';
+import ffi from '@livekit/rtc-ffi-bindings';
+import { PROGRAM_MV_TRACK, type ReturnFeedStatus, type ReturnState } from '@waar-connect/shared';
 import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
+import { Tiles, type Rotation } from './multiview.ts';
 import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
 import { ScaleBuffers, scaleBgraInto, sizeFor } from './scale.ts';
 
@@ -57,8 +69,35 @@ const BLACK_EVERY_MS = 500;
 const ROOM_RETRY_MS = 3_000;
 const SOURCE_RETRY_MS = 2_000;
 const OUT_SAMPLE_RATE = 48_000;
+/** Nobody in the multiview for this long: the burned-in copy is unpublished, and its encoder goes with it. */
+const MV_IDLE_MS = 5_000;
+/** Without programme video the burned-in copy still moves: the guests' pictures on black, this often. */
+const MV_BLACK_EVERY_MS = 80;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const ROTATIONS: readonly Rotation[] = [0, 90, 180, 270];
+
+/**
+ * Asks the media server for a guest's smallest copy (180p): it becomes a picture about 200 pixels
+ * wide, and the small copy costs a fraction of the full one to decode. rtc-node has no call for this
+ * yet, so the request goes to its bindings directly; if it fails the full copy arrives and works.
+ */
+function requestSmallCopy(pub: RemoteTrackPublication): boolean {
+  try {
+    const request = new ffi.FfiRequest({
+      message: {
+        case: 'setRemoteTrackPublicationQuality',
+        value: new ffi.SetRemoteTrackPublicationQualityRequest({ trackPublicationHandle: pub.ffiHandle.handle, quality: ffi.VideoQuality.LOW }),
+      },
+    });
+    ffi.FfiResponse.fromBinary(ffi.livekitFfiRequest(request.toBinary()));
+    return true;
+  } catch (err) {
+    log('warn', 'multiview: could not ask for the small copy; the full one will be decoded', { err });
+    return false;
+  }
+}
 
 export class ReturnFeed {
   readonly ndi: Ndi;
@@ -87,6 +126,17 @@ export class ReturnFeed {
   #outSize: { width: number; height: number } | null = null;
   readonly #scaled = new ScaleBuffers();
   #audioInfo: { channels: number; sampleRate: number } | null = null;
+
+  // Multiview burn-in: the latest picture of each guest the API subscribed us to, and the second track.
+  readonly #tiles = new Tiles();
+  readonly #guestReaders = new Map<string, { sid: string; cancel: () => void }>();
+  #mvSource: VideoSource | undefined;
+  #mvPub: LocalTrackPublication | undefined;
+  readonly #mvFrames = new ScaleBuffers();
+  #mvIdleSince = 0;
+  #mvBlackAt = 0;
+  #blackFrame: Uint8Array | undefined;
+
   #lastVideoAt = 0;
   #sourceFps = 0;
   #fpsAcc = 0;
@@ -144,6 +194,7 @@ export class ReturnFeed {
             height: this.#outSize?.height ?? 0,
           }
         : null,
+      mv: this.#mvPub ? { tiles: this.#tiles.size } : null,
       since: this.#since,
     };
   }
@@ -235,6 +286,11 @@ export class ReturnFeed {
         this.#sendBlack();
         lastBlackAt = now;
       }
+      // Without programme video the multiview guests still see each other: their pictures on black.
+      if (this.#state === 'no-signal' && this.#outSize && (this.#tiles.size > 0 || this.#mvPub) && now - this.#mvBlackAt > MV_BLACK_EVERY_MS) {
+        this.#multiview(this.#black(this.#outSize), this.#outSize);
+        this.#mvBlackAt = now;
+      }
       if (silentFor > RESCAN_MS) {
         this.#set('waiting-source', `${this.target.source} went quiet for ${Math.round(silentFor / 1000)} s; looking for it again`);
         return;
@@ -276,6 +332,7 @@ export class ReturnFeed {
     // captureFrame copies the pixels before it returns, so the scale buffers can be reused in turn.
     const data = scaleBgraInto(frame.data, frame.width, frame.height, out, out.width === frame.width && out.height === frame.height ? frame.data : this.#scaled.take(out));
     this.#videoSource.captureFrame(new VideoFrame(data, out.width, out.height, VideoBufferType.BGRA));
+    this.#multiview(data, out);
     this.#countFrame();
     const state: ReturnState = this.#connected && this.#videoPub ? 'publishing' : 'receiving';
     if (this.#state !== state) this.#set(state, state === 'receiving' ? 'frames arrive; the room is not connected yet' : null);
@@ -297,6 +354,117 @@ export class ReturnFeed {
     if (!this.#videoSource || !this.#outSize) return;
     const { width, height } = this.#outSize;
     this.#videoSource.captureFrame(new VideoFrame(new Uint8Array(width * height * 4), width, height, VideoBufferType.BGRA));
+  }
+
+  #black(size: { width: number; height: number }): Uint8Array {
+    const bytes = size.width * size.height * 4;
+    if (this.#blackFrame?.length !== bytes) this.#blackFrame = new Uint8Array(bytes);
+    return this.#blackFrame;
+  }
+
+  /**
+   * The burned-in copy: the frame that just went out, with the multiview guests' pictures drawn along
+   * its bottom, sent as a second track. It runs only while the API has this feed subscribed to at
+   * least one guest's camera; a few seconds after the last one goes, the track is unpublished.
+   */
+  #multiview(frame: Uint8Array, size: { width: number; height: number }): void {
+    const now = Date.now();
+    if (this.#tiles.size === 0) {
+      if (!this.#mvPub && !this.#mvSource) return;
+      if (!this.#mvIdleSince) this.#mvIdleSince = now;
+      else if (now - this.#mvIdleSince > MV_IDLE_MS) {
+        this.#mvIdleSince = 0;
+        void this.#unpublishMultiview();
+      }
+      return;
+    }
+    this.#mvIdleSince = 0;
+    if (!this.#mvSource) {
+      this.#mvSource = new VideoSource(size.width, size.height);
+      void this.#publish();
+    }
+    // captureFrame copies the pixels before it returns, so two buffers in turn are enough.
+    const picture = this.#mvFrames.take(size);
+    picture.set(frame.length === picture.length ? frame : frame.subarray(0, picture.length));
+    this.#tiles.compose(picture, size.width, size.height);
+    this.#mvSource.captureFrame(new VideoFrame(picture, size.width, size.height, VideoBufferType.BGRA));
+  }
+
+  /** The API subscribed this feed to a camera: a guest of the multiview group. Their frames become a small picture. */
+  #onGuestTrack(track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant): void {
+    const identity = participant.identity;
+    if (track.kind !== TrackKind.KIND_VIDEO || !identity.startsWith('guest:')) return;
+    this.#dropGuest(identity);
+    const small = requestSmallCopy(pub);
+    this.#tiles.add(identity);
+    const reader = new VideoStream(track).getReader();
+    let cancelled = false;
+    this.#guestReaders.set(identity, {
+      sid: track.sid ?? pub.sid ?? '',
+      cancel: () => {
+        cancelled = true;
+        void reader.cancel().catch(() => undefined);
+      },
+    });
+    log('info', 'multiview: guest added', { pcr: this.target.pcrName, guest: identity, guests: this.#tiles.size, smallCopyAsked: small });
+    void (async () => {
+      let seen = '';
+      try {
+        while (!cancelled) {
+          const { value, done } = await reader.read();
+          if (done || !value) break;
+          const now = Date.now();
+          if (!this.#tiles.due(identity, now)) continue; // thumbnails: about half the frames are enough
+          const frame = value.frame.type === VideoBufferType.I420 ? value.frame : value.frame.convert(VideoBufferType.I420);
+          const rotation = ROTATIONS[value.rotation] ?? 0;
+          const size = `${frame.width}x${frame.height}/${rotation}`;
+          if (size !== seen) {
+            seen = size;
+            log('info', 'multiview: guest picture', { pcr: this.target.pcrName, guest: identity, size: `${frame.width}x${frame.height}`, rotation });
+          }
+          this.#tiles.update(identity, frame.data, frame.width, frame.height, rotation, now);
+        }
+      } catch (err) {
+        if (!cancelled) log('warn', 'multiview: reading a guest stopped', { pcr: this.target.pcrName, guest: identity, err });
+      }
+    })();
+  }
+
+  /** A guest left the multiview (unsubscribed, or gone). With `sid`, only if that is the track we read. */
+  #dropGuest(identity: string, sid?: string): void {
+    const reading = this.#guestReaders.get(identity);
+    if (!reading || (sid !== undefined && reading.sid !== sid)) return;
+    reading.cancel();
+    this.#guestReaders.delete(identity);
+    this.#tiles.remove(identity);
+    log('info', 'multiview: guest removed', { pcr: this.target.pcrName, guest: identity, guests: this.#tiles.size });
+  }
+
+  #dropAllGuests(): void {
+    for (const reading of this.#guestReaders.values()) reading.cancel();
+    this.#guestReaders.clear();
+    this.#tiles.clear();
+  }
+
+  /** Takes the burned-in track down, in line with any publish that is under way. */
+  #unpublishMultiview(): Promise<void> {
+    const run = async () => {
+      if (this.#tiles.size > 0) return; // someone joined the multiview meanwhile
+      const pub = this.#mvPub;
+      const source = this.#mvSource;
+      if (!pub && !source) return;
+      this.#mvPub = undefined;
+      this.#mvSource = undefined;
+      const me = this.#room?.localParticipant;
+      if (pub?.sid && me) await me.unpublishTrack(pub.sid).catch(() => undefined);
+      if (source) await source.close().catch(() => undefined);
+      log('info', 'multiview: burned-in return stopped', { pcr: this.target.pcrName });
+    };
+    const next = (this.#publishing ?? Promise.resolve()).then(run).catch((err: unknown) => {
+      log('warn', 'multiview: stopping the burned-in return failed', { pcr: this.target.pcrName, err });
+    });
+    this.#publishing = next;
+    return next;
   }
 
   async #onAudio(frame: AudioFrameIn): Promise<void> {
@@ -329,6 +497,9 @@ export class ReturnFeed {
         room.on(RoomEvent.Reconnected, () => {
           this.#connected = true;
         });
+        room.on(RoomEvent.TrackSubscribed, (track, pub, participant) => this.#onGuestTrack(track, pub, participant));
+        room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => this.#dropGuest(participant.identity, track.sid ?? undefined));
+        room.on(RoomEvent.ParticipantDisconnected, (participant) => this.#dropGuest(participant.identity));
         try {
           await room.connect(this.target.url, this.target.token, { autoSubscribe: false, dynacast: false });
           this.#room = room;
@@ -352,6 +523,8 @@ export class ReturnFeed {
     this.#connected = false;
     this.#videoPub = undefined;
     this.#audioPub = undefined;
+    this.#mvPub = undefined;
+    this.#dropAllGuests(); // the API subscribes us again after the reconnect
     if (this.#stopped) return;
     log('warn', 'room disconnected; reconnecting', { pcr: this.target.pcrName, reason });
     setTimeout(() => void this.#connectRoom(), ROOM_RETRY_MS);
@@ -386,6 +559,18 @@ export class ReturnFeed {
         this.#audioPub = await me.publishTrack(track, opts);
         log('info', 'mix-minus published', { pcr: this.target.pcrName, codec: this.#audioPub.mimeType });
       }
+      if (this.#mvSource && !this.#mvPub) {
+        // Same size, codec and caps as the clean return: for the guests who get it, it takes the return's place.
+        const track = LocalVideoTrack.createVideoTrack(PROGRAM_MV_TRACK, this.#mvSource);
+        const opts = new TrackPublishOptions({
+          source: TrackSource.SOURCE_CAMERA,
+          videoCodec: VideoCodec.H264,
+          simulcast: false,
+          videoEncoding: { maxBitrate: BigInt(this.#kbps() * 1000), maxFramerate: this.#targetFps() },
+        });
+        this.#mvPub = await me.publishTrack(track, opts);
+        log('info', 'multiview: burned-in return published', { pcr: this.target.pcrName, codec: this.#mvPub.mimeType, guests: this.#tiles.size, maxKbps: this.#kbps() });
+      }
     };
     const next = (this.#publishing ?? Promise.resolve()).then(run).catch((err: unknown) => {
       log('warn', 'publish failed', { pcr: this.target.pcrName, err });
@@ -400,11 +585,15 @@ export class ReturnFeed {
     this.#connected = false;
     this.#videoPub = undefined;
     this.#audioPub = undefined;
+    this.#mvPub = undefined;
+    this.#dropAllGuests();
     if (room) await room.disconnect().catch(() => undefined);
     if (this.#videoSource) await this.#videoSource.close().catch(() => undefined);
     if (this.#audioSource) await this.#audioSource.close().catch(() => undefined);
+    if (this.#mvSource) await this.#mvSource.close().catch(() => undefined);
     this.#videoSource = undefined;
     this.#audioSource = undefined;
+    this.#mvSource = undefined;
     this.#resampler?.close();
     this.#resampler = undefined;
     if (this.#receiver) {

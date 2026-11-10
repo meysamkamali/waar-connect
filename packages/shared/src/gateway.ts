@@ -35,6 +35,8 @@ export interface ReturnFeedStatus {
   audio: { channels: number; sampleRate: number } | null;
   /** What goes out: codec on the wire, the bitrate cap, and the picture size sent (0x0 before the first frame). */
   publish: { codec: string; maxKbps: number; maxFps: number; width: number; height: number } | null;
+  /** The multiview burn-in: how many guests' pictures are drawn into the second copy of the return; null while it is off. */
+  mv?: { tiles: number } | null | undefined;
   /** Since when the feed has been in this state (ms since epoch). */
   since: number;
 }

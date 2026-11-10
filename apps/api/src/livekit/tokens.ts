@@ -1,5 +1,6 @@
 // LiveKit access tokens per audience. Grants are the first lock: an output page cannot publish,
-// a monitor is hidden, the studio return cannot subscribe.
+// a monitor is hidden. The studio return may subscribe since 2026-11-10: it draws the multiview
+// guests into the return, and the routing engine gives it their cameras and nothing else.
 import { AccessToken, TrackSource, type VideoGrant } from 'livekit-server-sdk';
 
 export type Audience = 'guest' | 'staff' | 'studio' | 'output' | 'monitor';
@@ -32,7 +33,7 @@ export function grantFor(audience: Audience, room: string): VideoGrant {
     case 'staff':
       return { ...base, canPublish: true, canSubscribe: true, canPublishData: true, canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE] };
     case 'studio':
-      return { ...base, canPublish: true, canSubscribe: false, canPublishData: false, canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE] };
+      return { ...base, canPublish: true, canSubscribe: true, canPublishData: false, canPublishSources: [TrackSource.CAMERA, TrackSource.MICROPHONE] };
     case 'output':
       return { ...base, canPublish: false, canSubscribe: true, canPublishData: false, hidden: true };
     case 'monitor':

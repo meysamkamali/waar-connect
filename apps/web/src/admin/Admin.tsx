@@ -17,7 +17,8 @@ export function returnLine(pcr: Pcr, gateway: GatewayView | null): string {
   const video = r.video ? `${r.video.width}x${r.video.height} ${r.video.fps} fps` : '';
   const sent = r.publish && r.publish.width && r.publish.height ? `${r.publish.width}x${r.publish.height} ` : '';
   const out = r.publish ? `sends ${sent}${r.publish.codec} up to ${r.publish.maxKbps} kbit/s` : '';
-  return `gateway ${r.state}${r.detail ? `: ${r.detail}` : ''}${video ? ` · ${video}` : ''}${out ? ` · ${out}` : ''}`;
+  const mv = r.mv ? ` · multiview burned in for ${r.mv.tiles} guests` : '';
+  return `gateway ${r.state}${r.detail ? `: ${r.detail}` : ''}${video ? ` · ${video}` : ''}${out ? ` · ${out}` : ''}${mv}`;
 }
 
 function gatewaySummary(gateway: GatewayView | null): string {

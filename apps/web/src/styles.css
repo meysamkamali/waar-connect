@@ -541,3 +541,7 @@ body.stage {
 .focus-note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.45; }
 /* Guest's screen: the multiview strip, small pictures side by side along the bottom. */
 .tiles .tile .name { font-size: 0.75rem; left: 4px; bottom: 4px; padding: 1px 6px; }
+
+/* Guest: the picture carries the multiview along its bottom (burned in by the server). It ends above the buttons, and the self view moves up. */
+.stage.mv-burn .stage-video { bottom: 60px; height: calc(100% - 60px); }
+.stage.mv-burn .pip { bottom: auto; top: 48px; }

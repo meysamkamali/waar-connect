@@ -43,6 +43,7 @@ export const Report = z.object({
         video: z.object({ width: z.int().min(0), height: z.int().min(0), fps: z.number().min(0) }).nullable(),
         audio: z.object({ channels: z.int().min(0), sampleRate: z.int().min(0) }).nullable(),
         publish: z.object({ codec: z.string().max(40), maxKbps: z.int().min(0), maxFps: z.number().min(0), width: z.int().min(0), height: z.int().min(0) }).nullable(),
+        mv: z.object({ tiles: z.int().min(0).max(64) }).nullable().optional(),
         since: z.number(),
       }),
     )

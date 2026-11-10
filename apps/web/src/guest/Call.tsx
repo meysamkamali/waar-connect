@@ -26,6 +26,9 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
 
   const inStudio = state.place === 'studio';
   const inLobby = state.place === 'lobby';
+  // The burned-in multiview is a row of guests along the bottom of the picture itself: the buttons and
+  // the self view must not sit on it.
+  const burned = session.programIsMv.value && main !== null && main === session.programVideo.value;
   const tallyClass = inStudio ? (state.tally === 'onair' ? 'tally onair' : 'tally standby') : 'tally off';
   const placeLabel = inLobby ? t('lobbyTitle') : inStudio ? t('studioTitle') : t('greenTitle');
 
@@ -47,7 +50,7 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
   }
 
   return (
-    <div class="screen stage" onClick={() => void session.unlockAudio()}>
+    <div class={`screen stage ${burned ? 'mv-burn' : ''}`} onClick={() => void session.unlockAudio()}>
       {main ? (
         <VideoView track={main} className="stage-video" />
       ) : (

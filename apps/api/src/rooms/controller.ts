@@ -226,7 +226,7 @@ export class RoomController {
   }
 
   #addTrack(publisher: string, t: TrackSnapshot): void {
-    const source = routedSource(publisher, t.source);
+    const source = routedSource(publisher, t.source, t.name);
     if (source) this.#tracks.set(t.sid, { sid: t.sid, publisher, source });
   }
 

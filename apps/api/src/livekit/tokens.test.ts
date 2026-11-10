@@ -13,7 +13,7 @@ describe('tokens', () => {
   it('grants follow the audience', () => {
     assert.equal(grantFor('output', 'r').canPublish, false);
     assert.equal(grantFor('output', 'r').hidden, true);
-    assert.equal(grantFor('studio', 'r').canSubscribe, false);
+    assert.equal(grantFor('studio', 'r').canSubscribe, true); // for the multiview burn-in; routing limits it to the group's cameras
     assert.equal(grantFor('guest', 'r').canPublish, true);
     assert.equal(grantFor('monitor', 'r').hidden, true);
   });

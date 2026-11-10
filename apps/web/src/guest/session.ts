@@ -9,6 +9,7 @@ import {
   describeChoice,
   guestFromAttributes,
   normalizeGuestPrefs,
+  PROGRAM_MV_TRACK,
   pickCodec,
   pickCodecLine,
   roleOf,
@@ -133,6 +134,8 @@ export class GuestSession {
   readonly micEnabled = signal(true);
   readonly localVideo = signal<LocalVideoTrack | null>(null);
   readonly programVideo = signal<RemoteVideoTrack | null>(null);
+  /** The program picture is the burned-in one: the multiview guests are drawn along its bottom by the server. */
+  readonly programIsMv = signal(false);
   readonly faceVideo = signal<RemoteVideoTrack | null>(null);
   readonly guestVideos = signal<VideoTile[]>([]);
   readonly audioTracks = signal<RemoteAudioTrack[]>([]);
@@ -311,7 +314,9 @@ export class GuestSession {
     const video = track as RemoteVideoTrack;
     const role = roleOf(participant.identity);
     if (participant.identity === STUDIO_IDENTITY) {
+      // The server sends either the clean return or the burned-in one, never both for long.
       this.programVideo.value = video;
+      this.programIsMv.value = pub.trackName === PROGRAM_MV_TRACK;
       pub.setVideoQuality(VideoQuality.HIGH);
     } else if (role === 'producer' || role === 'engineer') {
       this.faceVideo.value = video;
@@ -330,7 +335,10 @@ export class GuestSession {
       this.audioTracks.value = this.audioTracks.value.filter((t) => t.sid !== track.sid);
       return;
     }
-    if (this.programVideo.value?.sid === track.sid) this.programVideo.value = null;
+    if (this.programVideo.value?.sid === track.sid) {
+      this.programVideo.value = null;
+      this.programIsMv.value = false;
+    }
     if (this.faceVideo.value?.sid === track.sid) this.faceVideo.value = null;
     this.guestVideos.value = this.guestVideos.value.filter((tile) => tile.identity !== participant.identity || tile.track.sid !== track.sid);
   }
