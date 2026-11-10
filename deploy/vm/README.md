@@ -123,3 +123,11 @@ C=$(git rev-parse --short HEAD); tar --exclude=node_modules --exclude=dist --exc
 ```
 
 The commit hash is read on this PC first: the VM holds no git checkout, so inside the quoted remote command it would come out empty.
+
+That command does not touch Nginx. After a change to `nginx-connect.conf`, on the VM:
+
+```bash
+sudo install -m 644 /opt/waar-connect/deploy/vm/nginx-connect.conf /etc/nginx/sites-available/waar-connect.conf && sudo nginx -t && sudo systemctl reload nginx
+```
+
+The site's root (`/`) redirects to the landing page `/app/` since 2026-11-10; the phase 0 test page that used to answer there is at `/index.html`.

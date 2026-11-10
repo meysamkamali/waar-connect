@@ -221,6 +221,7 @@ export function Home() {
           <span>build {BUILD}</span>
           {open && <span>test phase: no sign-in</span>}
           <a href="/app/admin/station">This station</a>
+          <a href="/index.html">Phase 0 test pages</a>
           <a href="https://github.com/meysamkamali/waar-connect" rel="noopener" target="_blank">
             Source code (AGPL-3.0)
           </a>
