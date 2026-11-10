@@ -15,24 +15,39 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
   const [showInfo, setShowInfo] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(true);
   const [full, setFull] = useState(isFullscreen());
-  // Browsers give full screen only from a touch: the first touch anywhere takes it, once. After that
-  // the guest decides with the button, and leaving it (button or the phone's back gesture) is respected.
-  const autoFull = useRef(canFullscreen());
+  // No browser lets a page go full screen by itself: it takes a touch, or the phone being turned. So
+  // the page asks at once (in case the browser allows it), again when the phone is turned, and on any
+  // touch, and says so in a line until it has it. Once the guest leaves full screen on purpose (the
+  // button, or the phone's back gesture) it is not taken back; the button brings it back.
+  const [declined, setDeclined] = useState(false);
+  const declinedRef = useRef(false);
+  declinedRef.current = declined;
 
   useEffect(() => {
-    void enterFullscreen(); // works only when the browser still counts a touch; the first touch does it otherwise
-    return onFullscreenChange(() => {
-      setFull(isFullscreen());
-      autoFull.current = false;
+    let was = isFullscreen();
+    const wanted = () => !declinedRef.current && !isFullscreen();
+    void enterFullscreen();
+    const off = onFullscreenChange(() => {
+      const now = isFullscreen();
+      if (was && !now) setDeclined(true);
+      was = now;
+      setFull(now);
     });
+    const onTurn = () => {
+      if (wanted()) void enterFullscreen();
+    };
+    screen.orientation?.addEventListener?.('change', onTurn);
+    window.addEventListener('orientationchange', onTurn);
+    return () => {
+      off();
+      screen.orientation?.removeEventListener?.('change', onTurn);
+      window.removeEventListener('orientationchange', onTurn);
+    };
   }, []);
 
   const onTouch = () => {
     void session.unlockAudio();
-    if (autoFull.current) {
-      autoFull.current = false;
-      void enterFullscreen();
-    }
+    if (!declinedRef.current && !isFullscreen()) void enterFullscreen();
   };
 
   useEffect(() => {
@@ -95,6 +110,8 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
         {statusText && <span class={`status ${statusTone}`}>{statusText}</span>}
       </div>
 
+      {canFullscreen() && !full && !declined && <div class="fs-hint">{t('tapFullScreen')}</div>}
+
       {cue && (
         <button class="cue" onClick={() => session.dismissCue()}>
           <span class="cue-from">{cue.from || t('producer')}</span>
@@ -138,7 +155,7 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
             aria-label={full ? t('exitFullScreen') : t('fullScreen')}
             onClick={(e) => {
               e.stopPropagation();
-              autoFull.current = false;
+              setDeclined(full);
               void (full ? exitFullscreen() : enterFullscreen());
             }}
           >

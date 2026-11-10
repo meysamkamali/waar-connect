@@ -40,7 +40,8 @@ export const DEGRADE_MODES = ['resolution', 'framerate', 'balanced'] as const;
 export type DegradeMode = (typeof DEGRADE_MODES)[number];
 
 export const GUEST_HEIGHTS = [360, 540, 720, 1080] as const;
-export const GUEST_RATES = [25, 30] as const;
+/** The station runs at 50 Hz: 25 (each frame shown twice) or 50. 30 was removed on 2026-11-10; a stored 30 reads as 25. */
+export const GUEST_RATES = [25, 50] as const;
 export const GUEST_KBPS = { min: 400, max: 8000 } as const;
 export const MAX_CODEC_CHOICES = 12;
 

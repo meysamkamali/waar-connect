@@ -62,9 +62,10 @@ test('connection preferences: defaults on a new PCR and on rows written before t
     { codec: 'h264' as const, encoder: 'sw' as const },
     { codec: 'av1' as const, encoder: 'hw' as const },
   ];
-  const set = mergeSettings(base, { guest: { codecs: order, height: 1080, fps: 30, kbps: 4000, degrade: 'framerate' }, face: { height: 720, fps: 30, kbps: 1500 } });
+  const set = mergeSettings(base, { guest: { codecs: order, height: 1080, fps: 50, kbps: 4000, degrade: 'framerate' }, face: { height: 720, fps: 30, kbps: 1500 } });
   assert.deepEqual(set.guest.codecs, order);
   assert.equal(set.guest.kbps, 4000);
+  assert.equal(set.guest.fps, 50);
   assert.deepEqual(set.face, { height: 720, fps: 30, kbps: 1500 });
   assert.deepEqual(mergeSettings(set, { slots: 3 }).guest, set.guest, 'untouched by other changes');
 

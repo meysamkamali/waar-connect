@@ -47,7 +47,8 @@ describe('normalize', () => {
   it('fills gaps with the defaults and keeps valid values', () => {
     assert.deepEqual(normalizeGuestPrefs(undefined), DEFAULT_GUEST_PREFS);
     assert.deepEqual(normalizeGuestPrefs({ height: 1080, kbps: 4000 }), { ...DEFAULT_GUEST_PREFS, height: 1080, kbps: 4000 });
-    assert.deepEqual(normalizeGuestPrefs({ codecs: ORDER, height: 540, fps: 30, kbps: 1500, degrade: 'framerate' }), { codecs: ORDER, height: 540, fps: 30, kbps: 1500, degrade: 'framerate' });
+    assert.deepEqual(normalizeGuestPrefs({ codecs: ORDER, height: 540, fps: 50, kbps: 1500, degrade: 'framerate' }), { codecs: ORDER, height: 540, fps: 50, kbps: 1500, degrade: 'framerate' });
+    assert.equal(normalizeGuestPrefs({ fps: 30 }).fps, 25, '30 is no longer a guest rate: a stored 30 reads as 25');
     assert.notEqual(normalizeGuestPrefs(undefined).codecs, DEFAULT_GUEST_PREFS.codecs, 'a copy, never the shared default');
   });
   it('drops bad and repeated lines, clamps the bitrate, refuses odd sizes', () => {

@@ -66,7 +66,7 @@ RTT, loss, bitrate, resolution and direct/relay are shown on the guest page and 
 ## Decisions to come out of phase 0
 
 1. VPS location (lower RTT for the real guests wins).
-2. 25 or 30 fps on the guest side for a 50 Hz station.
+2. 25 or 30 fps on the guest side for a 50 Hz station. (Decided 2026-11-10: 25 or 50; 30 was removed.)
 3. Receive buffer on the out pages (start at 400 ms, try 250 and 600).
 4. Whether OBS browser sources are good enough or vMix web inputs are needed.
 5. Whether the station firewall needs rules for UDP 7882 and 3478 from the gateway PC.

@@ -40,6 +40,7 @@ const en = {
   deviceError: 'The camera or microphone could not be started.',
   fullScreen: 'Full screen',
   exitFullScreen: 'Leave full screen',
+  tapFullScreen: 'Tap the screen for full screen',
 };
 
 export type Strings = typeof en;
@@ -79,6 +80,7 @@ const ku: Strings = {
   deviceError: 'Kamera an mîkrofon nehat destpêkirin.',
   fullScreen: 'Tevahiya ekranê',
   exitFullScreen: 'Ji tevahiya ekranê derkeve',
+  tapFullScreen: 'Ji bo tevahiya ekranê li ekranê bixe',
 };
 
 const ckb: Strings = {
@@ -116,6 +118,7 @@ const ckb: Strings = {
   deviceError: 'کامێرا یان مایکرۆفۆن دەست پێ نەکرد.',
   fullScreen: 'پڕ بە شاشە',
   exitFullScreen: 'دەرچوون لە پڕ بە شاشە',
+  tapFullScreen: 'بۆ پڕ بە شاشە دەست لە شاشەکە بدە',
 };
 
 const ar: Strings = {
@@ -153,6 +156,7 @@ const ar: Strings = {
   deviceError: 'تعذّر تشغيل الكاميرا أو الميكروفون.',
   fullScreen: 'ملء الشاشة',
   exitFullScreen: 'الخروج من ملء الشاشة',
+  tapFullScreen: 'المس الشاشة لملء الشاشة',
 };
 
 const DICTS: Record<Lang, Strings> = { en, ku, ckb, ar };

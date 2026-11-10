@@ -82,7 +82,7 @@ function saveOverride(patch: GuestOverride): GuestOverride {
   return next;
 }
 const HEIGHTS = [360, 540, 720, 1080];
-const RATES = [25, 30];
+const RATES = [25, 50]; // the station is 50 Hz; 30 was removed on 2026-11-10
 
 function summarizeStep(target: number, samples: StatsSummary[]): TestStep {
   const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
@@ -362,6 +362,7 @@ export class GuestSession {
         this.#profile = { ...this.#profile, height, fps: rate };
         this.#override = saveOverride({ res: height, fps: rate });
         await this.localVideo.value?.restartTrack({ resolution: { width: Math.round((height * 16) / 9), height, frameRate: rate } });
+        await this.#setMaxFramerate(rate);
         await this.#reapplyCamera();
       }
       const kbps = cmd['kbps'];
@@ -507,6 +508,19 @@ export class GuestSession {
     await sender.setParameters(params);
   }
 
+  /**
+   * The encoder's own frame rate ceiling, on every copy. It is set when the camera is published; without
+   * raising it here a camera restarted at 50 would still be sent at 25.
+   */
+  async #setMaxFramerate(fps: number): Promise<void> {
+    const sender = this.localVideo.value?.sender;
+    if (!sender) return;
+    const params = sender.getParameters();
+    if (!params.encodings?.length) return;
+    for (const e of params.encodings) e.maxFramerate = fps;
+    await sender.setParameters(params);
+  }
+
   /** Switches the 360p and 180p copies on or off; viewers that asked for a small copy then get the full one. */
   async #setSmallCopies(on: boolean): Promise<void> {
     const sender = this.localVideo.value?.sender;
@@ -564,6 +578,8 @@ export class GuestSession {
       width: settings?.width,
       height: settings?.height,
       fps: settings?.frameRate,
+      fpsAsked: this.#profile.fps,
+      fpsMax: cam?.mediaStreamTrack.getCapabilities?.().frameRate?.max,
       codec: this.#profile.codec,
       why: this.#why,
       wire: this.up.value?.codec,

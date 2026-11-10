@@ -63,6 +63,10 @@ export interface GuestReport {
   width?: number | undefined;
   height?: number | undefined;
   fps?: number | undefined;
+  /** Frame rate asked of this phone (25 or 50); `fps` is what the camera really gives. */
+  fpsAsked?: number | undefined;
+  /** The highest frame rate this camera says it can do, at any size. Phones are usually 30 or 60. */
+  fpsMax?: number | undefined;
   /** Codec the producer asked for. */
   codec: string;
   /** Where that codec came from: pushed to this phone, the page address, or a line of the studio's order. */

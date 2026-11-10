@@ -66,8 +66,13 @@ of a PCR; everything else about a PCR stays with the admin.
 
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
-full screen on the guest's first touch (browsers allow it only from a touch, and an iPhone not at
-all), with a button to leave and return.
+full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by
+itself, and an iPhone not at all); a line on the screen says so until then, and a button leaves and
+returns.
+
+Also the same day: a guest's frame rate is **25 or 50**. 30 is gone: the station runs at 50 Hz, where
+25 fits exactly and 30 never does. 50 is asked of the camera and sent when the camera can; a phone
+camera usually runs at 30 or 60, so the phone reports its camera's top rate and what really arrives.
 
 The first page, `/app`, shows the station now (studios, guests connected, on air, return feeds, one
 line per studio) above the way to each desk: producer, engineer, contacts, admin.

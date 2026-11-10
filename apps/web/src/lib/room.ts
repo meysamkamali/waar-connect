@@ -24,9 +24,9 @@ export interface PublishProfile {
 }
 
 const HEIGHTS = [360, 540, 720, 1080];
-const RATES = [25, 30, 50];
+const RATES = [25, 50];
 
-/** `?res=720&fps=25&kbps=2500&codec=h264`; defaults suit a 50 Hz station and a phone uplink. */
+/** `?res=720&fps=25&kbps=2500&codec=h264`; defaults suit a 50 Hz station and a phone uplink. Frame rates: 25 or 50. */
 export function profileFromParams(p: URLSearchParams): PublishProfile {
   const res = Number(p.get('res'));
   const height = HEIGHTS.includes(res) ? res : 720;

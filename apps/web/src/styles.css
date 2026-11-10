@@ -504,3 +504,6 @@ body.stage {
   .desk { transition: none; }
   .desk:hover { transform: none; }
 }
+
+/* Guest: one line until the page has full screen (a touch or turning the phone gives it). */
+.fs-hint { position: fixed; top: 52px; left: 50%; transform: translateX(-50%); z-index: 5; padding: 6px 14px; border-radius: 999px; background: rgba(0, 0, 0, 0.62); color: var(--fg); font-size: 0.85rem; white-space: nowrap; pointer-events: none; }

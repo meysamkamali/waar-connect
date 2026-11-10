@@ -216,11 +216,23 @@ ${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error
           {h}p
         </button>
       ))}
-      {[25, 30].map((f) => (
-        <button class={`chip ${r?.fps && Math.round(r.fps) === f ? 'on' : ''}`} key={f} onClick={() => cmd({ fps: f })}>
-          {f} fps
-        </button>
-      ))}
+      {[25, 50].map((f) => {
+        // A phone camera runs at 30 or 60, rarely a true 50: the chip shows what was asked, the report what arrives.
+        const asked = r?.fpsAsked ?? (r?.fps ? Math.round(r.fps) : undefined);
+        const short = f === 50 && r?.fpsMax !== undefined && r.fpsMax < 50;
+        const title =
+          f === 25
+            ? "The station's own rate: each frame is shown twice"
+            : short
+              ? `This camera says it does at most ${Math.round(r!.fpsMax!)} fps: the phone sends what it can`
+              : 'Twice the frames: needs about one and a half times the bitrate, and a camera that can do it';
+        return (
+          <button class={`chip ${asked === f ? 'on' : ''}`} key={f} title={title} onClick={() => cmd({ fps: f })}>
+            {f} fps{short ? ` (camera: ${Math.round(r!.fpsMax!)})` : ''}
+          </button>
+        );
+      })}
+      {r?.fps !== undefined && r.fpsAsked !== undefined && Math.abs(r.fps - r.fpsAsked) > 2 && <span class="muted small">camera gives {Math.round(r.fps)} fps</span>}
     </div>
     <div class="row settings">
       <span class="muted small">when short</span>

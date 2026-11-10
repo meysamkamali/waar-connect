@@ -25,7 +25,7 @@ import { mintToken } from '../livekit/tokens.ts';
 const GuestPrefsBody = z.object({
   codecs: z.array(z.object({ codec: z.enum(CODEC_NAMES), encoder: z.enum(ENCODER_KINDS) })).min(1).max(MAX_CODEC_CHOICES),
   height: z.union([z.literal(360), z.literal(540), z.literal(720), z.literal(1080)]),
-  fps: z.union([z.literal(25), z.literal(30)]),
+  fps: z.union([z.literal(25), z.literal(50)]),
   kbps: z.int().min(GUEST_KBPS.min).max(GUEST_KBPS.max),
   degrade: z.enum(DEGRADE_MODES),
 });
