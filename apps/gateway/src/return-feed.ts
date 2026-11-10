@@ -2,10 +2,10 @@
 // camera source, H.264; track `mix-minus`, microphone source). The routing engine in the API sends
 // both to every studio guest and to the green-room guests the producer switches to them.
 //
-// The multiview burn-in lives here too. While a multiview group watches Studio, the API subscribes
-// this participant to the cameras of the group; their frames become small pictures drawn along the
-// bottom of a second copy of the return (track `program-mv`), and the group gets that one picture
-// instead of the clean return plus one small stream per guest.
+// The multiview lives here too. While guests are ticked MV, the API subscribes this participant to
+// the cameras of the group; their frames become small pictures in one wide picture, the strip (track
+// `mv-strip`), which the group gets instead of one small stream per guest. The phone lays it over
+// whatever the guest sees. The return itself is never touched: one decode, one clean encode.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import {
@@ -30,11 +30,11 @@ import {
   type RemoteTrackPublication,
 } from '@livekit/rtc-node';
 import ffi from '@livekit/rtc-ffi-bindings';
-import { PROGRAM_MV_TRACK, type ReturnFeedStatus, type ReturnState } from '@waar-connect/shared';
+import { MV_STRIP_TRACK, type ReturnFeedStatus, type ReturnState } from '@waar-connect/shared';
 import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
-import { Tiles, type Rotation } from './multiview.ts';
+import { mvPanel, Tiles, type Rotation } from './multiview.ts';
 import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
 import { ScaleBuffers, scaleBgraInto, sizeFor } from './scale.ts';
 
@@ -69,10 +69,15 @@ const BLACK_EVERY_MS = 500;
 const ROOM_RETRY_MS = 3_000;
 const SOURCE_RETRY_MS = 2_000;
 const OUT_SAMPLE_RATE = 48_000;
-/** Nobody in the multiview for this long: the burned-in copy is unpublished, and its encoder goes with it. */
+/** Nobody in the multiview for this long: the strip is unpublished, and its encoder goes with it. */
 const MV_IDLE_MS = 5_000;
-/** Without programme video the burned-in copy still moves: the guests' pictures on black, this often. */
-const MV_BLACK_EVERY_MS = 80;
+/** The strip is thumbnails: half the return's frame rate is plenty. */
+const MV_EVERY_MS = 80;
+const MV_FPS = 13;
+/** The strip's bitrate cap is a quarter of the return's, within these bounds (kbit/s). */
+const MV_KBPS = { min: 150, max: 500 } as const;
+/** The strip's size before the return's is known: two thirds by one third of 960x540. */
+const MV_DEFAULT_SIZE = { width: 640, height: 180 } as const;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -127,15 +132,15 @@ export class ReturnFeed {
   readonly #scaled = new ScaleBuffers();
   #audioInfo: { channels: number; sampleRate: number } | null = null;
 
-  // Multiview burn-in: the latest picture of each guest the API subscribed us to, and the second track.
+  // Multiview: the latest picture of each guest the API subscribed us to, and the strip they are drawn into.
   readonly #tiles = new Tiles();
   readonly #guestReaders = new Map<string, { sid: string; cancel: () => void }>();
   #mvSource: VideoSource | undefined;
   #mvPub: LocalTrackPublication | undefined;
+  #mvSize: { width: number; height: number } | null = null;
   readonly #mvFrames = new ScaleBuffers();
   #mvIdleSince = 0;
-  #mvBlackAt = 0;
-  #blackFrame: Uint8Array | undefined;
+  #mvTimer: ReturnType<typeof setInterval> | undefined;
 
   #lastVideoAt = 0;
   #sourceFps = 0;
@@ -151,6 +156,8 @@ export class ReturnFeed {
   }
 
   start(): void {
+    // The strip runs on its own clock: it does not depend on programme frames arriving.
+    this.#mvTimer = setInterval(() => this.#multiview(), MV_EVERY_MS);
     this.#loop = this.#run().catch((err: unknown) => {
       const message = err instanceof Error ? err.message : String(err);
       this.#set('error', message);
@@ -170,6 +177,7 @@ export class ReturnFeed {
 
   async stop(): Promise<void> {
     this.#stopped = true;
+    clearInterval(this.#mvTimer);
     await this.#loop;
     await this.#teardown();
   }
@@ -286,11 +294,6 @@ export class ReturnFeed {
         this.#sendBlack();
         lastBlackAt = now;
       }
-      // Without programme video the multiview guests still see each other: their pictures on black.
-      if (this.#state === 'no-signal' && this.#outSize && (this.#mvPub || this.#tiles.count(now) > 0) && now - this.#mvBlackAt > MV_BLACK_EVERY_MS) {
-        this.#multiview(this.#black(this.#outSize), this.#outSize);
-        this.#mvBlackAt = now;
-      }
       if (silentFor > RESCAN_MS) {
         this.#set('waiting-source', `${this.target.source} went quiet for ${Math.round(silentFor / 1000)} s; looking for it again`);
         return;
@@ -332,7 +335,6 @@ export class ReturnFeed {
     // captureFrame copies the pixels before it returns, so the scale buffers can be reused in turn.
     const data = scaleBgraInto(frame.data, frame.width, frame.height, out, out.width === frame.width && out.height === frame.height ? frame.data : this.#scaled.take(out));
     this.#videoSource.captureFrame(new VideoFrame(data, out.width, out.height, VideoBufferType.BGRA));
-    this.#multiview(data, out);
     this.#countFrame();
     const state: ReturnState = this.#connected && this.#videoPub ? 'publishing' : 'receiving';
     if (this.#state !== state) this.#set(state, state === 'receiving' ? 'frames arrive; the room is not connected yet' : null);
@@ -356,37 +358,53 @@ export class ReturnFeed {
     this.#videoSource.captureFrame(new VideoFrame(new Uint8Array(width * height * 4), width, height, VideoBufferType.BGRA));
   }
 
-  #black(size: { width: number; height: number }): Uint8Array {
-    const bytes = size.width * size.height * 4;
-    if (this.#blackFrame?.length !== bytes) this.#blackFrame = new Uint8Array(bytes);
-    return this.#blackFrame;
+  /**
+   * The strip's size follows the return's: two thirds of its width, one third of its height, the part
+   * of the guest's screen the phone lays it over. Before the first programme frame, the 540p size.
+   */
+  #stripSize(): { width: number; height: number } {
+    if (!this.#outSize) return { ...MV_DEFAULT_SIZE };
+    const panel = mvPanel(this.#outSize.width, this.#outSize.height);
+    return { width: panel.width, height: panel.height };
+  }
+
+  /** A quarter of the return's bitrate cap, within bounds: the strip is a fifth of the return's pixels at half its frame rate. */
+  #stripKbps(): number {
+    return Math.min(MV_KBPS.max, Math.max(MV_KBPS.min, Math.round(this.#kbps() / 4)));
   }
 
   /**
-   * The burned-in copy: the frame that just went out, with the multiview guests' pictures drawn along
-   * its bottom, sent as a second track. It runs only while frames arrive from at least one guest's
-   * camera (the API subscribes this feed to the multiview group); a few seconds after the last
-   * picture went quiet, the track is unpublished.
+   * One tick of the multiview: the guests' latest pictures drawn into the strip and sent as its own
+   * track. It runs only while frames arrive from at least one guest's camera (the API subscribes this
+   * feed to the multiview group); a few seconds after the last picture went quiet, the track is
+   * unpublished.
    */
-  #multiview(frame: Uint8Array, size: { width: number; height: number }): void {
+  #multiview(): void {
+    if (this.#stopped || !this.#connected) return;
     const now = Date.now();
     if (this.#tiles.count(now) === 0) {
       if (!this.#mvPub && !this.#mvSource) return;
       if (!this.#mvIdleSince) this.#mvIdleSince = now;
       else if (now - this.#mvIdleSince > MV_IDLE_MS) {
         this.#mvIdleSince = 0;
-        void this.#unpublishMultiview();
+        void this.#unpublishMultiview(false);
       }
       return;
     }
     this.#mvIdleSince = 0;
+    const size = this.#stripSize();
+    if (this.#mvSource && this.#mvSize && (this.#mvSize.width !== size.width || this.#mvSize.height !== size.height)) {
+      // The return's size became known, or changed: the strip starts again at the size that fits it.
+      void this.#unpublishMultiview(true);
+      return;
+    }
     if (!this.#mvSource) {
       this.#mvSource = new VideoSource(size.width, size.height);
+      this.#mvSize = size;
       void this.#publish();
     }
     // captureFrame copies the pixels before it returns, so two buffers in turn are enough.
     const picture = this.#mvFrames.take(size);
-    picture.set(frame.length === picture.length ? frame : frame.subarray(0, picture.length));
     this.#tiles.compose(picture, size.width, size.height, now);
     this.#mvSource.captureFrame(new VideoFrame(picture, size.width, size.height, VideoBufferType.BGRA));
   }
@@ -455,22 +473,32 @@ export class ReturnFeed {
     this.#tiles.clear();
   }
 
-  /** Takes the burned-in track down, in line with any publish that is under way. */
-  #unpublishMultiview(): Promise<void> {
-    const run = async () => {
-      if (this.#tiles.count(Date.now()) > 0) return; // someone joined the multiview meanwhile
-      const pub = this.#mvPub;
-      const source = this.#mvSource;
-      if (!pub && !source) return;
+  /** Takes the strip down, in line with any publish that is under way. `resize`: also while guests are in it, to start again at another size. */
+  #unpublishMultiview(resize: boolean): Promise<void> {
+    const pub = this.#mvPub;
+    const source = this.#mvSource;
+    if (resize) {
+      // let go of them at once, so the next tick builds the new size and no frame goes into the old one
       this.#mvPub = undefined;
       this.#mvSource = undefined;
+      this.#mvSize = null;
+    }
+    const run = async () => {
+      if (!resize) {
+        if (this.#tiles.count(Date.now()) > 0) return; // someone joined the multiview meanwhile
+        if (this.#mvPub !== pub || this.#mvSource !== source) return; // already replaced
+        this.#mvPub = undefined;
+        this.#mvSource = undefined;
+        this.#mvSize = null;
+      }
+      if (!pub && !source) return;
       const me = this.#room?.localParticipant;
       if (pub?.sid && me) await me.unpublishTrack(pub.sid).catch(() => undefined);
       if (source) await source.close().catch(() => undefined);
-      log('info', 'multiview: burned-in return stopped', { pcr: this.target.pcrName });
+      log('info', resize ? 'multiview: strip restarting at another size' : 'multiview: strip stopped', { pcr: this.target.pcrName });
     };
     const next = (this.#publishing ?? Promise.resolve()).then(run).catch((err: unknown) => {
-      log('warn', 'multiview: stopping the burned-in return failed', { pcr: this.target.pcrName, err });
+      log('warn', 'multiview: stopping the strip failed', { pcr: this.target.pcrName, err });
     });
     this.#publishing = next;
     return next;
@@ -569,16 +597,26 @@ export class ReturnFeed {
         log('info', 'mix-minus published', { pcr: this.target.pcrName, codec: this.#audioPub.mimeType });
       }
       if (this.#mvSource && !this.#mvPub) {
-        // Same size, codec and caps as the clean return: for the guests who get it, it takes the return's place.
-        const track = LocalVideoTrack.createVideoTrack(PROGRAM_MV_TRACK, this.#mvSource);
+        // The return's codec; a size and a bitrate cap that follow the return's; half its frame rate.
+        const source = this.#mvSource;
+        const track = LocalVideoTrack.createVideoTrack(MV_STRIP_TRACK, source);
         const opts = new TrackPublishOptions({
           source: TrackSource.SOURCE_CAMERA,
           videoCodec: VideoCodec.H264,
           simulcast: false,
-          videoEncoding: { maxBitrate: BigInt(this.#kbps() * 1000), maxFramerate: this.#targetFps() },
+          videoEncoding: { maxBitrate: BigInt(this.#stripKbps() * 1000), maxFramerate: MV_FPS },
         });
-        this.#mvPub = await me.publishTrack(track, opts);
-        log('info', 'multiview: burned-in return published', { pcr: this.target.pcrName, codec: this.#mvPub.mimeType, guests: this.#tiles.count(Date.now()), maxKbps: this.#kbps() });
+        const pub = await me.publishTrack(track, opts);
+        if (this.#mvSource === source) this.#mvPub = pub;
+        else await me.unpublishTrack(pub.sid ?? '').catch(() => undefined); // the strip was restarted meanwhile
+        log('info', 'multiview: strip published', {
+          pcr: this.target.pcrName,
+          codec: pub.mimeType,
+          size: this.#mvSize ? `${this.#mvSize.width}x${this.#mvSize.height}` : null,
+          guests: this.#tiles.count(Date.now()),
+          maxKbps: this.#stripKbps(),
+          maxFps: MV_FPS,
+        });
       }
     };
     const next = (this.#publishing ?? Promise.resolve()).then(run).catch((err: unknown) => {
@@ -603,6 +641,7 @@ export class ReturnFeed {
     this.#videoSource = undefined;
     this.#audioSource = undefined;
     this.#mvSource = undefined;
+    this.#mvSize = null;
     this.#resampler?.close();
     this.#resampler = undefined;
     if (this.#receiver) {

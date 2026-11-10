@@ -97,18 +97,21 @@ picture, level meter and a connection light. For each guest, independently, they
   hear it. A guest not ticked is outside. The tick is kept through a trip to the studio.
   **One multiview stream** (same day): where the gateway publishes the return, the guests' pictures
   are not sent to each other at all. The gateway receives the group's cameras (their smallest copy)
-  and draws them into a second copy of the return: the programme is decoded once and encoded twice,
-  clean and with the multiview, both with the size, codec, bitrate and frame rate set for the PCR's
-  return. There is one multiview for the whole group, each guest's own picture in it too.
-  Its place is fixed. Think of the picture as nine equal parts: the bottom-left part is where the
-  phone shows the guest's own camera, and the multiview is a dark panel over the bottom-centre and
-  bottom-right parts, with one to eight pictures laid out to be as large as fits (two fill it, then
-  three or four in a row, then two rows). Every multiview guest gets this one stream in place of the
-  clean return: a guest on Studio sees all of it, a guest on Black or the PCR sees only its multiview
-  part, cut out by the phone and laid over black or the producer's face. The sound of the group
-  always goes direct. A PCR without a gateway return, and the first moment before the second copy
-  runs, fall back to the small direct copies (180p, at most 150 kbit/s per guest shown), which the
-  phone lays to the right of the guest's own picture.
+  and draws them into one wide picture, the multiview strip: a dark panel with one to eight pictures
+  laid out to be as large as fits (two fill it, then three or four in a row, then two rows). There
+  is one strip for the whole group, each guest's own picture in it too. It goes out as its own small
+  stream: H.264 like the return, two thirds of the return's width by one third of its height, a
+  quarter of the return's bitrate cap (within 150 to 500 kbit/s), about 12 frames a second.
+  The phone lays the strip over whatever the guest sees, the return, the producer's camera or black.
+  Its place is fixed. Think of the screen picture as nine equal parts: the bottom-left part is the
+  phone's own camera, and the strip covers the bottom-centre and bottom-right parts. The return
+  itself is never touched: decoded once, encoded once, the same for everyone. The sound of the group
+  always goes direct. A PCR without a gateway return, and the first moment before the strip runs,
+  fall back to the small direct copies (180p, at most 150 kbit/s per guest shown), which the phone
+  lays to the right of the guest's own picture.
+  (The first build of that day drew the pictures into a second full-size copy of the return instead.
+  It was replaced the same day: a guest on Black or the PCR had to download the whole return to show
+  a third of it, and the server encoded the return twice.)
 - **Studio sound** on or off: lets the guest hear the studio mix-minus to get the feel of the show.
 - **Program picture** on or off.
 - **Cue**: a text message that appears on the guest's screen until dismissed.

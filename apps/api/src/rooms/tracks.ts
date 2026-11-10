@@ -1,5 +1,5 @@
 // Maps a LiveKit track to the routing engine's track source, from the publisher's role.
-import { PROGRAM_MV_TRACK, roleOf, type TrackSource as WcSource } from '@waar-connect/shared';
+import { MV_STRIP_TRACK, roleOf, type TrackSource as WcSource } from '@waar-connect/shared';
 import { TrackSource } from 'livekit-server-sdk';
 
 /**
@@ -18,8 +18,8 @@ export function routedSource(publisher: string, source: TrackSource, name = ''):
       if (source === TrackSource.MICROPHONE) return 'talkback';
       return null;
     case 'studio':
-      // The return feed's second picture, with the multiview guests drawn in, goes by its track name.
-      if (source === TrackSource.CAMERA) return name === PROGRAM_MV_TRACK ? 'program-mv' : 'program-video';
+      // The return feed's second picture, the multiview strip, goes by its track name.
+      if (source === TrackSource.CAMERA) return name === MV_STRIP_TRACK ? 'mv-strip' : 'program-video';
       if (source === TrackSource.MICROPHONE) return 'program-audio';
       return null;
     default:

@@ -26,14 +26,11 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
 
   const inStudio = state.place === 'studio';
   const inLobby = state.place === 'lobby';
-  // The multiview stream: the studio's picture with the group's pictures drawn into its bottom-centre and
-  // bottom-right ninths by the server (every guest of the group gets this same stream, their own picture
-  // in it too). The bottom-left ninth is left for this phone's own camera. A guest on Studio sees the
-  // whole stream; a guest on Black or on the PCR sees only its multiview part, over black or over the
-  // producer's face.
-  const mv = session.programIsMv.value ? session.programVideo.value : null;
-  const face = session.faceVideo.value;
-  const whole = mv !== null && face === null && state.program;
+  // The multiview: one wide picture of the guests ticked MV, made by the server (every guest of the
+  // group gets the same one, their own picture in it too). It is laid over the bottom-centre and
+  // bottom-right ninths of whatever fills the screen: the studio's return, the producer's face or the
+  // waiting card. The bottom-left ninth is this phone's own camera.
+  const strip = session.mvStrip.value;
   const tallyClass = inStudio ? (state.tally === 'onair' ? 'tally onair' : 'tally standby') : 'tally off';
   const placeLabel = inLobby ? t('lobbyTitle') : inStudio ? t('studioTitle') : t('greenTitle');
 
@@ -56,23 +53,19 @@ export function Call({ session, info, fullscreen: fs }: { session: GuestSession;
 
   return (
     <div class="screen stage" onClick={() => void session.unlockAudio()}>
-      {mv ? (
+      {strip ? (
         <div class="mv-frame">
-          {whole ? (
-            <VideoView track={mv} className="mv-fill" />
-          ) : face ? (
-            <VideoView track={face} className="mv-fill" />
+          {main ? (
+            <VideoView track={main} className="mv-fill" />
           ) : (
             <div class="slate mv-slate">
               <img class="logo" src="/app/logo.svg" alt="" />
               <div class="slate-title">{placeLabel}</div>
             </div>
           )}
-          {!whole && (
-            <div class="mv-panel">
-              <VideoView track={mv} />
-            </div>
-          )}
+          <div class="mv-panel">
+            <VideoView track={strip} />
+          </div>
           <VideoView track={session.localVideo.value} className="mv-self" mirror />
         </div>
       ) : (

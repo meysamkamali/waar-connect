@@ -1,11 +1,13 @@
-// The multiview burn-in: the pictures of the guests the producer ticked MV, drawn into a copy of the
-// return picture. There is one multiview for the whole group, every guest's own picture included, and
-// the group gets that one stream instead of one small stream per guest.
+// The multiview: the pictures of the guests the producer ticked MV, drawn into one wide picture (the
+// "strip") that goes out as its own small stream. There is one multiview for the whole group, every
+// guest's own picture included, and the group gets that one stream instead of one small stream per
+// guest. The phone lays the strip over whatever the guest sees: the studio's return, the producer's
+// camera or black. Nothing is drawn into the return itself.
 //
-// Its place is fixed. Cut the picture into nine equal parts: the bottom-left part is where the phone
-// shows the guest's own camera, so the multiview has the bottom-centre and the bottom-right part, as
-// one dark panel with one to eight pictures inside. A phone that must not show the programme (the
-// guest is on Black or on the PCR) shows that panel alone, so the panel is always opaque.
+// Its place on the phone is fixed. Cut the screen picture into nine equal parts: the bottom-left part
+// is where the phone shows the guest's own camera, and the strip covers the bottom-centre and the
+// bottom-right part. So the strip is two thirds as wide and one third as high as the return picture
+// (`mvPanel` gives that size), a dark panel with one to eight pictures inside.
 //
 // Pure pixel work on BGRA buffers, in plain JavaScript; the pictures are small, so drawing them costs
 // a few percent of a core.
@@ -260,12 +262,12 @@ export class Tiles {
   }
 
   /**
-   * Draws the multiview into the BGRA picture `dst` (width x height): the dark panel over the
-   * bottom-centre and bottom-right ninths, and the live guests' pictures in it. Returns how many.
+   * Draws the multiview into the BGRA picture `dst` (width x height): a dark panel with the live
+   * guests' pictures in it. By default the panel is the whole picture (the strip); pass the panel's
+   * place to draw it into a larger picture. Returns how many guests were drawn.
    */
-  compose(dst: Uint8Array, width: number, height: number, now: number): number {
+  compose(dst: Uint8Array, width: number, height: number, now: number, panel: Rect = { x: 0, y: 0, width, height }): number {
     const ids = this.identities(now).slice(0, MAX_TILES);
-    const panel = mvPanel(width, height);
     fillRect(dst, width, height, panel, 12, 12, 12);
     const rects = layoutTiles(ids.length, panel);
     for (let i = 0; i < rects.length; i++) {

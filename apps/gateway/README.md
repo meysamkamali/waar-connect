@@ -78,32 +78,30 @@ the frame copies of every feed run on the one JavaScript thread of this process.
 feeds run on threads of their own, a second live return should be set to 360p (the proxy stream needs
 no scaling) or the returns kept to one.
 
-## Multiview burn-in
+## Multiview strip
 
 While a green-room guest is ticked MV, the API subscribes this feed's participant (`studio`) to the
-cameras of the group. The feed asks the media
-server for each guest's smallest copy (320x180; rtc-node has no call for that yet, so the request goes
-to its bindings, `requestSmallCopy` in `return-feed.ts`), draws every guest's latest frame into a small
-picture (`multiview.ts`: I420 to BGRA, the phone's rotation applied, letterboxed, about half the frame
-rate) and draws them into a copy of each return frame. So the programme is decoded once and encoded
-twice: clean (`program`) and with the multiview (`program-mv`), the second with the same size,
-codec and caps as the first.
+cameras of the group. The feed asks the media server for each guest's smallest copy (320x180; rtc-node
+has no call for that yet, so the request goes to its bindings, `requestSmallCopy` in `return-feed.ts`)
+and draws every guest's latest frame into a small picture (`multiview.ts`: I420 to BGRA, the phone's
+rotation applied, letterboxed, about half the frame rate).
 
-There is one multiview for the whole group, every guest's own picture included. Its place is fixed:
-of the picture's nine equal parts, the bottom-left one is left for the camera picture the phone shows
-itself, and the multiview is a dark panel over the bottom-centre and bottom-right ones (`mvPanel`),
-with one to eight pictures in the grid that makes them largest (`layoutTiles`). The panel is always
-opaque, because a phone whose guest is on Black or the PCR cuts exactly that part out of the stream.
+Those pictures go into one wide picture, the strip: a dark panel holding one to eight guests in the
+grid that makes them largest (`layoutTiles`). There is one strip for the whole group, every guest's
+own picture included. It is published as its own track, `mv-strip`, on a clock of its own (it does
+not wait for programme frames): H.264, two thirds of the return's width by one third of its height
+(640x180 for a 540p return; `mvPanel` gives the size), a quarter of the return's bitrate cap within
+150 to 500 kbit/s, 12.5 frames a second. The return itself is not touched: one decode, one encode.
 
-The routing engine sends `program-mv` to every guest of the multiview group, in place of the clean
-return and of each other's cameras; nobody else ever gets it. A few seconds after the last picture
-went quiet the track is unpublished again.
+The routing engine sends `mv-strip` to every guest of the multiview group, in place of each other's
+cameras; nobody else ever gets it. The guest's page lays it over the bottom-centre and bottom-right
+ninths of whatever fills the screen, beside the phone's own camera picture in the bottom-left ninth.
+A few seconds after the last picture went quiet the track is unpublished again.
 
 A guest counts as present while frames arrive from them: the media library does not report the server
 ending a subscription, the frames just stop (or shrink to 8x8 placeholders, which are ignored).
 
-Measured 2026-11-10 on the VM with three guests on a 540p return: between 0.1 and 0.3 of a core for
-the three small decodes, the drawing and the second encode together (three runs, on a process whose
-main thread was already full with three returns, so the figure is rough).
+Measured 2026-11-10 on the VM with three guests: too small to tell apart from the noise of a process
+running three returns (2.89 cores with the strip, 2.92 without).
 
 NDI® is a registered trademark of Vizrt NDI AB.

@@ -156,7 +156,7 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   const w = 960;
   const h = 540;
   const dst = new Uint8Array(w * h * 4);
-  assert.equal(tiles.compose(dst, w, h, 1100), 2);
+  assert.equal(tiles.compose(dst, w, h, 1100, mvPanel(w, h)), 2);
   const panel = mvPanel(w, h);
   const [ra, rb] = layoutTiles(2, panel) as [{ x: number; y: number; width: number; height: number }, { x: number; y: number; width: number; height: number }];
   const mid = (r: { x: number; y: number; width: number; height: number }, from: Uint8Array = dst) => px(from, w, r.x + (r.width >> 1), r.y + (r.height >> 1));
@@ -174,7 +174,7 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   assert.deepEqual(tiles.identities(3400), ['guest:a', 'guest:b'], 'a is still within the stale time');
   assert.deepEqual(tiles.identities(3600), ['guest:b'], 'a went quiet 2.6 s ago');
   const again = new Uint8Array(w * h * 4);
-  assert.equal(tiles.compose(again, w, h, 3600), 1);
+  assert.equal(tiles.compose(again, w, h, 3600, mvPanel(w, h)), 1);
   const [only] = layoutTiles(1, panel);
   assert.deepEqual(mid(only!, again), [0, 0, 0, 255], 'guest b moved to the middle');
   // and a comes back the moment a frame arrives again
@@ -182,6 +182,15 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   assert.equal(tiles.count(3700), 2);
   tiles.remove('guest:a');
   assert.equal(tiles.count(3700), 1);
+  // The strip: the panel is the whole picture, two thirds by one third of the return's size.
+  const sw = panel.width;
+  const sh = panel.height;
+  const strip = new Uint8Array(sw * sh * 4);
+  tiles.update('guest:b', i420(8, 8, () => 235), 8, 8, 0, 3700);
+  assert.equal(tiles.compose(strip, sw, sh, 3700), 1);
+  assert.deepEqual(px(strip, sw, 0, 0), [12, 12, 12, 255], 'dark from its first corner');
+  assert.deepEqual(px(strip, sw, sw - 1, sh - 1), [12, 12, 12, 255], 'to its last');
+  assert.deepEqual(px(strip, sw, sw >> 1, sh >> 1), [255, 255, 255, 255], 'the one guest in the middle');
   tiles.clear();
   assert.equal(tiles.compose(again, w, h, 3700), 0);
   assert.equal(tiles.count(9000), 0);

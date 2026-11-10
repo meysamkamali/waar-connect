@@ -13,12 +13,12 @@ export type Role = (typeof ROLES)[number];
 export type StaffRole = Extract<Role, 'producer' | 'engineer'>;
 
 /**
- * program-mv is the return picture with the multiview guests drawn along its bottom (the "burn-in"),
- * published by the return feed beside the clean program-video while a multiview group watches Studio.
+ * mv-strip is the multiview: one wide picture holding the guests ticked MV, published by the return
+ * feed beside the program while such guests exist. The phone lays it over whatever the guest sees.
  */
-export const TRACK_SOURCES = ['camera', 'microphone', 'talkback', 'program-video', 'program-audio', 'program-mv'] as const;
-/** The name the return feed gives the burned-in track; the API tells it from the clean return by this name. */
-export const PROGRAM_MV_TRACK = 'program-mv';
+export const TRACK_SOURCES = ['camera', 'microphone', 'talkback', 'program-video', 'program-audio', 'mv-strip'] as const;
+/** The name the return feed gives the multiview track; the API tells it from the return by this name. */
+export const MV_STRIP_TRACK = 'mv-strip';
 export type TrackSource = (typeof TRACK_SOURCES)[number];
 
 /** The studio return (program picture and mix-minus) is always published under exactly this identity. */

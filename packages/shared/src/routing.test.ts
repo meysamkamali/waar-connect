@@ -172,9 +172,9 @@ describe('staff, monitor, studio return', () => {
   });
 });
 
-describe('multiview burned into the return', () => {
+describe('the multiview strip', () => {
   const D = 'guest:dara';
-  const burned: PublishedTrack[] = [...tracks, { sid: 'pgm-mv', publisher: STUDIO_IDENTITY, source: 'program-mv' }];
+  const withStrip: PublishedTrack[] = [...tracks, { sid: 'mv', publisher: STUDIO_IDENTITY, source: 'mv-strip' }];
   const got = (subscriber: string, list: readonly PublishedTrack[], s: RoomState) => allowedTracks(subscriber, list, s).map((t) => t.sid).sort();
   // A and B are in the multiview, A watches Studio, B is on Black; C is in the green room outside the group.
   const room = (over: Partial<RoomState> = {}) =>
@@ -188,24 +188,26 @@ describe('multiview burned into the return', () => {
   });
   it('the return feed receives the cameras of the group and nothing else', () => {
     assert.deepEqual(got(STUDIO_IDENTITY, tracks, room()), ['a-cam', 'b-cam']);
-    assert.deepEqual(got(STUDIO_IDENTITY, burned, room()), ['a-cam', 'b-cam']);
+    assert.deepEqual(got(STUDIO_IDENTITY, withStrip, room()), ['a-cam', 'b-cam']);
     assert.deepEqual(got(STUDIO_IDENTITY, tracks, state({ guests: [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green' })] })), ['a-cam'], 'one guest alone');
     assert.deepEqual(got(STUDIO_IDENTITY, tracks, state()), []);
   });
-  it('before the burned-in stream exists (or without a gateway return), the group gets each other directly', () => {
+  it('before the strip exists (or without a gateway return), the group gets each other directly', () => {
     assert.deepEqual(got(A, tracks, room()), ['b-cam', 'b-mic', 'pgm-v']);
     assert.deepEqual(got(B, tracks, room()), ['a-cam', 'a-mic']);
   });
-  it('once it exists, every multiview guest gets that one stream: no clean return, no cameras, the sound still direct', () => {
-    assert.deepEqual(got(A, burned, room()), ['b-mic', 'pgm-mv'], 'on Studio');
-    assert.deepEqual(got(B, burned, room()), ['a-mic', 'pgm-mv'], 'on Black: the same stream, of which the page shows the multiview part');
+  it('once it exists, every multiview guest gets the strip in place of the cameras; the main picture and the sound stay as they were', () => {
+    assert.deepEqual(got(A, withStrip, room()), ['b-mic', 'mv', 'pgm-v'], 'on Studio: the clean return and the strip over it');
+    assert.deepEqual(got(B, withStrip, room()), ['a-mic', 'mv'], 'on Black: the strip alone');
+    const face = room({ staff: [staff(PROD, 'producer', { faceTo: B }), staff(ENG, 'engineer')] });
+    assert.deepEqual(got(B, withStrip, face), ['a-mic', 'mv', 'prod-cam'], "on the PCR: the producer's camera and the strip over it");
   });
-  it('nobody else ever gets the burned-in stream', () => {
+  it('nobody else ever gets the strip', () => {
     const s = room({ guests: [...room().guests, guest(D, { place: 'studio', slot: 1, mv: true, program: true })], outputs: [{ identity: OUT1, slot: 1 }] });
-    assert.deepEqual(got(C, burned, s), ['pgm-v'], 'a green-room guest outside the group gets the clean return');
-    assert.ok(got(D, burned, s).includes('pgm-v') && !got(D, burned, s).includes('pgm-mv'), 'a guest in the studio gets the clean return');
-    for (const sub of [PROD, ENG, MON, OUT1]) assert.ok(!got(sub, burned, s).includes('pgm-mv'), `${sub} must not get it`);
-    assert.ok(got(PROD, burned, s).includes('pgm-v'));
+    assert.deepEqual(got(C, withStrip, s), ['pgm-v'], 'a green-room guest outside the group');
+    assert.ok(got(D, withStrip, s).includes('pgm-v') && !got(D, withStrip, s).includes('mv'), 'a guest in the studio');
+    for (const sub of [PROD, ENG, MON, OUT1]) assert.ok(!got(sub, withStrip, s).includes('mv'), `${sub} must not get it`);
+    assert.ok(got(PROD, withStrip, s).includes('pgm-v'));
   });
 });
 

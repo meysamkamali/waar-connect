@@ -42,12 +42,11 @@ export function wantsMultiview(state: Pick<RoomState, 'guests'>): boolean {
 }
 
 /**
- * `burnIn`: the return feed publishes the burned-in copy right now (the return with the multiview in
- * its bottom-centre and bottom-right ninths). Every multiview guest then gets that one stream, and
- * neither the clean return nor the other guests' cameras. A guest on Studio shows all of it; a guest
- * on Black or the PCR shows its multiview part only (the page does that from its own `program` flag).
+ * `strip`: the return feed publishes the multiview strip right now. Every multiview guest then gets
+ * that one stream in place of the other guests' cameras; what else they see (the return, the
+ * producer, nothing) stays as the producer set it, and the page lays the strip over it.
  */
-function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomState, burnIn: boolean): boolean {
+function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomState, strip: boolean): boolean {
   if (track.publisher === guest.identity) return false; // never yourself
 
   switch (guest.place) {
@@ -64,8 +63,8 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
           return talksTo(staff, guest.identity) || (guest.mv && mvGroup(state).some((o) => talksTo(staff, o.identity)));
         }
         case 'program-video':
-          return guest.program && !(burnIn && guest.mv);
-        case 'program-mv':
+          return guest.program;
+        case 'mv-strip':
           return guest.mv;
         case 'program-audio':
           return guest.studioSound;
@@ -75,8 +74,8 @@ function guestMayReceive(guest: GuestState, track: PublishedTrack, state: RoomSt
           if (staff) return track.source === 'camera' && staff.faceTo === guest.identity;
           const other = guestById(state, track.publisher);
           if (other === undefined || !guest.mv || other.place !== 'green' || !other.mv) return false;
-          // The others' pictures are inside the burned-in stream this guest gets; their sound still comes direct.
-          return !(track.source === 'camera' && burnIn);
+          // The others' pictures are in the multiview strip this guest gets; their sound still comes direct.
+          return !(track.source === 'camera' && strip);
         }
       }
       return false;
@@ -117,8 +116,8 @@ function staffMayReceive(staff: StaffState, track: PublishedTrack, state: RoomSt
       return fromProducer;
     case 'program-video':
       return true;
-    case 'program-mv':
-      return false; // made for the multiview guests; staff watch the clean return
+    case 'mv-strip':
+      return false; // made for the multiview guests; staff see every guest's own picture
     case 'program-audio':
       return false; // the console sits in the PCR, where the programme sound is on the monitors already
     case 'camera':
@@ -136,16 +135,16 @@ function outputMayReceive(slot: number, track: PublishedTrack, state: RoomState)
 }
 
 /**
- * The single rule: may `subscriber` receive `track` given the room state? `burnIn` says whether the
- * burned-in return is published right now (allowedTracks works it out from the room's tracks).
+ * The single rule: may `subscriber` receive `track` given the room state? `strip` says whether the
+ * multiview strip is published right now (allowedTracks works it out from the room's tracks).
  */
-export function canReceive(subscriber: string, track: PublishedTrack, state: RoomState, burnIn = false): boolean {
+export function canReceive(subscriber: string, track: PublishedTrack, state: RoomState, strip = false): boolean {
   if (subscriber === track.publisher) return false;
   const role = roleOf(subscriber);
   switch (role) {
     case 'guest': {
       const guest = guestById(state, subscriber);
-      return guest !== undefined && guestMayReceive(guest, track, state, burnIn);
+      return guest !== undefined && guestMayReceive(guest, track, state, strip);
     }
     case 'producer':
     case 'engineer': {
@@ -157,10 +156,10 @@ export function canReceive(subscriber: string, track: PublishedTrack, state: Roo
       return slot !== null && outputMayReceive(slot, track, state);
     }
     case 'monitor':
-      return track.source !== 'talkback' && track.source !== 'program-mv';
+      return track.source !== 'talkback' && track.source !== 'mv-strip';
     case 'studio': {
       // The return feed publishes. All it ever receives is the cameras of the multiview group, to draw
-      // them into the burned-in return.
+      // them into the multiview strip.
       if (track.source !== 'camera') return false;
       const guest = guestById(state, track.publisher);
       return guest !== undefined && guest.place === 'green' && guest.mv;
@@ -171,8 +170,8 @@ export function canReceive(subscriber: string, track: PublishedTrack, state: Roo
 }
 
 export function allowedTracks(subscriber: string, tracks: readonly PublishedTrack[], state: RoomState): PublishedTrack[] {
-  const burnIn = tracks.some((t) => t.source === 'program-mv');
-  return tracks.filter((t) => canReceive(subscriber, t, state, burnIn));
+  const strip = tracks.some((t) => t.source === 'mv-strip');
+  return tracks.filter((t) => canReceive(subscriber, t, state, strip));
 }
 
 /** Every known participant mapped to the track sids they may receive right now. */
