@@ -34,6 +34,12 @@ const schema = z.object({
     .trim()
     .regex(/^\d+(,\d+)*$/, 'comma-separated channel numbers, e.g. 1,2')
     .default('1,2'),
+  /**
+   * Where the return feeds run. process (the default): each in a process of its own, so each has a
+   * core for its scaling and a hung NDI receive ends only that feed. inline: all in the gateway's own
+   * process, which one JavaScript thread shares; fine for one feed, too little for two at 1080p25.
+   */
+  GATEWAY_FEEDS: z.enum(['process', 'inline']).default('process'),
   /** How often the gateway asks the API which PCRs want a return feed. */
   POLL_SECONDS: z.coerce.number().min(3).max(120).default(15),
   /** How often the gateway reports its sources and feeds to the API. */

@@ -72,11 +72,24 @@ Measured 2026-11-09 on the VM (Xeon E5-2680 v2, 2013, no AVX2), one 1080p25 prog
 At 360p the sender's proxy stream is taken, so the NDI decode shrinks as well (not measured yet).
 Guests' phones decode H.264 in hardware.
 
-**More than one return at a time** (seen 2026-11-10 with two live 1080p25 returns): the scaling and
-the frame copies of every feed run on the one JavaScript thread of this process. One feed takes about
-0.9 of it; two saturate it, and each feed then sends 10 to 19 frames a second instead of 25. Until the
-feeds run on threads of their own, a second live return should be set to 360p (the proxy stream needs
-no scaling) or the returns kept to one.
+**One process per return** (since 2026-11-10). The scaling and the frame copies of a feed run on
+JavaScript's one thread, about 0.9 of it for a 1080p25 source. With two live returns in one process
+that thread was full and each feed sent 10 to 19 frames a second instead of 25. So the gateway
+(`index.ts`) now only asks the API what is wanted, watches the NDI network and reports; every feed
+runs in a process of its own (`feed-process.ts` starts `feed-worker.ts` and passes it the target,
+fresh tokens and the address list over the process channel, and gets its status back each second).
+Measured after the change with the same two 1080p25 returns at 540p: 23 to 25 frames a second each,
+about 1.65 cores per feed process (its main thread 0.85, NDI decode 0.5, encode 0.14), the whole VM
+at about half its eight cores.
+
+It also keeps a fault to itself. A feed process that ends (the NDI receive that hangs ends it on
+purpose) is started again after two seconds, and the other feeds never notice: tried on the VM by
+killing one, which was publishing again 18 seconds later while the other stayed at 25 frames a
+second. `GATEWAY_FEEDS=inline` puts the feeds back into the gateway's own process, for one feed
+or for finding a fault.
+
+Each feed's main thread is near its limit at 1080p in, 540p out. A return set to 360p takes the
+sender's proxy stream and needs no scaling.
 
 ## Multiview strip
 

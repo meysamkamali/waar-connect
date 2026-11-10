@@ -28,3 +28,9 @@ test('a short token or a bad channel list is refused with a readable message', (
   assert.throws(() => loadConfig({ ...base, RETURN_HEIGHT: '600' }), /RETURN_HEIGHT/);
   assert.equal(loadConfig({ ...base, RETURN_HEIGHT: '0' }).RETURN_HEIGHT, 0);
 });
+
+test('feeds run in processes of their own unless told to stay inline', () => {
+  assert.equal(loadConfig(base).GATEWAY_FEEDS, 'process');
+  assert.equal(loadConfig({ ...base, GATEWAY_FEEDS: 'inline' }).GATEWAY_FEEDS, 'inline');
+  assert.throws(() => loadConfig({ ...base, GATEWAY_FEEDS: 'threads' }), /GATEWAY_FEEDS/);
+});

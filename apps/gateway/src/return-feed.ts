@@ -163,8 +163,10 @@ export class ReturnFeed {
       this.#set('error', message);
       log('error', 'return feed failed', { pcr: this.target.pcrName, err });
       if (message.startsWith('NDI receive stuck')) {
-        // The runtime holds a thread for good; only a fresh process gets the feed back.
-        log('error', 'exiting so systemd restarts the gateway', { pcr: this.target.pcrName });
+        // The runtime holds a thread for good; only a fresh process gets the feed back. In a process
+        // of its own that ends this feed alone and the gateway starts it again; inline, systemd
+        // restarts the whole gateway.
+        log('error', 'exiting so this feed is started again in a fresh process', { pcr: this.target.pcrName });
         setTimeout(() => process.exit(70), 500);
       }
     });
