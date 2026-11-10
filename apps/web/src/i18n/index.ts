@@ -38,6 +38,8 @@ const en = {
   producer: 'Producer',
   ended: 'This programme has ended.',
   deviceError: 'The camera or microphone could not be started.',
+  fullScreen: 'Full screen',
+  exitFullScreen: 'Leave full screen',
 };
 
 export type Strings = typeof en;
@@ -75,6 +77,8 @@ const ku: Strings = {
   producer: 'Berhemhêner',
   ended: 'Ev bername qediya.',
   deviceError: 'Kamera an mîkrofon nehat destpêkirin.',
+  fullScreen: 'Tevahiya ekranê',
+  exitFullScreen: 'Ji tevahiya ekranê derkeve',
 };
 
 const ckb: Strings = {
@@ -110,6 +114,8 @@ const ckb: Strings = {
   producer: 'بەرهەمهێنەر',
   ended: 'ئەم بەرنامەیە کۆتایی هات.',
   deviceError: 'کامێرا یان مایکرۆفۆن دەست پێ نەکرد.',
+  fullScreen: 'پڕ بە شاشە',
+  exitFullScreen: 'دەرچوون لە پڕ بە شاشە',
 };
 
 const ar: Strings = {
@@ -145,6 +151,8 @@ const ar: Strings = {
   producer: 'المنتج',
   ended: 'انتهى هذا البرنامج.',
   deviceError: 'تعذّر تشغيل الكاميرا أو الميكروفون.',
+  fullScreen: 'ملء الشاشة',
+  exitFullScreen: 'الخروج من ملء الشاشة',
 };
 
 const DICTS: Record<Lang, Strings> = { en, ku, ckb, ar };

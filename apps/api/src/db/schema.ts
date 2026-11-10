@@ -7,6 +7,7 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs } from '@waar-connect/shared';
 
 export const userRole = pgEnum('user_role', ['admin', 'producer', 'engineer']);
 
@@ -57,6 +58,10 @@ export interface PcrSettings {
   returnHeight: number | null;
   /** Bitrate cap of the return picture, kbit/s; null = the gateway's default. */
   returnKbps: number | null;
+  /** How a guest's phone connects by default: codec order, picture, bitrate. Set by the engineer. */
+  guest: GuestPrefs;
+  /** The producer's face camera as it is sent. Set by the engineer. */
+  face: FacePrefs;
 }
 
 export function defaultPcrSettings(slots: number): PcrSettings {
@@ -68,6 +73,8 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     returnSource: null,
     returnHeight: null,
     returnKbps: null,
+    guest: normalizeGuestPrefs(undefined),
+    face: normalizeFacePrefs(undefined),
   };
 }
 

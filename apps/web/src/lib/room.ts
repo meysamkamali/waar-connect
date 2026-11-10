@@ -11,6 +11,7 @@ import {
   type RemoteParticipant,
   type RemoteTrackPublication,
   type RoomOptions,
+  type TrackPublishOptions,
   type VideoCodec,
 } from 'livekit-client';
 import { isCodecName } from './codecs.ts';
@@ -41,6 +42,19 @@ export function profileFromParams(p: URLSearchParams): PublishProfile {
   };
 }
 
+/** Codec, bitrate cap and the two small simulcast copies for one profile. */
+export function videoPublishOptions(profile: PublishProfile): TrackPublishOptions {
+  return {
+    simulcast: true,
+    videoCodec: profile.codec,
+    videoEncoding: { maxBitrate: profile.maxKbps * 1000, maxFramerate: profile.fps },
+    videoSimulcastLayers: [new VideoPreset(320, 180, 150_000, profile.fps), new VideoPreset(640, 360, 500_000, profile.fps)],
+    // VP9, AV1 and H.265 are sent as one layered stream; a viewer that cannot decode them gets an
+    // H.264 copy the phone adds on demand (LiveKit's backup codec).
+    backupCodec: profile.codec === 'h264' ? true : { codec: 'h264' },
+  };
+}
+
 export function createRoom(profile: PublishProfile): Room {
   const width = Math.round((profile.height * 16) / 9);
   const options: RoomOptions = {
@@ -58,16 +72,7 @@ export function createRoom(profile: PublishProfile): Room {
       channelCount: 1,
     },
     publishDefaults: {
-      simulcast: true,
-      videoCodec: profile.codec,
-      videoEncoding: { maxBitrate: profile.maxKbps * 1000, maxFramerate: profile.fps },
-      videoSimulcastLayers: [
-        new VideoPreset(320, 180, 150_000, profile.fps),
-        new VideoPreset(640, 360, 500_000, profile.fps),
-      ],
-      // VP9, AV1 and H.265 are sent as one layered stream; a viewer that cannot decode them gets an
-      // H.264 copy the phone adds on demand (LiveKit's backup codec).
-      backupCodec: profile.codec === 'h264' ? true : { codec: 'h264' },
+      ...videoPublishOptions(profile),
       audioPreset: AudioPresets.music,
       dtx: false,
       red: true,

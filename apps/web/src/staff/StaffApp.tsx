@@ -1,17 +1,18 @@
-// Staff entry: session check, login (final phase), then the page: PCR list, a PCR's room, the contact
-// book, or the admin pages (PCRs and the station lock).
+// Staff entry: session check, login (final phase), then the page: PCR list, a PCR's room as the
+// producer or as the engineer, the contact book, or the admin pages (PCRs and the station lock).
 import { useEffect, useState } from 'preact/hooks';
 import { me, type User } from '../api.ts';
 import { BUILD, watchBuild } from '../lib/version.ts';
 import { Admin } from '../admin/Admin.tsx';
 import { Station } from '../admin/Station.tsx';
+import { EngineerScreen } from '../engineer/EngineerScreen.tsx';
 import { Contacts } from './Contacts.tsx';
 import { Login } from './Login.tsx';
 import { Nav } from './Nav.tsx';
 import { Pcrs } from './Pcrs.tsx';
 import { RoomScreen } from './RoomScreen.tsx';
 
-export type StaffPage = 'pcrs' | 'contacts' | 'admin' | 'station';
+export type StaffPage = 'pcrs' | 'engineer' | 'contacts' | 'admin' | 'station';
 
 export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage }) {
   const [user, setUser] = useState<User | null | undefined>(undefined);
@@ -42,6 +43,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
   const nav = <Nav user={user} open={open} page={page} onLogout={() => setUser(null)} />;
   let body;
   if (page === 'pcrs' && id) body = <RoomScreen id={id} user={user} />;
+  else if (page === 'engineer' && id) body = <EngineerScreen id={id} user={user} nav={nav} />;
   else if (page === 'contacts') body = <Contacts user={user} nav={nav} />;
   else if (page === 'admin' || page === 'station') {
     if (user.role !== 'admin') {
@@ -52,7 +54,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
         </div>
       );
     } else body = page === 'admin' ? <Admin nav={nav} /> : <Station nav={nav} />;
-  } else body = <Pcrs user={user} nav={nav} />;
+  } else body = <Pcrs user={user} nav={nav} engineer={page === 'engineer'} />;
   return (
     <>
       {banner}

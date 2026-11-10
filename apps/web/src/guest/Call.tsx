@@ -1,8 +1,9 @@
 // The one layout for lobby, green room and studio: big picture, self view, tally, cue, three buttons.
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import type { JoinInfo } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { t } from '../i18n/index.ts';
+import { canFullscreen, enterFullscreen, exitFullscreen, isFullscreen, onFullscreenChange } from '../lib/fullscreen.ts';
 import { formatSummary } from '../lib/stats.ts';
 import type { GuestSession } from './session.ts';
 
@@ -13,6 +14,26 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
   const cue = session.cue.value;
   const [showInfo, setShowInfo] = useState(false);
   const [audioUnlocked, setAudioUnlocked] = useState(true);
+  const [full, setFull] = useState(isFullscreen());
+  // Browsers give full screen only from a touch: the first touch anywhere takes it, once. After that
+  // the guest decides with the button, and leaving it (button or the phone's back gesture) is respected.
+  const autoFull = useRef(canFullscreen());
+
+  useEffect(() => {
+    void enterFullscreen(); // works only when the browser still counts a touch; the first touch does it otherwise
+    return onFullscreenChange(() => {
+      setFull(isFullscreen());
+      autoFull.current = false;
+    });
+  }, []);
+
+  const onTouch = () => {
+    void session.unlockAudio();
+    if (autoFull.current) {
+      autoFull.current = false;
+      void enterFullscreen();
+    }
+  };
 
   useEffect(() => {
     const check = () => setAudioUnlocked(session.room.canPlaybackAudio);
@@ -44,7 +65,7 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
   }
 
   return (
-    <div class="screen stage" onClick={() => void session.unlockAudio()}>
+    <div class="screen stage" onClick={onTouch}>
       {main ? (
         <VideoView track={main} className="stage-video" />
       ) : (
@@ -110,6 +131,20 @@ export function Call({ session, info }: { session: GuestSession; info: JoinInfo 
           {t('help')}
         </button>
         <span class="spacer" />
+        {canFullscreen() && (
+          <button
+            class="btn secondary small"
+            title={full ? t('exitFullScreen') : t('fullScreen')}
+            aria-label={full ? t('exitFullScreen') : t('fullScreen')}
+            onClick={(e) => {
+              e.stopPropagation();
+              autoFull.current = false;
+              void (full ? exitFullscreen() : enterFullscreen());
+            }}
+          >
+            {full ? '⤡' : '⛶'}
+          </button>
+        )}
         <button class="btn secondary small" onClick={() => setShowInfo(!showInfo)}>
           {t('info')}
         </button>

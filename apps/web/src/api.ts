@@ -1,5 +1,5 @@
 // Calls to the waar Connect API (same origin, /api/v1). Sessions are cookies, sent automatically.
-import type { GatewayStatus, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
+import type { FacePrefs, GatewayStatus, GuestPrefs, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -36,6 +36,8 @@ export interface JoinInfo {
   guest: { id: string; displayName: string; language: string };
   pcr: { id: string; name: string };
   livekit: { url: string; token: string; identity: string };
+  /** How this phone should connect unless something else was pushed to it; set per PCR by the engineer. */
+  prefs?: GuestPrefs;
 }
 
 export const resolveInvite = (token: string) => call<JoinInfo>('GET', `/invite/${encodeURIComponent(token)}`);
@@ -80,6 +82,10 @@ export interface PcrSettings {
   returnHeight: number | null;
   /** Bitrate cap of the return picture, kbit/s; null = the gateway's default. */
   returnKbps: number | null;
+  /** How a guest's phone connects by default: codec order, picture, bitrate. */
+  guest: GuestPrefs;
+  /** The producer's face camera as it is sent. */
+  face: FacePrefs;
 }
 /** The gateway as the API knows it: set up at all, and its last report if one came recently. */
 export interface GatewayView {
@@ -197,7 +203,7 @@ export const createInvite = (guestId: string) => call<Invite>('POST', `/guests/$
 export const revokeInvite = (token: string) => call<{ ok: true }>('POST', `/invites/${encodeURIComponent(token)}/revoke`);
 
 export const joinPcr = (id: string) => call<StaffJoin>('POST', `/pcrs/${id}/join`);
-export const getRoom = (id: string) => call<{ snapshot: RoomSnapshot }>('GET', `/pcrs/${id}/room`);
+export const getRoom = (id: string) => call<{ snapshot: RoomSnapshot; face?: FacePrefs }>('GET', `/pcrs/${id}/room`);
 export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnapshot }>('POST', `/pcrs/${id}/room/actions`, action);
 export const outputToken = (id: string, slot: number) => call<KioskToken & { slot: number; name: string }>('POST', `/pcrs/${id}/outputs/${slot}/token`);
 export const studioToken = (id: string) => call<KioskToken>('POST', `/pcrs/${id}/studio-token`);

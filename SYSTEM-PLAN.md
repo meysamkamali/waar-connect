@@ -48,10 +48,30 @@ reload). No tables in the green room: since 2026-11-09 the producer picks, per g
 green-room guests they see and hear. No slot choice: "send to studio" takes the first free slot,
 "bring back" frees it. The engineer role stays in the API for a later phase.
 
+**Decided 2026-11-10:** the engineer has a page of their own, `/app/engineer/<pcr>`. It shows every
+feed in the PCR as a tile: the studio return, the producer, and every guest from the moment they open
+their link. The engineer only receives (no microphone, no camera), listens to any feed on demand, and
+hears the producer's voice while it goes to a guest they listen to. Selecting a feed opens its
+technical side: a guest's phone settings (the same panel the producer has), the producer's face camera
+(picture, frame rate, bitrate), the return feed (NDI source, picture, bitrate). The engineer also sets
+how a guest's phone connects by default, per PCR: a **codec order** tried from the top (each line a
+codec with "hardware", "software" or "any encoder", for example H.265 hardware, H.264 hardware,
+H.264 software, AV1 hardware), picture, frame rate, bitrate cap and what gives way on a short line.
+A phone takes the first line it can do; a codec that fails on a phone is skipped there and the next
+line is taken; with no line left it sends H.264. A setting pushed to one phone wins on that phone
+until "studio preferences" is pressed in its panel. The engineer may change these technical settings
+of a PCR; everything else about a PCR stays with the admin.
+
+The same day: the guest's link has **no join button**. Opening it connects at once with the front
+camera and the phone's microphone; the device check appears only when that fails. The page goes
+full screen on the guest's first touch (browsers allow it only from a touch, and an iPhone not at
+all), with a button to leave and return.
+
 ## The places
 
-**Lobby (the door).** The guest opens the link, confirms their name, and the page checks camera,
-microphone and network for about ten seconds. Then they wait. They hear nothing and nobody hears them
+**Lobby (the door).** The guest opens the link and is connected at once (since 2026-11-10; the
+check of camera, microphone and network shows only when the camera or microphone did not start).
+Then they wait. They hear nothing and nobody hears them
 unless the producer or engineer opens a preview. The screen says who they are waiting for and shows a
 "help" button that pings the engineer.
 
@@ -106,7 +126,9 @@ themselves. Both are enforced on the server, not only in the pages (see "How it 
 
 The producer and the engineer see and hear every guest in every place and may see the program picture.
 They never get the studio mix-minus: their console sits in the PCR, where the programme sound is on the
-room's monitors already, and a second copy from the PC would come late and double it.
+room's monitors already, and a second copy from the PC would come late and double it. The engineer
+also gets a producer's talk track and face camera, to check what a guest is told and shown; a producer
+never gets another producer's or the engineer's.
 
 ## Studio slots
 

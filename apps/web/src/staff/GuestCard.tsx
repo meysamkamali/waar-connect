@@ -132,6 +132,174 @@ function CameraRow({ can, now, cmd }: { can: CameraControls; now: CameraState; c
   );
 }
 
+/**
+ * The technical side of one guest's phone: what arrives here, what the phone says about itself, the
+ * bandwidth test, and every setting that can be pushed to it. The producer's card and the engineer's
+ * page both show it.
+ */
+export function PhonePanel({ tile, report: r, cmd }: { tile: StaffTile | undefined; report: GuestReport | undefined; cmd: (command: Record<string, unknown>) => void }) {
+  const processing = r ? r.audio.ec || r.audio.ns || r.audio.agc : true;
+  const sweep = r?.test;
+  const recommended = recommendedCap(sweep);
+  const stale = r !== undefined && r.build !== BUILD;
+  return (
+    <>
+    <pre class="stats">
+      {formatSummary('IN ', tile?.stats)}
+      {'\n'}
+      {r ? `${formatSummary('UP ', r.up)}\nphone: ${describeReport(r)}\n${describeCodecs(r.codecs)}
+${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error: ${r.error}` : ''}` : 'phone: no report yet'}
+    </pre>
+    {stale && (
+      <p class="help bad" style={{ margin: '4px 0' }}>
+        The phone runs an older page (build {r.build ?? 'unknown'}; this screen is {BUILD}). New buttons do nothing there until it reloads.{' '}
+        <button class="link" onClick={() => cmd({ reload: true })}>
+          Reload the phone page
+        </button>
+      </p>
+    )}
+    <div class="row">
+      <button class="btn secondary small" onClick={() => cmd({ check: true })}>
+        Check now
+      </button>
+      <button class="btn small" onClick={() => cmd({ test: { steps: SWEEP_STEPS, seconds: 8 } })} disabled={sweep?.running === true}>
+        {sweep?.running ? `Testing… step ${sweep.step + 1} of ${sweep.steps.length}` : `Run bandwidth test (${SWEEP_STEPS[0]} → ${SWEEP_STEPS[SWEEP_STEPS.length - 1]} kbit/s, about ${SWEEP_STEPS.length * 8} s)`}
+      </button>
+      <span class="muted small">{r ? `report ${Math.round((Date.now() - r.at) / 1000)} s ago` : ''}</span>
+    </div>
+    {sweep && sweep.results.length > 0 && (
+      <table class="table sweep">
+        <thead>
+          <tr>
+            <th>cap</th>
+            <th>sent</th>
+            <th>rtt</th>
+            <th>loss</th>
+            <th>fps</th>
+            <th>limit</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {sweep.results.map((s) => (
+            <tr key={s.target} class={s.ok ? 'ok' : 'bad'}>
+              <td>{s.target}</td>
+              <td>{s.kbps} kbit/s</td>
+              <td>{s.rttMs !== undefined ? `${s.rttMs} ms${s.rttMaxMs !== undefined && s.rttMaxMs > s.rttMs ? ` (max ${s.rttMaxMs})` : ''}` : '—'}</td>
+              <td>{s.lossPct}%</td>
+              <td>{s.fps ?? '—'}</td>
+              <td>{s.limited ?? '—'}</td>
+              <td>{s.ok ? '✓' : '✗'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+    {sweep && !sweep.running && sweep.results.length > 0 && (
+      <div class="row">
+        {recommended !== undefined ? (
+          <>
+            <span class="small">Recommended cap: {recommended} kbit/s</span>
+            <button class={`chip ${r?.kbps === recommended ? 'on' : ''}`} onClick={() => cmd({ kbps: recommended })}>
+              apply {recommended} kbit/s
+            </button>
+          </>
+        ) : (
+          <span class="small bad">Even {sweep.steps[0]} kbit/s did not pass: try force relay (some networks pass only the relay port), or a better network.</span>
+        )}
+      </div>
+    )}
+    <div class="row settings">
+      <span class="muted small">picture</span>
+      {[1080, 720, 540, 360].map((h) => (
+        <button class={`chip ${r?.height === h ? 'on' : ''}`} key={h} onClick={() => cmd({ res: h })}>
+          {h}p
+        </button>
+      ))}
+      {[25, 30].map((f) => (
+        <button class={`chip ${r?.fps && Math.round(r.fps) === f ? 'on' : ''}`} key={f} onClick={() => cmd({ fps: f })}>
+          {f} fps
+        </button>
+      ))}
+    </div>
+    <div class="row settings">
+      <span class="muted small">when short</span>
+      {(Object.keys(DEGRADE_LABELS) as Degrade[]).map((d) => (
+        <button class={`chip ${(r?.degrade ?? DEGRADE_DEFAULT) === d ? 'on' : ''}`} key={d} title={d === 'resolution' ? 'drops frames first, keeps the size' : d === 'framerate' ? 'shrinks the picture first, keeps the motion' : 'lets WebRTC decide'} onClick={() => cmd({ degrade: d })}>
+          {DEGRADE_LABELS[d]}
+        </button>
+      ))}
+    </div>
+    <div class="row settings">
+      <span class="muted small">bitrate cap</span>
+      {SWEEP_STEPS.map((k) => (
+        <button class={`chip ${r?.kbps === k ? 'on' : ''}`} key={k} onClick={() => cmd({ kbps: k })}>
+          {k} kbit/s
+        </button>
+      ))}
+    </div>
+    <div class="row settings">
+      <span class="muted small">codec (reconnects)</span>
+      {CODECS.map((c) => {
+        const support = r?.codecs?.[c] ?? 'unknown';
+        const mark = support === 'hw' ? ' ⚡' : support === 'sw' ? ' · software' : support === 'no' ? ' · not supported' : support === 'failed' ? ' ⚠ failed' : '';
+        const off = support === 'no' || support === 'failed';
+        return (
+          <button class={`chip ${r?.codec === c ? 'on' : ''} ${off ? 'off' : ''}`} key={c} disabled={off} title={`${CODEC_LABELS[c]}: ${SUPPORT_LABELS[support]} encoder on this phone`} onClick={() => cmd({ codec: c })}>
+            {CODEC_LABELS[c]}
+            {mark}
+          </button>
+        );
+      })}
+      <span class="muted small">path</span>
+      <button class={`chip ${r && !r.relay ? 'on' : ''}`} title="UDP straight to the media server, TCP as fallback: the normal way" onClick={() => cmd({ relay: false })}>
+        direct if possible
+      </button>
+      <button class={`chip ${r?.relay ? 'on' : ''}`} title="Test tool: only through the station's TURN relay (UDP 3478). If the relay cannot be reached from the phone's network, the phone goes back to direct by itself." onClick={() => cmd({ relay: true })}>
+        force relay (reconnects)
+      </button>
+    </div>
+    <div class="row settings">
+      <span class="muted small">copies</span>
+      <button class={`chip ${r && r.small !== false ? 'on' : ''}`} title="full size plus 360p and 180p copies: small tiles and weak viewers take a small copy" onClick={() => cmd({ small: true })}>
+        full + small
+      </button>
+      <button class={`chip ${r?.small === false ? 'on' : ''}`} title="only the full-size copy: for a phone whose encoder ignores the small copies' caps" onClick={() => cmd({ small: false })}>
+        full only
+      </button>
+    </div>
+    <div class="row settings">
+      <span class="muted small">camera</span>
+      <button class={`chip ${r?.facing === 'user' ? 'on' : ''}`} onClick={() => cmd({ facing: 'user' })}>
+        front
+      </button>
+      <button class={`chip ${r?.facing === 'environment' ? 'on' : ''}`} onClick={() => cmd({ facing: 'environment' })}>
+        back
+      </button>
+      <span class="muted small">voice processing</span>
+      <button class={`chip ${processing ? 'on' : ''}`} onClick={() => cmd({ audio: { ec: true, ns: true, agc: true } })}>
+        on
+      </button>
+      <button class={`chip ${!processing ? 'on' : ''}`} onClick={() => cmd({ audio: { ec: false, ns: false, agc: false } })}>
+        off (music, studio mic)
+      </button>
+    </div>
+    {r?.cam && <CameraRow can={r.cam.can} now={r.cam.now} cmd={cmd} />}
+    <div class="row settings">
+      <button class="chip" onClick={() => cmd({ mute: !(r?.micOn ?? true) })}>
+        {r?.micOn === false ? 'unmute mic' : 'mute mic'}
+      </button>
+      <button class="chip" onClick={() => cmd({ reload: true })}>
+        reload the phone page
+      </button>
+      <button class="chip" title="Forget what was pushed to this phone for picture, bitrate and codec, and connect again with the studio's preferences" onClick={() => cmd({ defaults: true })}>
+        studio preferences (reconnects)
+      </button>
+    </div>
+    </>
+  );
+}
+
 /** Everything the producer can do with this guest; `openConn` shows the connection panel unfolded. */
 export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
   const g = p.state;
@@ -140,11 +308,6 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
   const inGreen = g.place === 'green';
   const inStudio = g.place === 'studio';
   const cmd = (command: Record<string, unknown>) => p.onAction({ type: 'command', guest: g.identity, command });
-  const r = p.report;
-  const processing = r ? r.audio.ec || r.audio.ns || r.audio.agc : true;
-  const sweep = r?.test;
-  const recommended = recommendedCap(sweep);
-  const stale = r !== undefined && r.build !== BUILD;
 
   return (
     <div class="guest-controls">
@@ -265,155 +428,7 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
               </span>
             )}
           </summary>
-          <pre class="stats">
-            {formatSummary('IN ', p.tile?.stats)}
-            {'\n'}
-            {r ? `${formatSummary('UP ', r.up)}\nphone: ${describeReport(r)}\n${describeCodecs(r.codecs)}
-${phoneModel(r.ua)}${r.camera ? ` · ${r.camera}` : ''}${r.error ? `\nlast error: ${r.error}` : ''}` : 'phone: no report yet'}
-          </pre>
-          {stale && (
-            <p class="help bad" style={{ margin: '4px 0' }}>
-              The phone runs an older page (build {r.build ?? 'unknown'}; this screen is {BUILD}). New buttons do nothing there until it reloads.{' '}
-              <button class="link" onClick={() => cmd({ reload: true })}>
-                Reload the phone page
-              </button>
-            </p>
-          )}
-          <div class="row">
-            <button class="btn secondary small" onClick={() => cmd({ check: true })}>
-              Check now
-            </button>
-            <button class="btn small" onClick={() => cmd({ test: { steps: SWEEP_STEPS, seconds: 8 } })} disabled={sweep?.running === true}>
-              {sweep?.running ? `Testing… step ${sweep.step + 1} of ${sweep.steps.length}` : `Run bandwidth test (${SWEEP_STEPS[0]} → ${SWEEP_STEPS[SWEEP_STEPS.length - 1]} kbit/s, about ${SWEEP_STEPS.length * 8} s)`}
-            </button>
-            <span class="muted small">{r ? `report ${Math.round((Date.now() - r.at) / 1000)} s ago` : ''}</span>
-          </div>
-          {sweep && sweep.results.length > 0 && (
-            <table class="table sweep">
-              <thead>
-                <tr>
-                  <th>cap</th>
-                  <th>sent</th>
-                  <th>rtt</th>
-                  <th>loss</th>
-                  <th>fps</th>
-                  <th>limit</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sweep.results.map((s) => (
-                  <tr key={s.target} class={s.ok ? 'ok' : 'bad'}>
-                    <td>{s.target}</td>
-                    <td>{s.kbps} kbit/s</td>
-                    <td>{s.rttMs !== undefined ? `${s.rttMs} ms${s.rttMaxMs !== undefined && s.rttMaxMs > s.rttMs ? ` (max ${s.rttMaxMs})` : ''}` : '—'}</td>
-                    <td>{s.lossPct}%</td>
-                    <td>{s.fps ?? '—'}</td>
-                    <td>{s.limited ?? '—'}</td>
-                    <td>{s.ok ? '✓' : '✗'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {sweep && !sweep.running && sweep.results.length > 0 && (
-            <div class="row">
-              {recommended !== undefined ? (
-                <>
-                  <span class="small">Recommended cap: {recommended} kbit/s</span>
-                  <button class={`chip ${r?.kbps === recommended ? 'on' : ''}`} onClick={() => cmd({ kbps: recommended })}>
-                    apply {recommended} kbit/s
-                  </button>
-                </>
-              ) : (
-                <span class="small bad">Even {sweep.steps[0]} kbit/s did not pass: try force relay (some networks pass only the relay port), or a better network.</span>
-              )}
-            </div>
-          )}
-          <div class="row settings">
-            <span class="muted small">picture</span>
-            {[1080, 720, 540, 360].map((h) => (
-              <button class={`chip ${r?.height === h ? 'on' : ''}`} key={h} onClick={() => cmd({ res: h })}>
-                {h}p
-              </button>
-            ))}
-            {[25, 30].map((f) => (
-              <button class={`chip ${r?.fps && Math.round(r.fps) === f ? 'on' : ''}`} key={f} onClick={() => cmd({ fps: f })}>
-                {f} fps
-              </button>
-            ))}
-          </div>
-          <div class="row settings">
-            <span class="muted small">when short</span>
-            {(Object.keys(DEGRADE_LABELS) as Degrade[]).map((d) => (
-              <button class={`chip ${(r?.degrade ?? DEGRADE_DEFAULT) === d ? 'on' : ''}`} key={d} title={d === 'resolution' ? 'drops frames first, keeps the size' : d === 'framerate' ? 'shrinks the picture first, keeps the motion' : 'lets WebRTC decide'} onClick={() => cmd({ degrade: d })}>
-                {DEGRADE_LABELS[d]}
-              </button>
-            ))}
-          </div>
-          <div class="row settings">
-            <span class="muted small">bitrate cap</span>
-            {SWEEP_STEPS.map((k) => (
-              <button class={`chip ${r?.kbps === k ? 'on' : ''}`} key={k} onClick={() => cmd({ kbps: k })}>
-                {k} kbit/s
-              </button>
-            ))}
-          </div>
-          <div class="row settings">
-            <span class="muted small">codec (reconnects)</span>
-            {CODECS.map((c) => {
-              const support = r?.codecs?.[c] ?? 'unknown';
-              const mark = support === 'hw' ? ' ⚡' : support === 'sw' ? ' · software' : support === 'no' ? ' · not supported' : support === 'failed' ? ' ⚠ failed' : '';
-              const off = support === 'no' || support === 'failed';
-              return (
-                <button class={`chip ${r?.codec === c ? 'on' : ''} ${off ? 'off' : ''}`} key={c} disabled={off} title={`${CODEC_LABELS[c]}: ${SUPPORT_LABELS[support]} encoder on this phone`} onClick={() => cmd({ codec: c })}>
-                  {CODEC_LABELS[c]}
-                  {mark}
-                </button>
-              );
-            })}
-            <span class="muted small">path</span>
-            <button class={`chip ${r && !r.relay ? 'on' : ''}`} title="UDP straight to the media server, TCP as fallback: the normal way" onClick={() => cmd({ relay: false })}>
-              direct if possible
-            </button>
-            <button class={`chip ${r?.relay ? 'on' : ''}`} title="Test tool: only through the station's TURN relay (UDP 3478). If the relay cannot be reached from the phone's network, the phone goes back to direct by itself." onClick={() => cmd({ relay: true })}>
-              force relay (reconnects)
-            </button>
-          </div>
-          <div class="row settings">
-            <span class="muted small">copies</span>
-            <button class={`chip ${r && r.small !== false ? 'on' : ''}`} title="full size plus 360p and 180p copies: small tiles and weak viewers take a small copy" onClick={() => cmd({ small: true })}>
-              full + small
-            </button>
-            <button class={`chip ${r?.small === false ? 'on' : ''}`} title="only the full-size copy: for a phone whose encoder ignores the small copies' caps" onClick={() => cmd({ small: false })}>
-              full only
-            </button>
-          </div>
-          <div class="row settings">
-            <span class="muted small">camera</span>
-            <button class={`chip ${r?.facing === 'user' ? 'on' : ''}`} onClick={() => cmd({ facing: 'user' })}>
-              front
-            </button>
-            <button class={`chip ${r?.facing === 'environment' ? 'on' : ''}`} onClick={() => cmd({ facing: 'environment' })}>
-              back
-            </button>
-            <span class="muted small">voice processing</span>
-            <button class={`chip ${processing ? 'on' : ''}`} onClick={() => cmd({ audio: { ec: true, ns: true, agc: true } })}>
-              on
-            </button>
-            <button class={`chip ${!processing ? 'on' : ''}`} onClick={() => cmd({ audio: { ec: false, ns: false, agc: false } })}>
-              off (music, studio mic)
-            </button>
-          </div>
-          {r?.cam && <CameraRow can={r.cam.can} now={r.cam.now} cmd={cmd} />}
-          <div class="row settings">
-            <button class="chip" onClick={() => cmd({ mute: !(r?.micOn ?? true) })}>
-              {r?.micOn === false ? 'unmute mic' : 'mute mic'}
-            </button>
-            <button class="chip" onClick={() => cmd({ reload: true })}>
-              reload the phone page
-            </button>
-          </div>
+          <PhonePanel tile={p.tile} report={p.report} cmd={cmd} />
         </details>
       )}
 

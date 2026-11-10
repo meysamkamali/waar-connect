@@ -7,6 +7,7 @@ import { StaffApp } from './staff/StaffApp.tsx';
 import './styles.css';
 
 const Producer = (props: { id?: string }) => <StaffApp id={props.id} page="pcrs" />;
+const Engineer = (props: { id?: string }) => <StaffApp id={props.id} page="engineer" />;
 const Contacts = () => <StaffApp page="contacts" />;
 const Admin = () => <StaffApp page="admin" />;
 const Station = () => <StaffApp page="station" />;
@@ -21,6 +22,9 @@ function Home() {
         <p class="row">
           <a class="btn" href="/app/producer">
             Producer
+          </a>
+          <a class="btn secondary" href="/app/engineer">
+            Engineer
           </a>
           <a class="btn secondary" href="/app/contacts">
             Contacts
@@ -56,6 +60,8 @@ function App() {
         <Route path="/app/g/:token" component={GuestPage} />
         <Route path="/app/producer/:id" component={Producer} />
         <Route path="/app/producer" component={Producer} />
+        <Route path="/app/engineer/:id" component={Engineer} />
+        <Route path="/app/engineer" component={Engineer} />
         <Route path="/app/contacts" component={Contacts} />
         <Route path="/app/admin/station" component={Station} />
         <Route path="/app/admin" component={Admin} />

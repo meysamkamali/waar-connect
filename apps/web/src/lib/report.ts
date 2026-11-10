@@ -1,11 +1,12 @@
 // What a guest's phone reports about itself to the producer (data topic wc.report), and how the
 // producer's card shows it in one line.
+import type { DegradeMode } from '@waar-connect/shared';
 import type { CameraControls, CameraState } from './camera.ts';
 import type { CodecName, CodecSupport } from './codecs.ts';
 import type { StatsSummary } from './stats.ts';
 
 /** When short: keep the picture size (drop frames), keep the frame rate (shrink), or let WebRTC balance. */
-export type Degrade = 'resolution' | 'framerate' | 'balanced';
+export type Degrade = DegradeMode;
 export const DEGRADE_DEFAULT: Degrade = 'resolution';
 export const DEGRADE_LABELS: Readonly<Record<Degrade, string>> = {
   resolution: 'keep picture size',
@@ -64,6 +65,8 @@ export interface GuestReport {
   fps?: number | undefined;
   /** Codec the producer asked for. */
   codec: string;
+  /** Where that codec came from: pushed to this phone, the page address, or a line of the studio's order. */
+  why?: string | undefined;
   /** Codec actually on the wire, from the sender statistics; differs when the browser switched. */
   wire?: string | undefined;
   /** Bitrate cap in use, kbit/s. */
@@ -92,6 +95,7 @@ export function describeReport(r: GuestReport): string {
   const parts = [
     r.height ? `${r.width ?? Math.round((r.height * 16) / 9)}x${r.height}@${r.fps ? Math.round(r.fps) : '?'}` : 'no camera',
     r.wire && r.wire !== r.codec ? `${r.codec} asked, ${r.wire} on the wire` : r.codec,
+    r.why ? `(${r.why})` : null,
     `cap ${r.kbps} kbit/s`,
     r.relay ? 'via relay' : 'direct allowed',
     r.small === false ? 'full copy only' : null,

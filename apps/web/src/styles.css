@@ -415,3 +415,30 @@ body.stage {
 
 /* Camera controls on the producer card: the sliders stay short beside the chips. */
 .guest-controls .settings input[type=range] { width: 120px; vertical-align: middle; margin: 0; }
+
+/* Engineer's page: every feed as a tile, the selected feed's technical side beside them. */
+.eng-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, 460px); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .eng-layout { grid-template-columns: minmax(0, 1fr); } }
+.feeds { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.feed { background: var(--bg-2); border-radius: 10px; overflow: hidden; border: 2px solid transparent; cursor: pointer; }
+.feed.selected { border-color: var(--blue-2); }
+.feed.offline { opacity: 0.6; }
+.feed .level { height: 4px; background: #0d1117; }
+.feed .level-fill { height: 100%; background: var(--ok); transition: width 150ms linear; }
+.feed-foot { display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 8px; min-height: 38px; }
+.feed-foot .chip { flex: 0 0 auto; }
+.guest-overlay .slot.tally.standby { background: var(--warn); color: #000; }
+.guest-overlay .slot.tally.onair { background: var(--bad); color: #fff; }
+.eng-side { background: var(--bg-2); border-radius: 12px; padding: 14px; display: grid; gap: 10px; align-content: start; position: sticky; top: 12px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+@media (max-width: 1100px) { .eng-side { position: static; max-height: none; } }
+.eng-side .guest-controls { padding: 0; }
+.eng-side .stats, .eng-card .stats { margin: 0; padding: 6px 8px; border-radius: 6px; background: #0d1117; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
+.eng-side .guest-controls .stats { width: 100%; }
+.eng-card { background: var(--bg-2); border-radius: 12px; padding: 14px; display: grid; gap: 12px; }
+.eng-card h3, .eng-side h3 { margin: 0 0 6px; font-size: 0.9rem; }
+.eng-prefs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px 24px; }
+.codec-order { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+.codec-order li { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.codec-order li.repeated select { opacity: 0.6; }
+.codec-order select, .eng-card select, .eng-side select { font: inherit; padding: 6px 8px; }
+.codec-order .chip:disabled { opacity: 0.4; cursor: default; }

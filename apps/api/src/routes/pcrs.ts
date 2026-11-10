@@ -5,11 +5,44 @@
 import { randomBytes } from 'node:crypto';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { identityFor, outputIdentity } from '@waar-connect/shared';
+import {
+  CODEC_NAMES,
+  DEGRADE_MODES,
+  ENCODER_KINDS,
+  FACE_KBPS,
+  GUEST_KBPS,
+  identityFor,
+  MAX_CODEC_CHOICES,
+  normalizeFacePrefs,
+  normalizeGuestPrefs,
+  outputIdentity,
+} from '@waar-connect/shared';
 import { z } from 'zod';
 import { defaultPcrSettings, events, guests, invites, pcrs, type PcrSettings } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
 import { mintToken } from '../livekit/tokens.ts';
+
+const GuestPrefsBody = z.object({
+  codecs: z.array(z.object({ codec: z.enum(CODEC_NAMES), encoder: z.enum(ENCODER_KINDS) })).min(1).max(MAX_CODEC_CHOICES),
+  height: z.union([z.literal(360), z.literal(540), z.literal(720), z.literal(1080)]),
+  fps: z.union([z.literal(25), z.literal(30)]),
+  kbps: z.int().min(GUEST_KBPS.min).max(GUEST_KBPS.max),
+  degrade: z.enum(DEGRADE_MODES),
+});
+const FacePrefsBody = z.object({
+  height: z.union([z.literal(180), z.literal(360), z.literal(540), z.literal(720)]),
+  fps: z.union([z.literal(15), z.literal(25), z.literal(30)]),
+  kbps: z.int().min(FACE_KBPS.min).max(FACE_KBPS.max),
+});
+
+/** What an engineer may change on a PCR: how things connect, not what the studio is. */
+export const TECHNICAL_KEYS: readonly (keyof PcrSettings)[] = ['returnSource', 'returnHeight', 'returnKbps', 'guest', 'face'];
+
+/** Is this patch only about the technical settings? The engineer's limit; the admin has none. */
+export function isTechnicalPatch(body: { name?: unknown; settings?: Record<string, unknown> | undefined }): boolean {
+  if (body.name !== undefined) return false;
+  return Object.keys(body.settings ?? {}).every((k) => (TECHNICAL_KEYS as readonly string[]).includes(k));
+}
 
 const Settings = z.object({
   slots: z.int().min(1).max(16),
@@ -19,6 +52,8 @@ const Settings = z.object({
   returnSource: z.string().trim().max(200).nullable(),
   returnHeight: z.union([z.literal(1080), z.literal(720), z.literal(540), z.literal(360)]).nullable(),
   returnKbps: z.int().min(200).max(8000).nullable(),
+  guest: GuestPrefsBody,
+  face: FacePrefsBody,
 });
 const CreateBody = z.object({ name: z.string().trim().min(1).max(80), settings: Settings.partial().optional() });
 const PatchBody = z.object({ name: z.string().trim().min(1).max(80).optional(), settings: Settings.partial().optional() });
@@ -36,6 +71,8 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     returnSource: base.returnSource ?? null,
     returnHeight: base.returnHeight ?? null,
     returnKbps: base.returnKbps ?? null,
+    guest: normalizeGuestPrefs(base.guest),
+    face: normalizeFacePrefs(base.face),
   };
   if (patch) {
     if (patch.slots !== undefined) out.slots = patch.slots;
@@ -45,6 +82,8 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     if (patch.returnSource !== undefined) out.returnSource = patch.returnSource?.trim() || null;
     if (patch.returnHeight !== undefined) out.returnHeight = patch.returnHeight;
     if (patch.returnKbps !== undefined) out.returnKbps = patch.returnKbps;
+    if (patch.guest !== undefined) out.guest = normalizeGuestPrefs(patch.guest);
+    if (patch.face !== undefined) out.face = normalizeFacePrefs(patch.face);
   }
   out.outputNames = Array.from({ length: out.slots }, (_, i) => out.outputNames[i]?.trim() || `Guest ${i + 1}`);
   return out;
@@ -57,16 +96,19 @@ function newRoomName(): string {
 export async function pcrRoutes(app: FastifyInstance): Promise<void> {
   const { db, cfg, rooms } = app.ctx;
   const admin = app.requireRole('admin');
+  const adminOrEngineer = app.requireRole('admin', 'engineer');
   const staff = app.requireRole('admin', 'producer', 'engineer');
 
   async function pcrById(id: string) {
     const [row] = await db.select().from(pcrs).where(eq(pcrs.id, id)).limit(1);
     return row;
   }
+  /** Rows written before a setting existed lack its key; the pages always get every setting. */
+  const complete = <T extends { settings: PcrSettings }>(row: T): T => ({ ...row, settings: mergeSettings(row.settings, undefined) });
 
   app.get('/pcrs', { preHandler: app.requireUser }, async () => {
     const rows = await db.select().from(pcrs).where(isNull(pcrs.archivedAt)).orderBy(asc(pcrs.name));
-    return { pcrs: rows };
+    return { pcrs: rows.map(complete) };
   });
 
   app.post('/pcrs', { preHandler: admin }, async (req, reply) => {
@@ -93,7 +135,7 @@ export async function pcrRoutes(app: FastifyInstance): Promise<void> {
           .where(and(inArray(invites.guestId, ids), isNull(invites.revokedAt)))
       : [];
     return {
-      pcr,
+      pcr: complete(pcr),
       guests: guestRows.map((g) => ({
         ...g,
         identity: identityFor('guest', g.id),
@@ -102,19 +144,23 @@ export async function pcrRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  app.patch('/pcrs/:id', { preHandler: admin }, async (req, reply) => {
+  /** The admin changes anything; the engineer only how things connect (return feed, guest and face preferences). */
+  app.patch('/pcrs/:id', { preHandler: adminOrEngineer }, async (req, reply) => {
     const params = parseOr400(Id, req.params, reply);
     const body = params && parseOr400(PatchBody, req.body, reply);
     if (!params || !body) return;
+    if (req.user!.role === 'engineer' && !isTechnicalPatch(body)) return reply.code(403).send({ error: 'The engineer changes the technical settings only; the rest is the admin\'s.' });
     const current = await pcrById(params.id);
     if (!current) return notFound(reply, 'PCR');
+    const settings = mergeSettings(current.settings, body.settings);
     const [row] = await db
       .update(pcrs)
-      .set({ name: body.name ?? current.name, settings: mergeSettings(current.settings, body.settings) })
+      .set({ name: body.name ?? current.name, settings })
       .where(eq(pcrs.id, params.id))
       .returning();
-    // The running controller holds the old settings; it rebuilds from LiveKit on the next request.
-    rooms.drop(current.livekitRoom);
+    // The running controller holds the slots and the IFB rule; when those change it rebuilds from
+    // LiveKit on the next request. A technical change leaves the live room alone.
+    if (settings.slots !== current.settings.slots || settings.ifbAllowed !== current.settings.ifbAllowed) rooms.drop(current.livekitRoom);
     await db.insert(events).values({ pcrId: current.id, actor: req.user!.id, type: 'pcr.updated', payload: { name: row!.name, settings: row!.settings } });
     return { pcr: row };
   });

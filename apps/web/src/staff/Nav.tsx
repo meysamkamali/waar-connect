@@ -37,6 +37,7 @@ export function Nav({ user, open, page, onLogout }: { user: User; open: boolean;
       <nav class="topnav">
         <img class="logo" src="/app/logo.svg" alt="" />
         {link('/app/producer', 'Studios', page === 'pcrs')}
+        {link('/app/engineer', 'Engineer', page === 'engineer')}
         {link('/app/contacts', 'Contacts', page === 'contacts')}
         {link('/app/admin', 'Admin', page === 'admin')}
         {link('/app/admin/station', 'This station', page === 'station')}

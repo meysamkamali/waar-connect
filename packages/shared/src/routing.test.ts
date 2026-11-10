@@ -138,10 +138,17 @@ describe('outputs', () => {
 });
 
 describe('staff, monitor, studio return', () => {
-  it('producer and engineer see every guest in every place and the program picture, never talkback or the program sound', () => {
+  it('the producer sees every guest in every place and the program picture, never talkback or the program sound', () => {
     const s = state({ staff: [staff(PROD, 'producer', { talkTo: 'all' }), staff(ENG, 'engineer', { talkTo: 'all' })] });
     assert.deepEqual(sids(PROD, s), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'c-cam', 'c-mic', 'pgm-v']);
-    assert.deepEqual(sids(ENG, s), sids(PROD, s));
+  });
+  it('the engineer gets the same, plus the producer\'s talk and face camera, and still no program sound', () => {
+    const s = state({ staff: [staff(PROD, 'producer', { talkTo: 'all' }), staff(ENG, 'engineer', { talkTo: 'all' })] });
+    assert.deepEqual(sids(ENG, s), ['a-cam', 'a-mic', 'b-cam', 'b-mic', 'c-cam', 'c-mic', 'pgm-v', 'prod-cam', 'prod-talk']);
+    // a second producer hears and sees nothing of the first, and an engineer nothing of another engineer
+    const two = state({ staff: [staff(PROD, 'producer'), staff('producer:second', 'producer'), staff(ENG, 'engineer'), staff('engineer:second', 'engineer')] });
+    assert.ok(!sids('producer:second', two).some((sid) => sid.startsWith('prod-')));
+    assert.ok(!sids('engineer:second', two).includes('eng-talk'));
   });
   it('a monitor sees everything except talkback', () => {
     const s = state({ staff: [staff(PROD, 'producer', { talkTo: 'all' })] });

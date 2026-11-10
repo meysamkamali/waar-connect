@@ -3,7 +3,19 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { computed, signal } from '@preact/signals';
-import { defaultGuestState, guestFromAttributes, roleOf, STUDIO_IDENTITY, type GuestState } from '@waar-connect/shared';
+import {
+  DEFAULT_GUEST_PREFS,
+  defaultGuestState,
+  describeChoice,
+  guestFromAttributes,
+  normalizeGuestPrefs,
+  pickCodec,
+  pickCodecLine,
+  roleOf,
+  STUDIO_IDENTITY,
+  type GuestPrefs,
+  type GuestState,
+} from '@waar-connect/shared';
 import {
   ConnectionState,
   DisconnectReason,
@@ -20,8 +32,8 @@ import {
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
 import { CODEC_LABELS, isCodecName, probeCodecs, type CodecName, type CodecSupport } from '../lib/codecs.ts';
-import { DEGRADE_DEFAULT, SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
-import { connectRoom, createRoom, profileFromParams, qualityLabel, type PublishProfile } from '../lib/room.ts';
+import { SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
+import { connectRoom, createRoom, profileFromParams, qualityLabel, videoPublishOptions, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
 
@@ -30,18 +42,18 @@ import { cameraConstraints, mergeCameraRequest, parseCameraRequest, readCamera, 
 // Settings the producer pushed to this phone; they survive a reload of the same tab.
 const OVERRIDE_KEY = 'wc.guest.override';
 export interface GuestOverride {
-  res?: number;
-  fps?: number;
-  kbps?: number;
-  codec?: CodecName;
+  res?: number | undefined;
+  fps?: number | undefined;
+  kbps?: number | undefined;
+  codec?: CodecName | undefined;
   relay?: boolean;
   facing?: 'user' | 'environment';
   audio?: { ec: boolean; ns: boolean; agc: boolean };
-  degrade?: Degrade;
+  degrade?: Degrade | undefined;
   /** Codecs the browser accepted and then dropped after publishing; never offered again in this tab. */
   failedCodecs?: CodecName[];
   /** False: send only the full-size copy (no 360p / 180p simulcast copies). */
-  small?: boolean;
+  small?: boolean | undefined;
   /** Camera settings the producer pushed (exposure, locks, zoom, torch); put back after a reload or a camera restart. */
   cam?: CameraRequest | undefined;
 }
@@ -137,6 +149,10 @@ export class GuestSession {
   #sweep: SweepResult | undefined;
   #sweeping = false;
   #codecs: Partial<Record<CodecName, CodecSupport>> | undefined;
+  /** The page address with the pushed settings laid over it: what is set there wins over the studio's preferences. */
+  #params: URLSearchParams;
+  #prefs: GuestPrefs = normalizeGuestPrefs(DEFAULT_GUEST_PREFS);
+  #why: string | undefined;
   #mismatch = 0;
   #connectedAt = 0;
   #over = 0;
@@ -150,6 +166,7 @@ export class GuestSession {
     if (o.kbps) params.set('kbps', String(o.kbps));
     if (o.codec) params.set('codec', o.codec);
     if (o.relay !== undefined) params.set('relay', o.relay ? '1' : '0');
+    this.#params = params;
     this.#profile = profileFromParams(params);
     this.#relay = params.get('relay') === '1';
     this.room = createRoom(this.#profile);
@@ -176,9 +193,38 @@ export class GuestSession {
       });
   }
 
+  /**
+   * What to send with: a setting pushed to this phone (or written in the page address) wins, the rest
+   * comes from the studio's preferences. The codec is the first line of the studio's order this phone
+   * can do, leaving out codecs that already failed in this tab.
+   */
+  #resolveProfile(): PublishProfile {
+    const p = this.#params;
+    const fromAddress = profileFromParams(p);
+    const prefs = this.#prefs;
+    const failed = this.#override.failedCodecs ?? [];
+    let codec: CodecName;
+    if (isCodecName(p.get('codec'))) {
+      codec = fromAddress.codec;
+      this.#why = this.#override.codec ? 'pushed to this phone' : 'from the page address';
+    } else {
+      codec = pickCodec(prefs.codecs, this.#codecs, failed);
+      const line = pickCodecLine(prefs.codecs, this.#codecs, failed);
+      this.#why = line >= 0 ? `studio preference ${line + 1} of ${prefs.codecs.length}: ${describeChoice(prefs.codecs[line]!)}` : 'no studio preference fits this phone';
+    }
+    return {
+      height: p.has('res') ? fromAddress.height : prefs.height,
+      fps: p.has('fps') ? fromAddress.fps : prefs.fps,
+      maxKbps: p.has('kbps') ? fromAddress.maxKbps : prefs.kbps,
+      codec,
+    };
+  }
+
   async connect(info: JoinInfo, devices: DeviceChoice): Promise<void> {
     this.status.value = 'connecting';
     this.state.value = defaultGuestState(info.livekit.identity);
+    this.#prefs = normalizeGuestPrefs(info.prefs);
+    const probe = probeCodecs().catch(() => undefined); // what this phone can send, asked while the connection comes up
     try {
       await connectRoom(this.room, info.livekit.url, info.livekit.token, this.#relay);
     } catch (err) {
@@ -195,23 +241,31 @@ export class GuestSession {
     this.#readState();
     const lp = this.room.localParticipant;
     const o = this.#override;
-    await lp.setCameraEnabled(true, { ...(devices.videoDeviceId && !o.facing ? { deviceId: devices.videoDeviceId } : {}), ...(o.facing ? { facingMode: o.facing } : {}) });
+    this.#codecs = await probe;
+    this.#profile = this.#resolveProfile();
+    const pr = this.#profile;
+    await lp.setCameraEnabled(
+      true,
+      {
+        resolution: { width: Math.round((pr.height * 16) / 9), height: pr.height, frameRate: pr.fps },
+        ...(devices.videoDeviceId && !o.facing ? { deviceId: devices.videoDeviceId } : {}),
+        ...(o.facing ? { facingMode: o.facing } : {}),
+      },
+      videoPublishOptions(pr),
+    );
     const a = o.audio ?? { ec: true, ns: true, agc: true };
     await lp.setMicrophoneEnabled(true, { ...(devices.audioDeviceId ? { deviceId: devices.audioDeviceId } : {}), echoCancellation: a.ec, noiseSuppression: a.ns, autoGainControl: a.agc });
     const cam = lp.getTrackPublication(Track.Source.Camera)?.videoTrack ?? null;
     this.localVideo.value = cam;
     this.#upStats = cam ? new TrackStats(cam, 'send') : undefined;
-    if (o.kbps) await this.#setMaxBitrate(o.kbps).catch(() => undefined);
+    await this.#setMaxBitrate(pr.maxKbps).catch(() => undefined); // also gives the small copies their share at a low cap
     if (o.small === false) await this.#setSmallCopies(false).catch(() => undefined);
-    await cam?.setDegradationPreference(toPreference(o.degrade ?? DEGRADE_DEFAULT)).catch(() => undefined);
+    await cam?.setDegradationPreference(toPreference(o.degrade ?? this.#prefs.degrade)).catch(() => undefined);
     if (o.cam) await this.#applyCamera(o.cam).catch(() => undefined);
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
     this.#reportTimer = window.setInterval(() => void this.#report(), 10_000);
-    void probeCodecs().then((c) => {
-      this.#codecs = c;
-      return this.#report();
-    });
+    void this.#report();
   }
 
   async setMic(on: boolean): Promise<void> {
@@ -318,6 +372,12 @@ export class GuestSession {
       }
       if (isCodecName(cmd['codec'])) {
         saveOverride({ codec: cmd['codec'] });
+        location.reload();
+        return;
+      }
+      if (cmd['defaults'] === true) {
+        // Back to the studio's preferences: forget what was pushed for picture, bitrate and codec, and connect again.
+        saveOverride({ res: undefined, fps: undefined, kbps: undefined, codec: undefined, degrade: undefined, small: undefined });
         location.reload();
         return;
       }
@@ -505,6 +565,7 @@ export class GuestSession {
       height: settings?.height,
       fps: settings?.frameRate,
       codec: this.#profile.codec,
+      why: this.#why,
       wire: this.up.value?.codec,
       kbps: this.#profile.maxKbps,
       relay: this.#relay,
@@ -515,7 +576,7 @@ export class GuestSession {
       mic: mic?.mediaStreamTrack.label,
       micOn: this.micEnabled.value,
       audio: this.#override.audio ?? { ec: true, ns: true, agc: true },
-      degrade: this.#override.degrade ?? DEGRADE_DEFAULT,
+      degrade: this.#override.degrade ?? this.#prefs.degrade,
       codecs: this.#codecsWithFailures(),
       net: nav.connection?.effectiveType,
       battery,
@@ -544,9 +605,9 @@ export class GuestSession {
    * The browser can change codec on its own after publishing. Seen 2026-11-08: a phone that advertised a
    * hardware H.265 encoder switched to VP8 seven seconds in; the server then moved every viewer to the
    * H.264 backup copy and the phone was uploading twice. When the codec on the wire is not the one asked
-   * for, remember that this codec fails here and go back to H.264: with a reload while the call is
-   * young (the producer just changed it), otherwise only from the next reload, so a live picture is
-   * not cut.
+   * for, remember that this codec fails here and move on to the next line of the studio's order this
+   * phone can do (H.264 when none is left): with a reload while the call is young (it just connected or
+   * the codec was just changed), otherwise only from the next reload, so a live picture is not cut.
    */
   async #checkCodec(wire: string | undefined): Promise<void> {
     const asked = this.#profile.codec;
@@ -558,11 +619,17 @@ export class GuestSession {
     const failed = this.#override.failedCodecs ?? [];
     if (failed.includes(asked)) return;
     const young = Date.now() - this.#connectedAt < 60_000;
-    this.#override = saveOverride({ failedCodecs: [...failed, asked], ...(asked === 'h264' ? {} : { codec: 'h264' }) });
-    const next = asked === 'h264' ? '' : young ? '; reconnecting with H.264' : '; H.264 from the next reload';
-    this.#lastError = `${CODEC_LABELS[asked]} failed on this phone (the browser switched to ${wire.toUpperCase()})${next}`;
+    const nowFailed = [...failed, asked];
+    // A pushed codec that failed is forgotten, so the studio's order decides again.
+    this.#override = saveOverride({ failedCodecs: nowFailed, ...(this.#override.codec === asked ? { codec: undefined } : {}) });
+    const next = pickCodec(this.#prefs.codecs, this.#codecs, nowFailed);
+    // A codec written in the page address is asked again after a reload; nothing to move to then.
+    const pinned = isCodecName(new URLSearchParams(location.search).get('codec'));
+    const moves = next !== asked && !pinned;
+    const tail = !moves ? '' : young ? `; reconnecting with ${CODEC_LABELS[next]}` : `; ${CODEC_LABELS[next]} from the next reload`;
+    this.#lastError = `${CODEC_LABELS[asked]} failed on this phone (the browser switched to ${wire.toUpperCase()})${tail}`;
     await this.#report();
-    if (asked !== 'h264' && young) location.reload();
+    if (moves && young) location.reload();
   }
 
   #codecsWithFailures(): Partial<Record<CodecName, CodecSupport>> | undefined {

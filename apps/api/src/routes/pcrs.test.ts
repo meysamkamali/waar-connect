@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { defaultPcrSettings } from '../db/schema.ts';
-import { mergeSettings } from './pcrs.ts';
+import { DEFAULT_FACE_PREFS, DEFAULT_GUEST_PREFS } from '@waar-connect/shared';
+import { isTechnicalPatch, mergeSettings } from './pcrs.ts';
 
 test('mergeSettings keeps output names in step with the slot count', () => {
   const base = defaultPcrSettings(4);
@@ -48,4 +49,37 @@ test('return picture size and bitrate: null means the gateway default; other cha
   delete old.returnHeight;
   delete old.returnKbps;
   assert.equal(mergeSettings(old as typeof base, undefined).returnHeight, null);
+});
+
+test('connection preferences: defaults on a new PCR and on rows written before they existed; a patch replaces one whole', () => {
+  const base = defaultPcrSettings(2);
+  assert.deepEqual(base.guest, DEFAULT_GUEST_PREFS);
+  assert.deepEqual(base.face, DEFAULT_FACE_PREFS);
+
+  const order = [
+    { codec: 'h265' as const, encoder: 'hw' as const },
+    { codec: 'h264' as const, encoder: 'hw' as const },
+    { codec: 'h264' as const, encoder: 'sw' as const },
+    { codec: 'av1' as const, encoder: 'hw' as const },
+  ];
+  const set = mergeSettings(base, { guest: { codecs: order, height: 1080, fps: 30, kbps: 4000, degrade: 'framerate' }, face: { height: 720, fps: 30, kbps: 1500 } });
+  assert.deepEqual(set.guest.codecs, order);
+  assert.equal(set.guest.kbps, 4000);
+  assert.deepEqual(set.face, { height: 720, fps: 30, kbps: 1500 });
+  assert.deepEqual(mergeSettings(set, { slots: 3 }).guest, set.guest, 'untouched by other changes');
+
+  const old = { ...base } as Partial<typeof base>;
+  delete old.guest;
+  delete old.face;
+  const merged = mergeSettings(old as typeof base, undefined);
+  assert.deepEqual(merged.guest, DEFAULT_GUEST_PREFS);
+  assert.deepEqual(merged.face, DEFAULT_FACE_PREFS);
+});
+
+test('an engineer patch is technical only', () => {
+  assert.equal(isTechnicalPatch({ settings: { returnSource: 'X (Y)', returnHeight: 540, returnKbps: 800, guest: {}, face: {} } }), true);
+  assert.equal(isTechnicalPatch({}), true);
+  assert.equal(isTechnicalPatch({ name: 'PCR 9' }), false);
+  assert.equal(isTechnicalPatch({ settings: { slots: 8 } }), false);
+  assert.equal(isTechnicalPatch({ settings: { face: {}, ifbAllowed: false } }), false);
 });

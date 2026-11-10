@@ -1,6 +1,6 @@
 // /app/producer/:id — one PCR: the door, the green room, the studio slots, and the guests seated
 // here with their links (from the contact book or a bare name).
-import { roleOf, type GuestState } from '@waar-connect/shared';
+import { normalizeFacePrefs, roleOf, type FacePrefs, type GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import {
@@ -39,6 +39,8 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
   const [newLang, setNewLang] = useState('ku');
   const [focused, setFocused] = useState<string | null>(null);
   const [solo, setSolo] = useState(true);
+  /** How the face camera is sent, from the room poll: the engineer can change it while we sit here. */
+  const [face, setFace] = useState<FacePrefs | null>(null);
   const myIdentity = useRef('');
   const station = useMemo(() => describeStation(loadStation()), []);
 
@@ -54,7 +56,11 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     void refresh();
     const poll = setInterval(() => {
       getRoom(id)
-        .then((r) => setSnap(r.snapshot))
+        .then((r) => {
+          setSnap(r.snapshot);
+          const next = r.face;
+          if (next) setFace((prev) => (prev && prev.height === next.height && prev.fps === next.fps && prev.kbps === next.kbps ? prev : next));
+        })
         .catch((err: unknown) => {
           if (err instanceof ApiError && err.status === 409) setError(err.message);
         });
@@ -73,13 +79,16 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
 
   useEffect(() => () => void session.leave(), [session]);
   useEffect(() => session.setFocus(focused), [focused, session]);
+  useEffect(() => {
+    if (joined && face) void session.applyFace(face);
+  }, [face, joined, session]);
 
   async function join(): Promise<void> {
     try {
       const j = await joinPcr(id);
       myIdentity.current = j.identity;
       setJoined(true);
-      await session.connect(j);
+      await session.connect(j, face ?? normalizeFacePrefs(view?.pcr.settings.face));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }

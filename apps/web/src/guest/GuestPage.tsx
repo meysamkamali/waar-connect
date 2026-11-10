@@ -1,4 +1,6 @@
-// /app/g/:token — the guest's whole journey: link, device check, lobby, green room, studio, exit.
+// /app/g/:token — the guest's whole journey: link, lobby, green room, studio, exit.
+// There is no join button: opening the link connects, with the phone's front camera and its
+// microphone. The device check appears only when that did not work (permission refused, no camera).
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { ApiError, resolveInvite, type JoinInfo } from '../api.ts';
 import { setLanguage, t } from '../i18n/index.ts';
@@ -66,7 +68,7 @@ export function GuestPage({ token }: { token?: string }) {
   joinedRef.current = joined;
   const devicesRef = useRef<DeviceChoice | null>(null);
 
-  /** Connects. An automatic rejoin that fails (camera gone, permission lost) falls back to the device check. */
+  /** Connects. An automatic start that fails (camera gone, permission refused) falls back to the device check. */
   const start = (i: JoinInfo, devices: DeviceChoice, automatic: boolean) => {
     if (!token) return;
     devicesRef.current = devices;
@@ -79,7 +81,7 @@ export function GuestPage({ token }: { token?: string }) {
         session.error.value = message;
         return;
       }
-      console.warn('automatic rejoin failed, back to the device check:', message);
+      console.warn('automatic start failed, showing the device check:', message);
       clearJoin();
       devicesRef.current = null;
       void session.leave();
@@ -106,8 +108,7 @@ export function GuestPage({ token }: { token?: string }) {
       .then((i) => {
         setLanguage(i.guest.language);
         setInfo(i);
-        const saved = loadJoin(token);
-        if (saved) start(i, saved, true);
+        start(i, loadJoin(token) ?? {}, true);
       })
       .catch((err: unknown) => setError(err instanceof ApiError && err.status !== 404 ? err.message : t('invalidLink')));
   }, [token]);

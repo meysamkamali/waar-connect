@@ -7,7 +7,7 @@ import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery,
 import { LANGUAGES } from '../staff/Contacts.tsx';
 
 /** One line on where this studio's return feed stands, from the gateway's last report. */
-function returnLine(pcr: Pcr, gateway: GatewayView | null): string {
+export function returnLine(pcr: Pcr, gateway: GatewayView | null): string {
   if (!pcr.settings.returnSource) return 'No NDI source: the return feed page on the studio PC publishes the return.';
   if (!gateway) return 'gateway: …';
   if (!gateway.configured) return 'No gateway is set up on the server (GATEWAY_TOKEN); the source is saved but nothing picks it up.';
@@ -56,7 +56,7 @@ const TYPE_A_NAME = '#type-a-name'; // never an NDI name, those are 'MACHINE (so
  * a return must never be one of them), the saved name marked when its sender is off right now, and a
  * typed name for a sender that is not on yet.
  */
-function SourcePicker({ value, gateway, onChange }: { value: string | null; gateway: GatewayView | null; onChange: (v: string | null) => void }) {
+export function SourcePicker({ value, gateway, onChange }: { value: string | null; gateway: GatewayView | null; onChange: (v: string | null) => void }) {
   const [typing, setTyping] = useState(false);
   const sources = (gateway?.status?.sources ?? []).filter((s) => !s.own);
   const seen = value !== null && sources.some((s) => s.name === value);
@@ -153,7 +153,9 @@ function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: Gate
 
   const save = () => {
     setBusy(true);
-    updatePcr(pcr.id, { name: name.trim() || pcr.name, settings: s })
+    // The connection preferences belong to the engineer's page; sending this page's older copy would undo a change made there.
+    const { guest: _guest, face: _face, ...own } = s;
+    updatePcr(pcr.id, { name: name.trim() || pcr.name, settings: own })
       .then(onSaved)
       .catch((err: unknown) => onError(err instanceof ApiError ? err.message : String(err)))
       .finally(() => setBusy(false));

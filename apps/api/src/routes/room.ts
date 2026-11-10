@@ -3,7 +3,7 @@
 
 import { eq } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { identityFor } from '@waar-connect/shared';
+import { identityFor, normalizeFacePrefs } from '@waar-connect/shared';
 import { z } from 'zod';
 import { pcrs } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
@@ -46,7 +46,8 @@ export async function roomRoutes(app: FastifyInstance): Promise<void> {
     const { pcr, controller } = await controllerFor(params.id);
     if (!pcr) return notFound(reply, 'PCR');
     if (!controller) return reply.code(409).send({ error: 'This studio is closed.' });
-    return { snapshot: controller.snapshot() };
+    // The producer's console follows the face camera settings from here, so an engineer's change lands within a poll.
+    return { snapshot: controller.snapshot(), face: normalizeFacePrefs(pcr.settings.face) };
   });
 
   app.post('/pcrs/:id/room/actions', { preHandler: staff }, async (req, reply) => {

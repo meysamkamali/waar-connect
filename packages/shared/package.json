@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test src/routing.test.ts src/model.test.ts"
+    "test": "node --test src/routing.test.ts src/model.test.ts src/prefs.test.ts"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",

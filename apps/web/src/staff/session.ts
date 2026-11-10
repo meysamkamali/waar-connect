@@ -1,10 +1,12 @@
-// The producer's or engineer's LiveKit session: a muted talk track and a muted face camera that the
-// actions unmute, every guest's picture and sound as tiles, hand and help signals, and the third
-// lock: track permissions so only the guests the server names can ever subscribe to the talk track.
+// The producer's or engineer's LiveKit session. The producer publishes a muted talk track and a muted
+// face camera that the actions unmute; the engineer publishes nothing and only receives. Both get
+// every guest's picture and sound as tiles (the engineer also the producer's), hand and help signals.
+// The third lock lives here: track permissions, so only the guests the server names, and the
+// engineer, can ever subscribe to the producer's talk track.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { signal } from '@preact/signals';
-import { roleOf, STAFF_ATTR } from '@waar-connect/shared';
+import { DEFAULT_FACE_PREFS, roleOf, STAFF_ATTR, type FacePrefs } from '@waar-connect/shared';
 import {
   ConnectionState,
   createLocalAudioTrack,
@@ -32,6 +34,8 @@ export interface StaffTile {
   identity: string;
   name: string;
   video: RemoteVideoTrack | null;
+  /** The publisher switched its camera off (the producer's face camera outside face to face): no frames arrive. */
+  videoMuted: boolean;
   audio: RemoteAudioTrack | null;
   quality: string;
   stats: StatsSummary | undefined;
@@ -55,10 +59,15 @@ export class StaffSession {
   /** The guest shown full screen: their picture is asked for in the highest layer, the rest medium. */
   readonly focus = signal<string | null>(null);
   readonly localVideo = signal<LocalVideoTrack | null>(null);
+  /** Who is making sound right now, 0 to 1, as the server hears it. */
+  readonly levels = signal<Record<string, number>>({});
   identity = '';
+  role: 'producer' | 'engineer' = 'producer';
 
   #talk: LocalAudioTrack | null = null;
   #cam: LocalVideoTrack | null = null;
+  #face: FacePrefs = { ...DEFAULT_FACE_PREFS };
+  #faceBusy = false;
   #trackers = new Map<string, TrackStats>();
   #timer: number | undefined;
 
@@ -85,8 +94,19 @@ export class StaffSession {
       })
       .on(RoomEvent.TrackSubscribed, (track, pub, p) => this.#onTrack(track, pub, p))
       .on(RoomEvent.TrackUnsubscribed, (track, _pub, p) => this.#offTrack(track, p))
+      .on(RoomEvent.TrackMuted, (pub, p) => {
+        if (!p.isLocal && pub.kind === Track.Kind.Video) this.#patch(p.identity, { videoMuted: true });
+      })
+      .on(RoomEvent.TrackUnmuted, (pub, p) => {
+        if (!p.isLocal && pub.kind === Track.Kind.Video) this.#patch(p.identity, { videoMuted: false });
+      })
       .on(RoomEvent.ConnectionQualityChanged, (q, p) => {
         if (!p.isLocal) this.#patch(p.identity, { quality: qualityLabel(q) });
+      })
+      .on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+        const next: Record<string, number> = {};
+        for (const s of speakers) next[s.identity] = s.audioLevel;
+        this.levels.value = next;
       })
       .on(RoomEvent.DataReceived, (payload, p, _k, topic) => {
         if (!p) return;
@@ -102,32 +122,69 @@ export class StaffSession {
       });
   }
 
-  async connect(join: StaffJoin): Promise<void> {
+  async connect(join: StaffJoin, face: FacePrefs = DEFAULT_FACE_PREFS): Promise<void> {
     this.identity = join.identity;
+    this.role = join.role;
     this.status.value = 'connecting';
     await connectRoom(this.room, join.url, join.token, false);
     for (const p of this.room.remoteParticipants.values()) this.#ensureTile(p);
+    if (this.role === 'engineer') {
+      // Receive only: no talk track, no camera, so this PC is never asked for a microphone.
+      await this.room.startAudio().catch(() => undefined);
+      this.#timer = window.setInterval(() => void this.#sample(), 2000);
+      return;
+    }
     // Devices come from the admin's station lock on this PC; the producer has no picker.
     const station = loadStation();
     const micId = await resolveDeviceId('audioinput', station?.mic ?? null);
-    const camId = await resolveDeviceId('videoinput', station?.camera ?? null);
     // Talk track: published muted; "talk" unmutes it. The server names who may subscribe.
     this.#talk = await createLocalAudioTrack({ ...(micId ? { deviceId: micId } : {}), echoCancellation: true, noiseSuppression: true, autoGainControl: true });
     await this.#talk.mute();
     await this.room.localParticipant.publishTrack(this.#talk, { name: 'talkback', source: Track.Source.Microphone, dtx: false, red: true });
     // Face camera: published muted; "face to face" unmutes it for one guest.
-    try {
-      this.#cam = await createLocalVideoTrack({ ...(camId ? { deviceId: camId } : { facingMode: 'user' }), resolution: { width: 640, height: 360, frameRate: 25 } });
-      await this.#cam.mute();
-      await this.room.localParticipant.publishTrack(this.#cam, { name: 'face', source: Track.Source.Camera, simulcast: false, videoEncoding: { maxBitrate: 600_000, maxFramerate: 25 } });
-      this.localVideo.value = this.#cam;
-    } catch (err) {
-      this.error.value = `No camera for face-to-face: ${err instanceof Error ? err.message : String(err)}`;
-    }
+    await this.#publishFace(face);
     this.#readAllowed();
     await this.#applyPermissions();
     await this.room.startAudio().catch(() => undefined);
     this.#timer = window.setInterval(() => void this.#sample(), 2000);
+  }
+
+  /** Publishes the face camera with the picture size, frame rate and bitrate the engineer set for this PCR. */
+  async #publishFace(face: FacePrefs): Promise<void> {
+    this.#face = { ...face };
+    try {
+      const camId = await resolveDeviceId('videoinput', loadStation()?.camera ?? null);
+      const cam = await createLocalVideoTrack({
+        ...(camId ? { deviceId: camId } : { facingMode: 'user' }),
+        resolution: { width: Math.round((face.height * 16) / 9), height: face.height, frameRate: face.fps },
+      });
+      if (!this.facing.value) await cam.mute();
+      await this.room.localParticipant.publishTrack(cam, { name: 'face', source: Track.Source.Camera, simulcast: false, videoEncoding: { maxBitrate: face.kbps * 1000, maxFramerate: face.fps } });
+      this.#cam = cam;
+      this.localVideo.value = cam;
+      this.error.value = null;
+    } catch (err) {
+      this.#cam = null;
+      this.localVideo.value = null;
+      this.error.value = `No camera for face-to-face: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  /**
+   * The engineer changed how the face camera is sent. A muted camera is a stopped camera, so its
+   * settings cannot be changed in place: the track is published again, muted or not as it was.
+   */
+  async applyFace(face: FacePrefs): Promise<void> {
+    if (this.role !== 'producer' || this.room.state !== ConnectionState.Connected || this.#faceBusy) return;
+    if (face.height === this.#face.height && face.fps === this.#face.fps && face.kbps === this.#face.kbps) return;
+    this.#faceBusy = true;
+    try {
+      if (this.#cam) await this.room.localParticipant.unpublishTrack(this.#cam, true);
+      await this.#publishFace(face);
+      await this.#applyPermissions();
+    } finally {
+      this.#faceBusy = false;
+    }
   }
 
   async setTalking(on: boolean): Promise<void> {
@@ -171,8 +228,12 @@ export class StaffSession {
     void this.#applyPermissions();
   }
 
-  /** Third lock: only the guests the server lists may subscribe to the talk track; nobody else ever. */
+  /**
+   * Third lock: only the guests the server lists may subscribe to the talk track, and the engineer,
+   * who checks what a guest is told. Outputs, monitors, the return feed and other producers never.
+   */
   async #applyPermissions(): Promise<void> {
+    if (this.role === 'engineer') return; // publishes nothing
     const talkSid = this.#talk?.sid;
     const camSid = this.#cam?.sid;
     const allowed = new Set(this.talkAllowed.value);
@@ -180,16 +241,19 @@ export class StaffSession {
     for (const p of this.room.remoteParticipants.values()) {
       const sids: string[] = [];
       if (camSid) sids.push(camSid);
-      if (talkSid && roleOf(p.identity) === 'guest' && allowed.has(p.identity)) sids.push(talkSid);
+      const role = roleOf(p.identity);
+      if (talkSid && ((role === 'guest' && allowed.has(p.identity)) || role === 'engineer')) sids.push(talkSid);
       perms.push({ participantIdentity: p.identity, allowedTrackSids: sids });
     }
     this.room.localParticipant.setTrackSubscriptionPermissions(false, perms);
   }
 
   #ensureTile(p: RemoteParticipant): void {
-    if (roleOf(p.identity) !== 'guest' && p.identity !== 'studio') return;
+    const role = roleOf(p.identity);
+    const wanted = role === 'guest' || role === 'studio' || (this.role === 'engineer' && role === 'producer');
+    if (!wanted) return;
     if (this.tiles.value.some((t) => t.identity === p.identity)) return;
-    this.tiles.value = [...this.tiles.value, { identity: p.identity, name: p.name || p.identity, video: null, audio: null, quality: 'unknown', stats: undefined }];
+    this.tiles.value = [...this.tiles.value, { identity: p.identity, name: p.name || p.identity, video: null, videoMuted: false, audio: null, quality: 'unknown', stats: undefined }];
   }
 
   #patch(identity: string, patch: Partial<StaffTile>): void {
@@ -200,7 +264,7 @@ export class StaffSession {
     this.#ensureTile(p);
     if (track.kind === Track.Kind.Video) {
       pub.setVideoQuality(p.identity === this.focus.value ? VideoQuality.HIGH : VideoQuality.MEDIUM);
-      this.#patch(p.identity, { video: track as RemoteVideoTrack });
+      this.#patch(p.identity, { video: track as RemoteVideoTrack, videoMuted: pub.isMuted });
       this.#trackers.set(p.identity, new TrackStats(track as RemoteVideoTrack, 'recv'));
     } else if (track.kind === Track.Kind.Audio) {
       this.#patch(p.identity, { audio: track as RemoteAudioTrack });
