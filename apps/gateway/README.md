@@ -102,13 +102,15 @@ rotation applied, letterboxed, about half the frame rate).
 Those pictures go into one wide picture, the strip: a dark panel holding one to eight guests in the
 grid that makes them largest (`layoutTiles`). There is one strip for the whole group, every guest's
 own picture included. It is published as its own track, `mv-strip`, on a clock of its own (it does
-not wait for programme frames): H.264, two thirds of the return's width by one third of its height
-(640x180 for a 540p return; `mvPanel` gives the size), a quarter of the return's bitrate cap within
-150 to 500 kbit/s, 12.5 frames a second. The return itself is not touched: one decode, one encode.
+not wait for programme frames): H.264, in the shape of the multiview widget on the guest's screen,
+three of its nine sections wide and one high (960x180 for a 540p return, never wider than 1280;
+`stripSize` in the shared package gives the size, and `layoutTiles` lives there too so that the
+admin's screen designer draws the same), a quarter of the return's bitrate cap within 150 to
+500 kbit/s, 12.5 frames a second. The return itself is not touched: one decode, one encode.
 
 The routing engine sends `mv-strip` to every guest of the multiview group, in place of each other's
-cameras; nobody else ever gets it. The guest's page lays it over the bottom-centre and bottom-right
-ninths of whatever fills the screen, beside the phone's own camera picture in the bottom-left ninth.
+cameras; nobody else ever gets it. The guest's page shows it in the multiview widget, wherever the
+admin placed that on the guest's screen.
 A few seconds after the last picture went quiet the track is unpublished again.
 
 A guest counts as present while frames arrive from them: the media library does not report the server

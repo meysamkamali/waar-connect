@@ -227,6 +227,21 @@ describe('room controller', () => {
     assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.tally, 'onair');
   });
 
+  it('tells each phone how many guests are on its screen', async () => {
+    const { fake, c } = await roomWithEveryone({ slots: 4, ifbAllowed: true, approval: false });
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await c.act({ type: 'admit', guest: B }, PROD);
+    assert.equal(fake.attrs.get(A)?.['wc.guests'], '1');
+    await c.act({ type: 'mv', guest: A, on: true }, PROD);
+    assert.equal(fake.attrs.get(A)?.['wc.guests'], '1', 'a group of one');
+    await c.act({ type: 'mv', guest: B, on: true }, PROD);
+    assert.equal(fake.attrs.get(A)?.['wc.guests'], '2');
+    assert.equal(fake.attrs.get(B)?.['wc.guests'], '2');
+    await c.act({ type: 'handoff', guest: A }, PROD);
+    assert.equal(fake.attrs.get(A)?.['wc.guests'], '1', 'alone in the studio');
+    assert.equal(fake.attrs.get(B)?.['wc.guests'], '1', 'and the one left behind too');
+  });
+
   it('slots are exclusive, bounded and locked while on the studio side', async () => {
     const { c } = await roomWithEveryone({ slots: 2, ifbAllowed: false, approval: false });
     await c.act({ type: 'admit', guest: A }, PROD);

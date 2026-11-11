@@ -1,73 +1,25 @@
 // The multiview: the pictures of the guests the producer ticked MV, drawn into one wide picture (the
 // "strip") that goes out as its own small stream. There is one multiview for the whole group, every
 // guest's own picture included, and the group gets that one stream instead of one small stream per
-// guest. The phone lays the strip over whatever the guest sees: the studio's return, the producer's
-// camera or black. Nothing is drawn into the return itself.
+// guest. Nothing is drawn into the return itself.
 //
-// Its place on the phone is fixed. Cut the screen picture into nine equal parts: the bottom-left part
-// is where the phone shows the guest's own camera, and the strip covers the bottom-centre and the
-// bottom-right part. So the strip is two thirds as wide and one third as high as the return picture
-// (`mvPanel` gives that size), a dark panel with one to eight pictures inside.
+// On the phone the strip fills the multiview widget of the guest's screen: three of the screen's nine
+// sections wide and one high. So the strip has that shape (`stripSize` in the shared package), a
+// dark panel with one to eight pictures inside, laid out by `layoutTiles` (shared too, so that the
+// admin's screen designer draws the same).
 //
 // Pure pixel work on BGRA buffers, in plain JavaScript; the pictures are small, so drawing them costs
 // a few percent of a core.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
+import { layoutTiles, MAX_TILES, type Rect } from '@waar-connect/shared';
 import { scaleBgraInto } from './scale.ts';
 
-export interface Rect {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+export { layoutTiles, MAX_TILES };
+export type { Rect };
 
 /** Every guest's picture is kept at this size, whatever arrives and whatever the tiles' size is. */
 export const THUMB = { width: 320, height: 180 } as const;
-/** More pictures than this would be too small to recognise on a phone. */
-export const MAX_TILES = 8;
-
-/** The multiview's panel: the bottom-centre and bottom-right ninths of the picture (two thirds wide, one third high). */
-export function mvPanel(width: number, height: number): Rect {
-  const x = Math.round(width / 3) & ~1;
-  const y = Math.round((height * 2) / 3) & ~1;
-  return { x, y, width: width - x, height: height - y };
-}
-
-/**
- * Where one to eight 16:9 pictures go inside the panel: the grid that makes them largest (two side
- * by side fill it; three in a row; then rows of three or four), the whole block centred, a shorter
- * last row centred too. Even numbers throughout.
- */
-export function layoutTiles(count: number, panel: Rect): Rect[] {
-  const n = Math.min(Math.max(0, Math.floor(count)), MAX_TILES);
-  if (n === 0 || panel.width < 32 || panel.height < 18) return [];
-  const gap = Math.max(2, Math.round(panel.width * 0.006)) & ~1;
-  let best = { cols: 1, rows: n, tw: 0, waste: 0 };
-  for (let cols = 1; cols <= n; cols++) {
-    const rows = Math.ceil(n / cols);
-    const byWidth = (panel.width - gap * (cols + 1)) / cols;
-    const byHeight = (((panel.height - gap * (rows + 1)) / rows) * 16) / 9;
-    const tw = Math.floor(Math.min(byWidth, byHeight)) & ~1;
-    const waste = cols * rows - n;
-    // the largest picture wins; between equals, the grid with the fewest empty places
-    if (tw > best.tw || (tw === best.tw && waste < best.waste)) best = { cols, rows, tw, waste };
-  }
-  const { cols, rows, tw } = best;
-  if (tw < 8) return [];
-  const th = Math.round((tw * 9) / 16) & ~1;
-  const blockH = rows * th + (rows - 1) * gap;
-  const y0 = panel.y + (((panel.height - blockH) / 2) & ~1);
-  const out: Rect[] = [];
-  for (let r = 0; r < rows; r++) {
-    const inRow = Math.min(cols, n - r * cols);
-    const rowW = inRow * tw + (inRow - 1) * gap;
-    const x0 = panel.x + (((panel.width - rowW) / 2) & ~1);
-    for (let c = 0; c < inRow; c++) out.push({ x: x0 + c * (tw + gap), y: y0 + r * (th + gap), width: tw, height: th });
-  }
-  return out;
-}
-
 /** Degrees the decoded frame must be turned clockwise to stand upright (a phone held on its side). */
 export type Rotation = 0 | 90 | 180 | 270;
 

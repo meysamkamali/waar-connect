@@ -33,6 +33,12 @@ export function mvGroup(state: Pick<RoomState, 'guests'>): GuestState[] {
   return state.guests.filter((g) => g.place === 'green' && g.mv);
 }
 
+/** How many guests are on this guest's screen: the multiview group they are in, or only themselves. */
+export function guestsOnScreen(g: GuestState, state: Pick<RoomState, 'guests'>): number {
+  if (g.place !== 'green' || !g.mv) return 1;
+  return Math.max(1, mvGroup(state).length);
+}
+
 /**
  * Should the return feed make the multiview? Whenever a guest is ticked MV: the multiview shows every
  * guest of the group, their own picture included, so even one guest has something in it.

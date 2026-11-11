@@ -3,7 +3,7 @@
 
 import { eq, sql } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { identityFor, normalizeGuestPrefs } from '@waar-connect/shared';
+import { identityFor, normalizeGuestPrefs, normalizeScreen } from '@waar-connect/shared';
 import { z } from 'zod';
 import { guests, invites, pcrs } from '../db/schema.ts';
 import { parseOr400 } from '../http.ts';
@@ -64,6 +64,8 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
       livekit,
       // How this phone should connect unless the producer or engineer pushes something else to it.
       prefs: normalizeGuestPrefs(row.pcr.settings.guest),
+      // The guest's screen as the admin designed it for this studio.
+      screen: normalizeScreen(row.pcr.settings.screen),
     };
   });
 }

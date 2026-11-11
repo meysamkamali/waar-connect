@@ -79,6 +79,30 @@ its numbers every two seconds (data topic `wc.live`); numbers older than eight s
 are not judged. From this date the pages carry **no guide text**: what only explains opens in a
 balloon.
 
+**Decided 2026-11-11 (the guest's screen):** the admin designs the guest's screen, per studio, in
+Admin under "Guest screen". The screen is **nine sections, three by three**. Widgets fill it, by
+drag and drop:
+
+- **Pictures** take whole sections and do not lie on top of each other: the studio feed (2×2, 1×1,
+  or full screen, when it lies under the others), the guest's own camera (1×1) and the multiview
+  (one section high, three wide).
+- **Overlays** float over the pictures, docked in a section against the nearest edges of the screen:
+  the tally (where the guest is, STAND BY, ON AIR; it cannot be removed), the producer's cue banner
+  (one to three sections wide, shown only while there is a cue) and the guest's buttons: mute, raise
+  hand, help, full screen. Overlays in one section stand side by side.
+
+There is **one design per number of guests on the screen**, one to eight: a guest alone, or a
+multiview group of that size (the server tells each phone the number, attribute `wc.guests`). The
+station's own designs: alone, the studio feed full screen with the own camera bottom left and the
+buttons bottom right; in a group, the studio feed 2×2 top left, the own camera top right, the
+buttons under it and the multiview along the bottom. A saved design goes to the connected phones
+at once (data topic `wc.screen`) and to the others with their link. The model and its rules are
+`packages/shared/src/screen.ts`; the phone draws it in `apps/web/src/guest/Call.tsx`, and the
+designer's small screen uses the phone's own styles, to scale. The multiview strip now has the
+shape of its widget (three sections by one, 960x180 for a 540p return, never wider than 1280), which
+replaces the fixed place described below. The old bottom bar with text buttons and the "info"
+panel are gone from the guest's screen: the engineer has the numbers.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by
@@ -115,8 +139,9 @@ picture, level meter and a connection light. For each guest, independently, they
   and draws them into one wide picture, the multiview strip: a dark panel with one to eight pictures
   laid out to be as large as fits (two fill it, then three or four in a row, then two rows). There
   is one strip for the whole group, each guest's own picture in it too. It goes out as its own small
-  stream: H.264 like the return, two thirds of the return's width by one third of its height, a
-  quarter of the return's bitrate cap (within 150 to 500 kbit/s), about 12 frames a second.
+  stream: H.264 like the return, the shape of the multiview widget (three sections wide, one high;
+  until 2026-11-11 two thirds by one third), a quarter of the return's bitrate cap (within 150 to
+  500 kbit/s), about 12 frames a second.
   The phone lays the strip over whatever the guest sees, the return, the producer's camera or black.
   Its place is fixed. Think of the screen picture as nine equal parts: the bottom-left part is the
   phone's own camera, and the strip covers the bottom-centre and bottom-right parts. The return

@@ -6,15 +6,19 @@ import { computed, signal } from '@preact/signals';
 import {
   DEFAULT_GUEST_PREFS,
   defaultGuestState,
+  defaultScreen,
   describeChoice,
+  GUEST_COUNT_ATTR,
   guestFromAttributes,
   MV_STRIP_TRACK,
   normalizeGuestPrefs,
+  normalizeScreen,
   pickCodec,
   pickCodecLine,
   roleOf,
   STUDIO_IDENTITY,
   type GuestPrefs,
+  type GuestScreen,
   type GuestState,
 } from '@waar-connect/shared';
 import {
@@ -136,6 +140,10 @@ export class GuestSession {
   readonly programVideo = signal<RemoteVideoTrack | null>(null);
   /** The multiview: one wide picture of the guests ticked MV, made by the server, to lay over whatever fills the screen. */
   readonly mvStrip = signal<RemoteVideoTrack | null>(null);
+  /** The screen as the admin designed it for this studio; a new design arrives live (wc.screen). */
+  readonly screen = signal<GuestScreen>(defaultScreen());
+  /** How many guests are on this screen: the multiview group, or one. Picks the screen's pattern. */
+  readonly guests = signal(1);
   readonly faceVideo = signal<RemoteVideoTrack | null>(null);
   readonly guestVideos = signal<VideoTile[]>([]);
   readonly audioTracks = signal<RemoteAudioTrack[]>([]);
@@ -226,6 +234,7 @@ export class GuestSession {
   async connect(info: JoinInfo, devices: DeviceChoice): Promise<void> {
     this.status.value = 'connecting';
     this.state.value = defaultGuestState(info.livekit.identity);
+    this.screen.value = normalizeScreen(info.screen);
     this.#prefs = normalizeGuestPrefs(info.prefs);
     const probe = probeCodecs().catch(() => undefined); // what this phone can send, asked while the connection comes up
     try {
@@ -303,6 +312,7 @@ export class GuestSession {
   #readState(): void {
     const lp = this.room.localParticipant;
     this.state.value = guestFromAttributes(lp.identity, lp.attributes);
+    this.guests.value = Math.max(1, Number(lp.attributes[GUEST_COUNT_ATTR]) || 1);
   }
 
   #onTrack(track: RemoteTrack, pub: RemoteTrackPublication, participant: RemoteParticipant): void {
@@ -352,6 +362,9 @@ export class GuestSession {
       this.cue.value = { text: message['text'], from: participant?.name ?? '', at: Date.now() };
     } else if (topic === 'wc.cmd') {
       void this.#command(message);
+    } else if (topic === 'wc.screen' && participant === undefined) {
+      // the admin saved a new design; only the server sends this
+      this.screen.value = normalizeScreen(message);
     }
   }
 

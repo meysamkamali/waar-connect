@@ -6,7 +6,9 @@ import {
   allowedTracks,
   defaultGuestState,
   GUEST_IFB_ATTR,
+  GUEST_COUNT_ATTR,
   guestAttributes,
+  guestsOnScreen,
   guestFromAttributes,
   roleOf,
   slotOfOutput,
@@ -378,7 +380,7 @@ export class RoomController {
 
     for (const g of this.#guests.values()) {
       if (!this.#connected.has(g.identity)) continue;
-      await this.#pushAttributes(g.identity, { ...guestAttributes(g), [GUEST_IFB_ATTR]: this.#ifb.has(g.identity) ? '1' : '0' });
+      await this.#pushAttributes(g.identity, { ...guestAttributes(g), [GUEST_IFB_ATTR]: this.#ifb.has(g.identity) ? '1' : '0', [GUEST_COUNT_ATTR]: String(guestsOnScreen(g, state)) });
     }
     for (const s of this.#staff.values()) {
       if (!this.#connected.has(s.identity)) continue;
@@ -437,5 +439,10 @@ export class RoomRegistry {
 
   drop(room: string): void {
     this.#rooms.delete(room);
+  }
+
+  /** Sends a message to everybody in a room (a setting the pages take live). Fails when nobody is there. */
+  tell(room: string, topic: string, payload: unknown): Promise<void> {
+    return this.control.sendData(room, null, topic, payload);
   }
 }

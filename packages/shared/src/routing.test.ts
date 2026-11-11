@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { defaultGuestState, outputIdentity, STUDIO_IDENTITY, type GuestState, type PublishedTrack, type RoomState, type StaffState } from './model.ts';
-import { allowedTracks, canReceive, subscriptionPlan, talkbackSubscribers, wantsMultiview } from './routing.ts';
+import { allowedTracks, canReceive, guestsOnScreen, subscriptionPlan, talkbackSubscribers, wantsMultiview } from './routing.ts';
 
 // ---- fixtures ------------------------------------------------------------------------------------
 
@@ -261,5 +261,16 @@ describe('talkback permissions', () => {
     });
     assert.deepEqual(talkbackSubscribers(s.staff[0]!, s), [A]);
     assert.deepEqual(talkbackSubscribers(s.staff[1]!, s).sort(), [A, B]);
+  });
+});
+
+describe('guests on a screen', () => {
+  it('is the multiview group for its members and one for everybody else', () => {
+    const guests = [guest(A, { place: 'green', mv: true }), guest(B, { place: 'green', mv: true }), guest(C, { place: 'green' }), guest('guest:d', { place: 'studio', mv: true })];
+    assert.equal(guestsOnScreen(guests[0]!, { guests }), 2);
+    assert.equal(guestsOnScreen(guests[1]!, { guests }), 2);
+    assert.equal(guestsOnScreen(guests[2]!, { guests }), 1, 'not ticked MV');
+    assert.equal(guestsOnScreen(guests[3]!, { guests }), 1, 'in the studio a guest is alone');
+    assert.equal(guestsOnScreen(guest(A, { place: 'green', mv: true }), { guests: [guest(A, { place: 'green', mv: true })] }), 1, 'a group of one');
   });
 });

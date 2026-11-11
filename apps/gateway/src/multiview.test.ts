@@ -1,16 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { blit, drawI420, fillRect, layoutTiles, MAX_TILES, mvPanel, THUMB, Tiles, type Rotation } from './multiview.ts';
+import { blit, drawI420, fillRect, layoutTiles, MAX_TILES, THUMB, Tiles, type Rect, type Rotation } from './multiview.ts';
 
-test('panel: the bottom-centre and bottom-right ninths, the bottom-left ninth left free', () => {
-  assert.deepEqual(mvPanel(960, 540), { x: 320, y: 360, width: 640, height: 180 });
-  assert.deepEqual(mvPanel(1920, 1080), { x: 640, y: 720, width: 1280, height: 360 });
-  const odd = mvPanel(1280, 720); // thirds that are not whole numbers
-  assert.equal(odd.x % 2, 0);
-  assert.equal(odd.x + odd.width, 1280, 'to the right edge');
-  assert.equal(odd.y + odd.height, 720, 'to the bottom edge');
-  assert.ok(Math.abs(odd.x - 1280 / 3) <= 1 && Math.abs(odd.y - 480) <= 1);
-});
+/** A panel inside a larger picture, for the drawing tests: the bottom-centre and bottom-right ninths. */
+function mvPanel(width: number, height: number): Rect {
+  const x = Math.round(width / 3) & ~1;
+  const y = Math.round((height * 2) / 3) & ~1;
+  return { x, y, width: width - x, height: height - y };
+}
 
 test('layout: one to eight pictures inside the panel, as large as fits, 16:9, centred, never overlapping', () => {
   for (const [w, h] of [
@@ -182,7 +179,7 @@ test('Tiles: guests in a fixed order, drawn into the row, frames taken no faster
   assert.equal(tiles.count(3700), 2);
   tiles.remove('guest:a');
   assert.equal(tiles.count(3700), 1);
-  // The strip: the panel is the whole picture, two thirds by one third of the return's size.
+  // The strip: the panel is the whole picture.
   const sw = panel.width;
   const sh = panel.height;
   const strip = new Uint8Array(sw * sh * 4);

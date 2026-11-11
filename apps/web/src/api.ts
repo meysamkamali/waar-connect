@@ -1,5 +1,5 @@
 // Calls to the waar Connect API (same origin, /api/v1). Sessions are cookies, sent automatically.
-import type { FacePrefs, GatewayStatus, GuestPrefs, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
+import type { FacePrefs, GatewayStatus, GuestPrefs, GuestScreen, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -38,6 +38,8 @@ export interface JoinInfo {
   livekit: { url: string; token: string; identity: string };
   /** How this phone should connect unless something else was pushed to it; set per PCR by the engineer. */
   prefs?: GuestPrefs;
+  /** The guest's screen as the admin designed it for this studio. */
+  screen?: GuestScreen;
 }
 
 export const resolveInvite = (token: string) => call<JoinInfo>('GET', `/invite/${encodeURIComponent(token)}`);
@@ -88,6 +90,8 @@ export interface PcrSettings {
   guest: GuestPrefs;
   /** The producer's face camera as it is sent. */
   face: FacePrefs;
+  /** The guest's screen as the admin designed it: one pattern per number of guests on it. */
+  screen?: GuestScreen;
 }
 /** The gateway as the API knows it: set up at all, and its last report if one came recently. */
 export interface GatewayView {

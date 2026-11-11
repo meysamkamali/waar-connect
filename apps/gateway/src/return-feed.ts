@@ -30,11 +30,11 @@ import {
   type RemoteTrackPublication,
 } from '@livekit/rtc-node';
 import ffi from '@livekit/rtc-ffi-bindings';
-import { MV_STRIP_TRACK, type ReturnFeedStatus, type ReturnState } from '@waar-connect/shared';
+import { MV_STRIP_TRACK, stripSize, type ReturnFeedStatus, type ReturnState } from '@waar-connect/shared';
 import { pickChannels, planarToMonoInt16 } from './audio.ts';
 import type { Config } from './config.ts';
 import { log } from './log.ts';
-import { mvPanel, Tiles, type Rotation } from './multiview.ts';
+import { Tiles, type Rotation } from './multiview.ts';
 import type { NdiSource, AudioFrameIn, Ndi, Receiver, VideoFrameIn } from './ndi.ts';
 import { ScaleBuffers, scaleBgraInto, sizeFor } from './scale.ts';
 
@@ -76,8 +76,8 @@ const MV_EVERY_MS = 80;
 const MV_FPS = 13;
 /** The strip's bitrate cap is a quarter of the return's, within these bounds (kbit/s). */
 const MV_KBPS = { min: 150, max: 500 } as const;
-/** The strip's size before the return's is known: two thirds by one third of 960x540. */
-const MV_DEFAULT_SIZE = { width: 640, height: 180 } as const;
+/** The strip's size before the return's is known: the bottom row of a 960x540 screen. */
+const MV_DEFAULT_SIZE = { width: 960, height: 180 } as const;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -361,13 +361,12 @@ export class ReturnFeed {
   }
 
   /**
-   * The strip's size follows the return's: two thirds of its width, one third of its height, the part
-   * of the guest's screen the phone lays it over. Before the first programme frame, the 540p size.
+   * The strip's size follows the return's: the shape of the multiview widget on the guest's screen,
+   * three sections wide and one high. Before the first programme frame, the 540p size.
    */
   #stripSize(): { width: number; height: number } {
     if (!this.#outSize) return { ...MV_DEFAULT_SIZE };
-    const panel = mvPanel(this.#outSize.width, this.#outSize.height);
-    return { width: panel.width, height: panel.height };
+    return stripSize(this.#outSize.width, this.#outSize.height);
   }
 
   /** A quarter of the return's bitrate cap, within bounds: the strip is a fifth of the return's pixels at half its frame rate. */

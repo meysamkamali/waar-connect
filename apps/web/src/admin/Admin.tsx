@@ -5,6 +5,7 @@ import { useEffect, useState } from 'preact/hooks';
 import { RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiSourceInfo } from '@waar-connect/shared';
 import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
 import { LANGUAGES } from '../staff/Contacts.tsx';
+import { ScreenDesigner } from './ScreenDesigner.tsx';
 
 /** One line on where this studio's return feed stands, from the gateway's last report. */
 export function returnLine(pcr: Pcr, gateway: GatewayView | null): string {
@@ -154,8 +155,9 @@ function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: Gate
 
   const save = () => {
     setBusy(true);
-    // The connection preferences belong to the engineer's page; sending this page's older copy would undo a change made there.
-    const { guest: _guest, face: _face, ...own } = s;
+    // The connection preferences belong to the engineer's page and the guest screen to its designer below;
+    // sending this card's older copy would undo a change made there.
+    const { guest: _guest, face: _face, screen: _screen, ...own } = s;
     updatePcr(pcr.id, { name: name.trim() || pcr.name, settings: own })
       .then(onSaved)
       .catch((err: unknown) => onError(err instanceof ApiError ? err.message : String(err)))
@@ -361,6 +363,7 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
           {pcrs.length === 0 && <p class="muted">No studio built yet.</p>}
         </div>
       </section>
+      {pcrs.length > 0 && <ScreenDesigner pcrs={pcrs} onSaved={() => void load()} onError={setError} />}
     </div>
   );
 }

@@ -15,7 +15,12 @@ import {
   MAX_CODEC_CHOICES,
   normalizeFacePrefs,
   normalizeGuestPrefs,
+  normalizeScreen,
   outputIdentity,
+  SCREEN_COLS,
+  SCREEN_GUESTS,
+  SCREEN_ROWS,
+  WIDGET_KINDS,
 } from '@waar-connect/shared';
 import { z } from 'zod';
 import { defaultPcrSettings, events, guests, invites, pcrs, type PcrSettings } from '../db/schema.ts';
@@ -33,6 +38,26 @@ const FacePrefsBody = z.object({
   height: z.union([z.literal(180), z.literal(360), z.literal(540), z.literal(720)]),
   fps: z.union([z.literal(15), z.literal(25), z.literal(30)]),
   kbps: z.int().min(FACE_KBPS.min).max(FACE_KBPS.max),
+});
+
+const ScreenBody = z.object({
+  patterns: z
+    .array(
+      z.object({
+        widgets: z
+          .array(
+            z.object({
+              kind: z.enum(WIDGET_KINDS),
+              col: z.int().min(0).max(SCREEN_COLS - 1),
+              row: z.int().min(0).max(SCREEN_ROWS - 1),
+              cols: z.int().min(1).max(SCREEN_COLS),
+              rows: z.int().min(1).max(SCREEN_ROWS),
+            }),
+          )
+          .max(WIDGET_KINDS.length),
+      }),
+    )
+    .max(SCREEN_GUESTS),
 });
 
 /** What an engineer may change on a PCR: how things connect, not what the studio is. */
@@ -55,6 +80,7 @@ const Settings = z.object({
   returnKbps: z.int().min(200).max(8000).nullable(),
   guest: GuestPrefsBody,
   face: FacePrefsBody,
+  screen: ScreenBody,
 });
 const CreateBody = z.object({ name: z.string().trim().min(1).max(80), settings: Settings.partial().optional() });
 const PatchBody = z.object({ name: z.string().trim().min(1).max(80).optional(), settings: Settings.partial().optional() });
@@ -75,6 +101,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     returnKbps: base.returnKbps ?? null,
     guest: normalizeGuestPrefs(base.guest),
     face: normalizeFacePrefs(base.face),
+    screen: normalizeScreen(base.screen),
   };
   if (patch) {
     if (patch.slots !== undefined) out.slots = patch.slots;
@@ -87,6 +114,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     if (patch.returnKbps !== undefined) out.returnKbps = patch.returnKbps;
     if (patch.guest !== undefined) out.guest = normalizeGuestPrefs(patch.guest);
     if (patch.face !== undefined) out.face = normalizeFacePrefs(patch.face);
+    if (patch.screen !== undefined) out.screen = normalizeScreen(patch.screen);
   }
   out.outputNames = Array.from({ length: out.slots }, (_, i) => out.outputNames[i]?.trim() || `Guest ${i + 1}`);
   return out;
@@ -165,6 +193,8 @@ export async function pcrRoutes(app: FastifyInstance): Promise<void> {
     // LiveKit on the next request. A technical change leaves the live room alone.
     const live = (s: PcrSettings) => `${s.slots}/${s.ifbAllowed}/${s.approval}`;
     if (live(settings) !== live(mergeSettings(current.settings, undefined))) rooms.drop(current.livekitRoom);
+    // A new screen design goes to the phones that are connected now; the others get it with their link.
+    if (body.settings?.screen !== undefined) void rooms.tell(current.livekitRoom, 'wc.screen', settings.screen).catch(() => undefined);
     await db.insert(events).values({ pcrId: current.id, actor: req.user!.id, type: 'pcr.updated', payload: { name: row!.name, settings: row!.settings } });
     return { pcr: row };
   });

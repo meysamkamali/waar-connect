@@ -142,6 +142,8 @@ export function guestAttributes(g: GuestState): Record<string, string> {
 
 /** Set on a guest while an engineer may talk to them in the studio (IFB override). */
 export const GUEST_IFB_ATTR = 'wc.ifb';
+/** How many guests are on this guest's screen (the multiview group, or 1): picks the screen pattern. */
+export const GUEST_COUNT_ATTR = 'wc.guests';
 
 /** Staff attribute keys; `talkAllowed` is computed by the server and applied by the staff client. */
 export const STAFF_ATTR = {

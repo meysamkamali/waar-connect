@@ -7,7 +7,7 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs } from '@waar-connect/shared';
+import { defaultScreen, normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs, type GuestScreen } from '@waar-connect/shared';
 
 export const userRole = pgEnum('user_role', ['admin', 'producer', 'engineer']);
 
@@ -47,6 +47,8 @@ export interface PcrSettings {
   ifbAllowed: boolean;
   /** A guest goes to the studio, and on air, only after the engineer approved them. */
   approval: boolean;
+  /** The guest's screen as the admin designed it: one pattern per number of guests on it. Absent: the station's own. */
+  screen?: GuestScreen | undefined;
   /** Languages offered on guest invites: ku, ckb, ar, en, tr. */
   languages: string[];
   /** Label of each output slot as the vision mixer operator knows it, e.g. "SDI 3" or "NDI Guest 1". */
@@ -71,6 +73,7 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     slots,
     ifbAllowed: true,
     approval: true,
+    screen: defaultScreen(),
     languages: ['ku', 'ckb', 'ar', 'en'],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
     returnSource: null,
