@@ -8,7 +8,7 @@ import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiSourceInfo } from '@waar-connect/shared';
 import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
-import { Icon, Info, Tip } from '../components/ui.tsx';
+import { CopyButton, Icon, Info, Switch, Tip } from '../components/ui.tsx';
 import { LANGUAGES } from '../staff/Contacts.tsx';
 import { ScreenDesigner } from './ScreenDesigner.tsx';
 
@@ -111,16 +111,6 @@ function Pill({ tone, text, tip, side }: { tone: Tone; text: string; tip?: strin
   );
 }
 
-function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: (on: boolean) => void }) {
-  return (
-    <label class="switch">
-      <input type="checkbox" checked={on} onChange={(e) => onChange((e.currentTarget as HTMLInputElement).checked)} />
-      <span class="switch-track" />
-      <span>{label}</span>
-    </label>
-  );
-}
-
 function Stepper({ value, min, max, label, onChange }: { value: number; min: number; max: number; label: string; onChange: (n: number) => void }) {
   const set = (n: number) => onChange(Math.min(max, Math.max(min, Math.round(n) || min)));
   return (
@@ -133,21 +123,6 @@ function Stepper({ value, min, max, label, onChange }: { value: number; min: num
         +
       </button>
     </div>
-  );
-}
-
-function CopyButton({ text }: { text: string }) {
-  const [done, setDone] = useState(false);
-  useEffect(() => {
-    if (!done) return;
-    const id = setTimeout(() => setDone(false), 1500);
-    return () => clearTimeout(id);
-  }, [done]);
-  return (
-    <button type="button" class={`chip ${done ? 'on' : ''}`} aria-label="Copy the address" onClick={() => void navigator.clipboard?.writeText(text).then(() => setDone(true))}>
-      <Icon name={done ? 'check' : 'copy'} />
-      {done ? 'Copied' : 'Copy'}
-    </button>
   );
 }
 

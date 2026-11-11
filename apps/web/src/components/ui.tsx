@@ -4,6 +4,7 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import type { ComponentChildren } from 'preact';
+import { useEffect, useState } from 'preact/hooks';
 
 const SHAPES = {
   sound: (
@@ -27,6 +28,10 @@ const SHAPES = {
       <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
     </>
   ),
+  back: <path d="M19 12H5M12 19l-7-7 7-7" />,
+  forward: <path d="M5 12h14M12 5l7 7-7 7" />,
+  link: <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />,
+  exit: <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />,
   phone: (
     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
   ),
@@ -128,5 +133,61 @@ export function Tip({ text, side, below, class: cls, children }: { text: string 
     <span class={`tip ${side ? `tip-${side}` : ''} ${below ? 'tip-below' : ''} ${cls ?? ''}`} data-tip={text ?? ''}>
       {children}
     </span>
+  );
+}
+
+/** A switch with its label: on or off, nothing in between. */
+export function Switch({ on, label, onChange, disabled }: { on: boolean; label: string; onChange: (on: boolean) => void; disabled?: boolean }) {
+  return (
+    <label class="switch">
+      <input type="checkbox" checked={on} disabled={disabled} onChange={(e) => onChange((e.currentTarget as HTMLInputElement).checked)} />
+      <span class="switch-track" />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+/** Copies a text; says so for a moment. With `label` it reads as that, without it shows only the icon. */
+export function CopyButton({ text, label = 'Copy', iconOnly = false }: { text: string; label?: string; iconOnly?: boolean }) {
+  const [done, setDone] = useState(false);
+  useEffect(() => {
+    if (!done) return;
+    const id = setTimeout(() => setDone(false), 1500);
+    return () => clearTimeout(id);
+  }, [done]);
+  return (
+    <button type="button" class={`chip ${done ? 'on' : ''}`} aria-label={label} title={iconOnly ? label : undefined} onClick={() => void navigator.clipboard?.writeText(text).then(() => setDone(true))}>
+      <Icon name={done ? 'check' : 'copy'} />
+      {!iconOnly && (done ? 'Copied' : label)}
+    </button>
+  );
+}
+
+/**
+ * A button for something that cannot be taken back: the first press arms it (it turns red and asks),
+ * the second within three seconds does it. No dialog in the way of a live show.
+ */
+export function ArmButton({ label, ask, icon, onConfirm, iconOnly = false }: { label: string; ask: string; icon: IconName; onConfirm: () => void; iconOnly?: boolean }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const id = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(id);
+  }, [armed]);
+  return (
+    <button
+      type="button"
+      class={`chip arm ${armed ? 'armed' : ''}`}
+      aria-label={armed ? ask : label}
+      title={iconOnly && !armed ? label : undefined}
+      onClick={() => {
+        if (!armed) return setArmed(true);
+        setArmed(false);
+        onConfirm();
+      }}
+    >
+      <Icon name={icon} />
+      {armed ? ask : iconOnly ? null : label}
+    </button>
   );
 }

@@ -121,6 +121,19 @@ number dials, an international WhatsApp number opens wa.me, a Telegram user name
 Skype and email open theirs; `apps/web/src/lib/contact.ts`); search and "Add contact" at the top,
 editing in place.
 
+**The producer's room** was redrawn last. The guest's way runs from left to right in three lanes:
+the **door** (with the list of everyone seated in the studio: where each is right now, their link
+to copy, and one line that adds a guest, either a contact from the book or a name of their own),
+the **green room**, and the **studio** with its slots (an empty slot is one slim line; a slot on
+stand by is ringed amber, on air red; a dot says whether its output page is open). On a narrow
+screen the lanes stack, the studio first. The top of the page counts who is where and holds Join,
+Talk to all and Sound. Every guest has the same card: the picture with name, tally, a raised hand
+and a call for help on it; under it the guest's marks (approved, MV, slot, line) and what is done
+with them in that place (sees and hears in the green room, tally and IFB in the studio, the move
+on or back), the cues, and the tools. The phone's settings open in a drawer beside the room.
+"Show out" and "remove" take two presses (the first arms the button for three seconds) instead of
+a dialog. The full-screen view of one guest is as it was.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by

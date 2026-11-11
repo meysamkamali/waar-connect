@@ -1,48 +1,45 @@
-// /app/producer/:id — one PCR: the door, the green room, the studio slots, and the guests seated
-// here with their links (from the contact book or a bare name).
+// /app/producer/:id — one studio as the producer works it. The guest's way runs from left to right:
+// the door (with the list of everyone seated here and their links), the green room, the studio's
+// slots. A guest's card carries what is done with them in that place; their phone's settings open in
+// a drawer beside the room, and one guest can fill the screen (GuestFocus).
+// Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
+
 import { normalizeFacePrefs, roleOf, type FacePrefs, type GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import {
-  act,
-  ApiError,
-  createInvite,
-  deleteGuest,
-  getPcr,
-  getRoom,
-  joinPcr,
-  listContacts,
-  seatGuest,
-  type Contact,
-  type PcrView,
-  type RoomAction,
-  type RoomSnapshot,
-  type User,
-} from '../api.ts';
+import { act, ApiError, getPcr, getRoom, joinPcr, type PcrView, type RoomAction, type RoomSnapshot, type User } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
+import { Icon, Tip } from '../components/ui.tsx';
 import { describeStation, loadStation } from '../lib/station.ts';
-import { LANGUAGES } from './Contacts.tsx';
-import { GuestCard, guestName, type GuestCardProps, type Sees } from './GuestCard.tsx';
+import { GuestCard, guestName, PhonePanel, type GuestCardProps, type Sees } from './GuestCard.tsx';
 import { GuestFocus } from './GuestFocus.tsx';
+import { GuestList } from './GuestList.tsx';
 import { StaffSession } from './session.ts';
 
-export function RoomScreen({ id, user }: { id: string; user: User }) {
+function Count({ n, label, tone }: { n: number; label: string; tone?: 'warn' | 'air' }) {
+  return (
+    <span class={`eng-count ${n > 0 ? (tone ?? '') : 'zero'}`}>
+      <b>{n}</b>
+      {label}
+    </span>
+  );
+}
+
+export function RoomScreen({ id }: { id: string; user: User }) {
   const { route } = useLocation();
   const session = useMemo(() => new StaffSession(), []);
   const [view, setView] = useState<PcrView | null>(null);
   const [snap, setSnap] = useState<RoomSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
-  const [query, setQuery] = useState('');
-  const [found, setFound] = useState<Contact[]>([]);
-  const [newGuest, setNewGuest] = useState('');
-  const [newLang, setNewLang] = useState('ku');
   const [focused, setFocused] = useState<string | null>(null);
   const [solo, setSolo] = useState(true);
+  /** The guest whose phone settings are open in the drawer. */
+  const [phone, setPhone] = useState<string | null>(null);
   /** How the face camera is sent, from the room poll: the engineer can change it while we sit here. */
   const [face, setFace] = useState<FacePrefs | null>(null);
   const myIdentity = useRef('');
-  const station = useMemo(() => describeStation(loadStation()), []);
+  const station = useMemo(() => loadStation(), []);
 
   async function refresh(): Promise<void> {
     try {
@@ -67,15 +64,6 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     }, 2000);
     return () => clearInterval(poll);
   }, [id]);
-
-  useEffect(() => {
-    if (!query.trim()) {
-      setFound([]);
-      return;
-    }
-    const timer = setTimeout(() => void listContacts(query.trim()).then((r) => setFound(r.contacts)).catch(() => setFound([])), 200);
-    return () => clearTimeout(timer);
-  }, [query]);
 
   useEffect(() => () => void session.leave(), [session]);
   useEffect(() => session.setFocus(focused), [focused, session]);
@@ -138,21 +126,11 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     if ((mode === 'studio') !== g.program) doAction({ type: 'program', guest: g.identity, on: mode === 'studio' });
   }
 
-  function seat(body: { contactId: string } | { displayName: string; language: string }): void {
-    seatGuest(id, body)
-      .then(({ guest }) => (guest.invites?.length ? undefined : createInvite(guest.id)))
-      .then(() => {
-        setQuery('');
-        setNewGuest('');
-        return refresh();
-      })
-      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : String(err)));
-  }
-
   if (!view) return <div class="screen center">{error ? <p class="help bad">{error}</p> : <p>Loading…</p>}</div>;
 
   const settings = view.pcr.settings;
-  const guestsByPlace = (place: GuestState['place']) => (snap?.guests ?? []).filter((g) => g.place === place);
+  const all = snap?.guests ?? [];
+  const guestsByPlace = (place: GuestState['place']) => all.filter((g) => g.place === place);
   const recordFor = (identity: string) => view.guests.find((g) => g.identity === identity);
   const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
   // Only the guests are played here. The studio's sound is never attached: the console sits in the PCR,
@@ -164,8 +142,8 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
         .map((t) => t.audio)
         .filter((a): a is NonNullable<typeof a> => a !== null)
     : [];
-  const focusedGuest = focused ? (snap?.guests ?? []).find((g) => g.identity === focused) : undefined;
-  const seatedIds = new Set(view.guests.map((g) => g.contactId).filter((c): c is string => c !== null));
+  const focusedGuest = focused ? all.find((g) => g.identity === focused) : undefined;
+  const phoneGuest = phone ? all.find((g) => g.identity === phone) : undefined;
 
   const cardProps = (g: GuestState): GuestCardProps => ({
     state: g,
@@ -191,33 +169,52 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     onSee: (mode) => see(g, mode),
     onClearHelp: () => session.clearHelp(g.identity),
     onFocus: () => setFocused(g.identity),
+    joined,
   });
-  const card = (g: GuestState) => <GuestCard key={g.identity} {...cardProps(g)} />;
+  const card = (g: GuestState) => <GuestCard key={g.identity} {...cardProps(g)} onPhone={() => setPhone(phone === g.identity ? null : g.identity)} phoneOpen={phone === g.identity} />;
+
+  const door = guestsByPlace('lobby');
+  const green = guestsByPlace('green');
+  const studio = guestsByPlace('studio');
+  const onAir = studio.filter((g) => g.tally === 'onair').length;
+  const talkingToAll = talkList === null;
 
   return (
-    <div class="screen page staff">
-      <header class="row between">
-        <div class="row" style={{ alignItems: 'center', gap: '12px' }}>
-          <button class="link" onClick={() => route('/app/producer')}>
-            ← studios
+    <div class="screen page staff room">
+      <header class="room-top">
+        <div class="room-title">
+          <button class="chip" aria-label="Back to the studios" title="Back to the studios" onClick={() => route('/app/producer')}>
+            <Icon name="back" />
           </button>
           <h1>{view.pcr.name}</h1>
-          <span class="muted small">{view.pcr.livekitRoom}</span>
-          <span class={`badge ${snap?.studioConnected ? 'live' : ''}`}>{snap?.studioConnected ? 'return feed on' : 'no return feed'}</span>
+          <span class={`adm-pill ${snap?.studioConnected ? 'ok' : 'bad'} tip tip-below`} data-tip={snap?.studioConnected ? 'The studio return is in the room: guests can see and hear the studio.' : 'No studio return in the room: guests sent to the studio see and hear nothing from it.'}>
+            return feed
+          </span>
+          <span class="adm-pill tip tip-below" data-tip={`This PC: ${describeStation(station)}. The admin sets it under “This station”.`}>
+            {station?.name || 'this desk'}
+          </span>
         </div>
-        <div class="row" style={{ alignItems: 'center' }}>
+        <div class="eng-counts">
+          <Count n={door.length} label="at the door" tone="warn" />
+          <Count n={green.length} label="green room" />
+          <Count n={studio.length} label="studio" />
+          {onAir > 0 && <Count n={onAir} label="on air" tone="air" />}
+        </div>
+        <div class="adm-actions">
           {!joined ? (
-            <button class="btn" onClick={() => void join()}>
-              Join as producer
-            </button>
+            <Tip side="end" below text="Until you join you see where everyone is, but no pictures, and the guests cannot hear you.">
+              <button class="btn" onClick={() => void join()}>
+                <Icon name="mic" /> Join as producer
+              </button>
+            </Tip>
           ) : (
             <>
-              <span class={`status ${session.status.value === 'connected' ? 'ok' : 'warn'}`}>{session.status.value}</span>
-              <button class={`btn ${talkList === null ? 'live' : 'secondary'} small`} onClick={() => talkAll(talkList !== null)}>
-                {talkList === null ? 'Talking to all' : 'Talk to all'}
+              {session.status.value !== 'connected' && <span class="status warn">{session.status.value}</span>}
+              <button class={`btn ${talkingToAll ? 'live' : 'secondary'}`} aria-pressed={talkingToAll} title="Your voice to every guest in the green room" onClick={() => talkAll(!talkingToAll)}>
+                <Icon name="mic" /> {talkingToAll ? 'Talking to all' : 'Talk to all'}
               </button>
-              <button class="btn secondary small" onClick={() => session.setListening(!session.listening.value)}>
-                {session.listening.value ? 'Sound on' : 'Sound off'}
+              <button class="btn secondary" aria-pressed={session.listening.value} title="The guests' sound on this desk" onClick={() => session.setListening(!session.listening.value)}>
+                <Icon name={session.listening.value ? 'sound' : 'silent'} /> {session.listening.value ? 'Sound on' : 'Sound off'}
               </button>
             </>
           )}
@@ -228,126 +225,60 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
           {error}
         </p>
       )}
-      {session.error.value && <p class="help">{session.error.value}</p>}
-      {!joined && <p class="help">Join first: without joining you see the states but no pictures, and the guest cannot hear you.</p>}
+      {session.error.value && <p class="help bad">{session.error.value}</p>}
 
-      <section>
-        <h2>Studio</h2>
-        <div class="slots">
+      <div class="room-board">
+        <section class="room-lane door">
+          <h2>
+            Door <span class="lane-count">{door.length}</span>
+          </h2>
+          {door.map((g) => card(g))}
+          {door.length === 0 && <div class="room-empty">Nobody at the door</div>}
+          <GuestList pcrId={id} guests={view.guests} snapshot={snap} onChanged={refresh} onError={setError} />
+        </section>
+
+        <section class="room-lane green">
+          <h2>
+            Green room <span class="lane-count">{green.length}</span>
+          </h2>
+          {green.length > 0 ? <div class="room-cards">{green.map((g) => card(g))}</div> : <div class="room-empty">Nobody in the green room</div>}
+        </section>
+
+        <section class="room-lane studio">
+          <h2>
+            Studio <span class="lane-count">{studio.length}</span>
+          </h2>
           {Array.from({ length: settings.slots }, (_, i) => i + 1).map((n) => {
-            const g = (snap?.guests ?? []).find((x) => x.slot === n && x.place === 'studio');
+            const g = all.find((x) => x.slot === n && x.place === 'studio');
             const out = snap?.outputs.find((o) => o.slot === n);
             return (
-              <div class={`slot-box ${g ? g.tally : 'empty'}`} key={n}>
-                <div class="slot-head">
-                  slot {n} · {settings.outputNames[n - 1]} {out ? <span class="ok">· output page connected</span> : <span class="muted">· no output page</span>}
+              <div class={`room-slot ${g ? g.tally : 'empty'}`} key={n}>
+                <div class="room-slot-head">
+                  <span class="room-slot-n">{n}</span>
+                  <span>{settings.outputNames[n - 1]}</span>
+                  <i class={`adm-dot ${out ? 'ok' : ''} tip tip-end`} data-tip={out ? 'The output page for this slot is open on the studio PC.' : 'No output page is open for this slot: the studio does not get this guest.'} />
                 </div>
-                {g ? card(g) : <div class="slate-mini">slate</div>}
+                {g && card(g)}
               </div>
             );
           })}
-          {guestsByPlace('studio')
-            .filter((g) => g.slot === null)
-            .map((g) => card(g))}
-        </div>
-      </section>
+          {studio.filter((g) => g.slot === null).map((g) => card(g))}
+        </section>
+      </div>
 
-      <section>
-        <h2>Green room</h2>
-        <div class="cards">{guestsByPlace('green').map((g) => card(g))}</div>
-        {guestsByPlace('green').length === 0 && <p class="muted">Nobody in the green room.</p>}
-      </section>
-
-      <section>
-        <h2>Door</h2>
-        <div class="cards">{guestsByPlace('lobby').map((g) => card(g))}</div>
-        {guestsByPlace('lobby').length === 0 && <p class="muted">Nobody waiting.</p>}
-      </section>
-
-      <section>
-        <h2>Guests and links</h2>
-        <ul class="list">
-          {view.guests.map((g) => (
-            <li key={g.id}>
-              <strong>{g.displayName}</strong> <span class="muted small">{g.language}</span>{' '}
-              {g.invites[0] ? (
-                <>
-                  <code class="small">{g.invites[0].url}</code>{' '}
-                  <button class="link" onClick={() => void navigator.clipboard?.writeText(g.invites[0]!.url)}>
-                    copy
-                  </button>
-                </>
-              ) : (
-                <button class="link" onClick={() => void createInvite(g.id).then(refresh)}>
-                  make link
-                </button>
-              )}
-              {snap?.connected.includes(g.identity) ? <span class="ok"> · online</span> : <span class="muted"> · offline</span>}
-              <button
-                class="link bad"
-                onClick={() => {
-                  if (confirm(`Remove ${g.displayName} and their link from this studio?`)) void deleteGuest(g.id).then(refresh);
-                }}
-              >
-                remove
-              </button>
-            </li>
-          ))}
-          {view.guests.length === 0 && <li class="muted">No guest seated yet.</li>}
-        </ul>
-
-        <h3 style={{ margin: '16px 0 6px' }}>Invite from the contact book</h3>
-        <div class="row">
-          <input placeholder="Search a contact…" value={query} onInput={(e) => setQuery((e.currentTarget as HTMLInputElement).value)} />
-          <a class="btn secondary small" href="/app/contacts">
-            Open contact book
-          </a>
-        </div>
-        {found.length > 0 && (
-          <ul class="list results">
-            {found.map((c) => (
-              <li key={c.id}>
-                <strong>{c.displayName}</strong>
-                <span class="muted small">
-                  {[c.phone, c.whatsapp && `WhatsApp ${c.whatsapp}`, c.telegram && `Telegram ${c.telegram}`, c.skype && `Skype ${c.skype}`].filter(Boolean).join(' · ') || 'no contact details'}
-                </span>
-                {seatedIds.has(c.id) ? (
-                  <span class="ok">already seated</span>
-                ) : (
-                  <button class="btn secondary small" onClick={() => seat({ contactId: c.id })}>
-                    Seat and make link
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <h3 style={{ margin: '16px 0 6px' }}>Or a one-off guest</h3>
-        <form
-          class="row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (newGuest.trim()) seat({ displayName: newGuest.trim(), language: newLang });
-          }}
-        >
-          <input placeholder="Guest name" value={newGuest} onInput={(e) => setNewGuest((e.currentTarget as HTMLInputElement).value)} />
-          <select value={newLang} onChange={(e) => setNewLang((e.currentTarget as HTMLSelectElement).value)}>
-            {LANGUAGES.map(([code, label]) => (
-              <option value={code} key={code}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <button class="btn secondary" type="submit">
-            Seat and make link
-          </button>
-        </form>
-      </section>
-
-      <p class="muted small">
-        {user.name}: this PC uses {station}. Output pages for this studio run on the studio PC; the admin has the links.
-      </p>
+      {phoneGuest && (
+        <aside class="eng-side room-drawer">
+          <div class="row between">
+            <h3 class="eng-side-title">{guestName({ record: recordFor(phoneGuest.identity), state: phoneGuest })}</h3>
+            <button class="chip" aria-label="Close" onClick={() => setPhone(null)}>
+              <Icon name="close" />
+            </button>
+          </div>
+          <div class="guest-controls">
+            <PhonePanel tile={tileFor(phoneGuest.identity)} report={session.reports.value[phoneGuest.identity]} cmd={(command) => doAction({ type: 'command', guest: phoneGuest.identity, command })} />
+          </div>
+        </aside>
+      )}
 
       {focusedGuest && <GuestFocus {...cardProps(focusedGuest)} solo={solo} onSolo={setSolo} onClose={() => setFocused(null)} />}
       {session.localVideo.value && <VideoView track={session.localVideo.value} className="pip" mirror />}
