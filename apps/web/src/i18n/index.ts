@@ -1,4 +1,4 @@
-// Guest-facing strings in English, Kurmanji (Latin), Sorani (Arabic script) and Arabic.
+// Guest-facing strings in the station's languages: English, Bahdini (code ku), Sorani (ckb) and Arabic.
 // The Kurdish and Arabic texts were written by the assistant and need a native speaker's review
 // before the first programme; every key is short on purpose.
 import { signal } from '@preact/signals';
@@ -45,42 +45,43 @@ const en = {
 
 export type Strings = typeof en;
 
+// Bahdini, in Arabic letters, as the station writes Kurdish. Until 2026-11-11 this was Kurmanji in Latin letters.
 const ku: Strings = {
   appName: 'waar Connect',
-  loading: 'Tê barkirin…',
-  invalidLink: 'Ev lînk ne derbasdar e.',
-  checkTitle: 'Kamera û mîkrofon',
-  camera: 'Kamera',
-  microphone: 'Mîkrofon',
-  permission: 'Dema telefon dipirse, destûrê bide kamera û mîkrofonê.',
-  network: 'Girêdana bi studyoyê re',
-  join: 'Têkeve',
-  lobbyTitle: 'Ji kerema xwe bisekine',
-  lobbyText: 'Berhemhêner dê te niha bîne hundir.',
-  you: 'Tu',
-  greenTitle: 'Odeya kesk',
-  greenText: 'Tu bi berhemhêner re yî. Studyo hê te nabihîze.',
-  studioTitle: 'Studyo',
-  standby: 'AMADE BE',
-  onair: 'DI WEŞANÊ DE',
-  mute: 'Bêdeng',
-  unmute: 'Deng veke',
-  raiseHand: 'Destê xwe rake',
-  handRaised: 'Dest rakirî ye',
-  help: 'Alîkarî',
-  info: 'Agahî',
-  connecting: 'Tê girêdan…',
-  reconnecting: 'Dîsa tê girêdan…',
-  disconnected: 'Girêdan qut bû. Rûpelê nû bike.',
-  noMedia: 'Girêdayî ye, lê wêne û deng naçin.',
-  exitTitle: 'Spas',
-  exitText: 'Tu ji bernameyê derketî.',
-  producer: 'Berhemhêner',
-  ended: 'Ev bername qediya.',
-  deviceError: 'Kamera an mîkrofon nehat destpêkirin.',
-  fullScreen: 'Tevahiya ekranê',
-  exitFullScreen: 'Ji tevahiya ekranê derkeve',
-  tapFullScreen: 'Ji bo tevahiya ekranê li ekranê bixe',
+  loading: 'دهێتە بارکرن…',
+  invalidLink: 'ئەڤ لینکە نە یێ دروستە.',
+  checkTitle: 'کامێرا و مایکرۆفۆن',
+  camera: 'کامێرا',
+  microphone: 'مایکرۆفۆن',
+  permission: 'دەمێ مۆبایل دپرسیت، دەستویریێ بدە کامێرا و مایکرۆفۆنێ.',
+  network: 'پەیوەندی دگەل ستۆدیۆیێ',
+  join: 'بەشدار ببە',
+  lobbyTitle: 'هیڤیە چاڤەڕێ بە',
+  lobbyText: 'بەرهەمهێنەر دێ نوکە تە ئینیتە ژوور.',
+  you: 'تو',
+  greenTitle: 'ژوورا کەسک',
+  greenText: 'تو یێ دگەل بەرهەمهێنەری. ستۆدیۆ هێشتا دەنگێ تە نابهیسیت.',
+  studioTitle: 'ستۆدیۆ',
+  standby: 'ئامادە بە',
+  onair: 'ل سەر هەوایێ',
+  mute: 'بێدەنگ',
+  unmute: 'دەنگی ڤەکە',
+  raiseHand: 'دەستێ خۆ بلند بکە',
+  handRaised: 'دەست یێ بلندکریە',
+  help: 'هاریکاری',
+  info: 'پێزانین',
+  connecting: 'پەیوەندی دهێتە کرن…',
+  reconnecting: 'دوبارە پەیوەندی دهێتە کرن…',
+  disconnected: 'پەیوەندی هاتە بڕین. لاپەڕەی نوی بکە.',
+  noMedia: 'پەیوەندی هەیە، بەلێ وێنە و دەنگ ناچن.',
+  exitTitle: 'سوپاس',
+  exitText: 'تو ژ بەرنامەی دەرکەفتی.',
+  producer: 'بەرهەمهێنەر',
+  ended: 'ئەڤ بەرنامە ب دوماهیک هات.',
+  deviceError: 'کامێرا یان مایکرۆفۆن دەست پێ نەکر.',
+  fullScreen: 'هەمی شاشە',
+  exitFullScreen: 'دەرکەفتن ژ هەمی شاشێ',
+  tapFullScreen: 'بۆ هەمی شاشێ دەستێ خۆ ل شاشێ بدە',
 };
 
 const ckb: Strings = {
@@ -160,7 +161,7 @@ const ar: Strings = {
 };
 
 const DICTS: Record<Lang, Strings> = { en, ku, ckb, ar };
-const RTL: ReadonlySet<Lang> = new Set<Lang>(['ckb', 'ar']);
+const RTL: ReadonlySet<Lang> = new Set<Lang>(['ku', 'ckb', 'ar']);
 
 export const lang = signal<Lang>('en');
 

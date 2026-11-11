@@ -7,7 +7,7 @@
 // lays out the same switches on their own.
 // The phone's technical side (PhonePanel.tsx) opens beside the room, and on the engineer's page.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
-import type { GuestState } from '@waar-connect/shared';
+import { cueLabel, cueText, type Cue, type GuestState } from '@waar-connect/shared';
 import { useState } from 'preact/hooks';
 import type { GuestRecord, RoomAction } from '../api.ts';
 import { VideoView } from '../components/media.tsx';
@@ -24,6 +24,8 @@ export interface GuestCardProps {
   report: GuestReport | undefined;
   connected: boolean;
   outputNames: string[];
+  /** The station's ready-made cues; each goes to the guest in the language of their page. */
+  cues: Cue[];
   ifbAllowed: boolean;
   /** This studio sends a guest to air only with the engineer's approval (`state.ready`). */
   needsApproval: boolean;
@@ -44,8 +46,6 @@ export interface GuestCardProps {
   /** This desk has joined the room; until then no pictures arrive. Absent: joined. */
   joined?: boolean;
 }
-
-const QUICK_CUES = ['30 seconds', 'Wrap up', 'Look at the camera', 'Speak louder', 'You are next'];
 
 export function guestName(p: Pick<GuestCardProps, 'record' | 'state'>): string {
   return p.record?.displayName ?? p.state.identity.replace(/^guest:/, '');
@@ -189,17 +189,24 @@ export function TallySwitch({ p }: { p: GuestCardProps }) {
   );
 }
 
-/** Text cues for the guest's screen: the ready-made ones and a line to type. */
+/**
+ * Text cues for the guest's screen: the station's ready-made ones and a line to type. A ready-made cue
+ * stands here by its English text and goes to the guest in the language of their page.
+ */
 export function CueBox({ p }: { p: GuestCardProps }) {
   const g = p.state;
   const [cue, setCue] = useState('');
+  const language = p.record?.language;
   return (
     <div class="cues">
-      {QUICK_CUES.map((text) => (
-        <button class="chip" key={text} onClick={() => p.onAction({ type: 'cue', to: g.identity, text })}>
-          {text}
-        </button>
-      ))}
+      {p.cues.map((c) => {
+        const text = cueText(c, language);
+        return (
+          <button class="chip" key={c.id} title={text !== cueLabel(c) ? `The guest reads: ${text}` : undefined} onClick={() => p.onAction({ type: 'cue', to: g.identity, text })}>
+            {cueLabel(c)}
+          </button>
+        );
+      })}
       <form
         class="row"
         onSubmit={(e) => {

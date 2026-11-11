@@ -8,18 +8,14 @@ import { useEffect, useState } from 'preact/hooks';
 import { ApiError, createContact, deleteContact, listContacts, updateContact, type Contact, type ContactInput, type User } from '../api.ts';
 import { Icon, Info, type IconName } from '../components/ui.tsx';
 import { CHANNEL_LABELS, channelLink, CHANNELS, initials, type Channel } from '../lib/contact.ts';
+import { DEFAULT_LANGUAGE, languageName, LANGUAGES as STATION_LANGUAGES } from '@waar-connect/shared';
 
-export const LANGUAGES: ReadonlyArray<[string, string]> = [
-  ['ku', 'Kurdî (Kurmancî)'],
-  ['ckb', 'کوردی (سۆرانی)'],
-  ['ar', 'العربية'],
-  ['en', 'English'],
-  ['tr', 'Türkçe'],
-];
+/** The station's languages in its order, as [code, label] for the pickers. */
+export const LANGUAGES: ReadonlyArray<[string, string]> = STATION_LANGUAGES.map((l) => [l.code, l.native === l.name ? l.name : `${l.name} · ${l.native}`]);
 
 const CHANNEL_ICONS: Readonly<Record<Channel, IconName>> = { phone: 'phone', whatsapp: 'message', telegram: 'send', skype: 'camera', email: 'mail', other: 'user' };
 
-const empty = (): ContactInput => ({ displayName: '', language: 'ku', phone: '', whatsapp: '', telegram: '', skype: '', email: '', other: '', notes: '', casparName: '' });
+const empty = (): ContactInput => ({ displayName: '', language: DEFAULT_LANGUAGE, phone: '', whatsapp: '', telegram: '', skype: '', email: '', other: '', notes: '', casparName: '' });
 
 function ContactForm({ title, initial, onSave, onCancel, saving }: { title: string; initial: ContactInput; onSave: (c: ContactInput) => void; onCancel: () => void; saving: boolean }) {
   const [c, setC] = useState<ContactInput>(initial);
@@ -62,12 +58,14 @@ function ContactForm({ title, initial, onSave, onCancel, saving }: { title: stri
         </div>
         <label>
           Language
-          <select value={c.language ?? 'ku'} onChange={(e) => set('language', (e.currentTarget as HTMLSelectElement).value)}>
+          <select value={c.language ?? DEFAULT_LANGUAGE} onChange={(e) => set('language', (e.currentTarget as HTMLSelectElement).value)}>
             {LANGUAGES.map(([code, label]) => (
               <option value={code} key={code}>
                 {label}
               </option>
             ))}
+            {/* a language the station no longer offers stays as it is until another is picked */}
+            {c.language && !LANGUAGES.some(([code]) => code === c.language) && <option value={c.language}>{c.language}</option>}
           </select>
         </label>
         {CHANNELS.map((key) => (
@@ -95,7 +93,7 @@ function ContactRow({ c, canEdit, onEdit, onRemove }: { c: Contact; canEdit: boo
       <div class="ct-main">
         <div class="ct-head">
           <strong dir="auto">{c.displayName}</strong>
-          <span class="eng-tag">{LANGUAGES.find(([code]) => code === c.language)?.[1] ?? c.language}</span>
+          <span class="eng-tag">{languageName(c.language)}</span>
           {c.casparName && (
             <span class="ct-onscreen tip" data-tip="Name on screen: the lower third when the guest is on air." dir="auto">
               {c.casparName}

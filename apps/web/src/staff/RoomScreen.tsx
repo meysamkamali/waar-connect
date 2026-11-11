@@ -4,10 +4,10 @@
 // a drawer beside the room, and one guest can fill the screen (GuestFocus).
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
-import { normalizeFacePrefs, roleOf, type FacePrefs, type GuestState } from '@waar-connect/shared';
+import { normalizeFacePrefs, roleOf, type Cue, type FacePrefs, type GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
-import { act, ApiError, getPcr, getRoom, joinPcr, type PcrView, type RoomAction, type RoomSnapshot, type User } from '../api.ts';
+import { act, ApiError, getPcr, getRoom, joinPcr, listCues, type PcrView, type RoomAction, type RoomSnapshot, type User } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { Icon, Tip } from '../components/ui.tsx';
 import { describeStation, loadStation } from '../lib/station.ts';
@@ -37,6 +37,8 @@ export function RoomScreen({ id }: { id: string; user: User }) {
   const [solo, setSolo] = useState(true);
   /** The guest whose phone settings are open in the drawer. */
   const [phone, setPhone] = useState<string | null>(null);
+  /** The station's ready-made cues; read again every minute, so the admin's change arrives without a reload. */
+  const [cues, setCues] = useState<Cue[]>([]);
   /** How the face camera is sent, from the room poll: the engineer can change it while we sit here. */
   const [face, setFace] = useState<FacePrefs | null>(null);
   const myIdentity = useRef('');
@@ -65,6 +67,13 @@ export function RoomScreen({ id }: { id: string; user: User }) {
     }, 2000);
     return () => clearInterval(poll);
   }, [id]);
+
+  useEffect(() => {
+    const load = () => void listCues().then((r) => setCues(r.cues)).catch(() => undefined);
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => () => void session.leave(), [session]);
   useEffect(() => session.setFocus(focused), [focused, session]);
@@ -153,6 +162,7 @@ export function RoomScreen({ id }: { id: string; user: User }) {
     report: session.reports.value[g.identity],
     connected: snap?.connected.includes(g.identity) ?? false,
     outputNames: settings.outputNames,
+    cues,
     ifbAllowed: settings.ifbAllowed,
     needsApproval: settings.approval !== false,
     ifb: snap?.ifbOverride.includes(g.identity) ?? false,

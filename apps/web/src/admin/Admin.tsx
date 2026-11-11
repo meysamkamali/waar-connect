@@ -1,6 +1,7 @@
 // /app/admin — the admin builds studios (PCRs) and sets them up. One studio is in hand at a time,
-// picked at the top; below it everything about that studio: its settings and return feed, the pages
-// for the studio PC, and the guest's screen. The NDI gateway, which serves every studio, comes last.
+// picked at the top; below it everything about that studio: its settings and return feed and the
+// pages for the studio PC. Under "Every studio" comes what the whole station shares: the guest's
+// screen, the producer's cues, and the NDI gateway.
 // The page carries no guide text: what only explains opens in a balloon.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
@@ -10,6 +11,7 @@ import { RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiSourceInfo } from '@waar-c
 import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
 import { CopyButton, Icon, Info, Switch, Tip } from '../components/ui.tsx';
 import { LANGUAGES } from '../staff/Contacts.tsx';
+import { CuesCard } from './CuesCard.tsx';
 import { ScreenDesigner } from './ScreenDesigner.tsx';
 
 type Tone = 'ok' | 'warn' | 'bad' | 'none';
@@ -539,7 +541,7 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
           <Info
             side="start"
             below
-            text="Pick a studio to set it up: its slots and rules, its return feed, the pages for the studio PC and the guest's screen. How phones connect is the engineer's; hardware for each PC is under “This station”."
+            text="Pick a studio to set it up: its slots and rules, its return feed and the pages for the studio PC. Under “Every studio”: the guest's screen, the cues and the NDI gateway. How phones connect is the engineer's; hardware for each PC is under “This station”."
           />
         </div>
         <Pill tone={gw.tone} text={gw.word} tip={gw.detail} side="end" />
@@ -609,10 +611,12 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
             onError={setError}
           />
           <StudioPages pcr={pcr} />
-          <ScreenDesigner pcrs={list} pcrId={pcr.id} onSaved={() => void load()} onError={setError} />
         </>
       )}
 
+      <h2 class="adm-divider">Every studio</h2>
+      <ScreenDesigner onError={setError} />
+      <CuesCard onError={setError} />
       <GatewayCard gateway={gateway} onSaved={pollGateway} onError={setError} />
     </div>
   );

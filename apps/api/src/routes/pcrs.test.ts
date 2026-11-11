@@ -96,18 +96,12 @@ test('the engineer\'s approval: asked for by default, also on rows written befor
   assert.equal(isTechnicalPatch({ settings: { approval: false } }), false, 'a studio rule, not a technical setting: the admin\'s');
 });
 
-test('the guest screen: the station design by default, the admin\'s design made safe, not an engineer\'s setting', async () => {
-  const { defaultScreen, defaultPattern, samePattern } = await import('@waar-connect/shared');
+test('the guest screen is the station\'s, not a studio\'s: a studio hands none out, and the languages come in the station\'s order', () => {
   const base = defaultPcrSettings(2);
-  assert.deepEqual(mergeSettings(base, undefined).screen, defaultScreen(), 'rows without a design get the station one');
-  const mine = { patterns: [{ widgets: [{ kind: 'self' as const, col: 1, row: 1, cols: 1, rows: 1 }, { kind: 'self' as const, col: 0, row: 0, cols: 1, rows: 1 }] }] };
-  const merged = mergeSettings(base, { screen: mine });
-  assert.deepEqual(merged.screen!.patterns[0]!.widgets, [
-    { kind: 'self', col: 1, row: 1, cols: 1, rows: 1 },
-    { kind: 'status', col: 0, row: 0, cols: 1, rows: 1 },
-  ]);
-  assert.equal(merged.screen!.patterns.length, 8);
-  assert.ok(samePattern(merged.screen!.patterns[3]!, defaultPattern(4)));
-  assert.deepEqual(mergeSettings(merged, { slots: 3 }).screen, merged.screen, 'untouched by other changes');
-  assert.equal(isTechnicalPatch({ settings: { screen: mine } }), false);
+  assert.equal('screen' in base, false);
+  assert.deepEqual(base.languages, ['en', 'ku', 'ckb', 'ar']);
+  // a row of the day designs were kept per studio still carries one: it is not handed out
+  const old = { ...base, screen: { patterns: [] } };
+  assert.equal('screen' in mergeSettings(old, undefined), false);
+  assert.equal('screen' in mergeSettings(old, { slots: 3 }), false);
 });

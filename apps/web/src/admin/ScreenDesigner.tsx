@@ -2,14 +2,15 @@
 // fills it with widgets, dragged from the palette onto the screen and moved about on it. Pictures
 // (studio feed, self camera, multiview) take whole sections; overlays (tally, cue banner, the guest's
 // buttons) float over them, docked in a section. There is one design per number of guests on the
-// screen, one to eight, and one set of designs per studio (the studio in hand on the admin page). The
-// small screen here is drawn with the phone's own styles, to scale.
+// screen, one to eight, and the designs are the station's: every studio's guests get them. The small
+// screen here is drawn with the phone's own styles, to scale.
 // Dragging is done with pointer events, so it works with a mouse, a pen and a finger; every widget
 // can also be placed, moved (arrow keys) and removed (Delete) from the keyboard.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import {
   defaultPattern,
+  defaultScreen,
   firstPlace,
   isFullScreen,
   isPicture,
@@ -31,8 +32,8 @@ import {
   type ScreenWidget,
   type WidgetKind,
 } from '@waar-connect/shared';
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { ApiError, updatePcr, type Pcr } from '../api.ts';
+import { useEffect, useRef, useState } from 'preact/hooks';
+import { ApiError, getScreen, saveScreen } from '../api.ts';
 import { Icon, Info, type IconName } from '../components/ui.tsx';
 import { cellStyle, dockClass, TallyChip } from '../guest/screen.tsx';
 
@@ -115,9 +116,9 @@ function Sample({ kind, guests }: { kind: WidgetKind; guests: number }) {
   }
 }
 
-export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[]; pcrId: string; onSaved: () => void; onError: (m: string) => void }) {
-  const pcr = pcrs.find((p) => p.id === pcrId) ?? pcrs[0];
-  const [drafts, setDrafts] = useState<Record<string, GuestScreen>>({});
+export function ScreenDesigner({ onError }: { onError: (m: string) => void }) {
+  const [saved, setSaved] = useState<GuestScreen | null>(null);
+  const [draft, setDraft] = useState<GuestScreen | null>(null);
   const [guests, setGuests] = useState(1);
   const [selected, setSelected] = useState<WidgetKind | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -127,21 +128,25 @@ export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[];
   const canvas = useRef<HTMLDivElement>(null);
   const dragRef = useRef<Drag | null>(null);
 
-  const savedKey = JSON.stringify(pcr?.settings.screen ?? null);
-  const saved = useMemo(() => normalizeScreen(pcr?.settings.screen), [savedKey]);
-  const screen = (pcr && drafts[pcr.id]) || saved;
+  useEffect(() => {
+    getScreen()
+      .then((r) => setSaved(normalizeScreen(r.screen)))
+      .catch((err: unknown) => onError(err instanceof ApiError ? err.message : String(err)));
+  }, []);
+
+  const base = saved ?? defaultScreen();
+  const screen = draft ?? base;
   const pattern = screen.patterns[guests - 1] ?? defaultPattern(guests);
-  const dirty = JSON.stringify(screen) !== JSON.stringify(saved);
+  const dirty = draft !== null && JSON.stringify(draft) !== JSON.stringify(base);
 
   // What the pointer handlers work on: always the latest, whichever render registered them.
-  const now = useRef({ id: pcr?.id ?? '', guests, saved, pattern });
-  now.current = { id: pcr?.id ?? '', guests, saved, pattern };
+  const now = useRef({ guests, base, pattern });
+  now.current = { guests, base, pattern };
 
   const apply = (fn: (p: ScreenPattern) => ScreenPattern) =>
-    setDrafts((d) => {
-      const { id, guests: n, saved: base } = now.current;
-      const from = d[id] ?? base;
-      return { ...d, [id]: { patterns: from.patterns.map((p, i) => (i === n - 1 ? fn(p) : p)) } };
+    setDraft((d) => {
+      const { guests: n, base: from } = now.current;
+      return { patterns: (d ?? from).patterns.map((p, i) => (i === n - 1 ? fn(p) : p)) };
     });
 
   useEffect(() => {
@@ -160,7 +165,7 @@ export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[];
     return () => clearTimeout(id);
   }, [note]);
 
-  useEffect(() => setSelected(null), [guests, pcr?.id]);
+  useEffect(() => setSelected(null), [guests]);
 
   /** Places a widget without dragging, or gives the one on the screen another size. */
   const add = (kind: WidgetKind, size: Size) => {
@@ -280,24 +285,21 @@ export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[];
   };
 
   // ---- saving -------------------------------------------------------------------------------------------
-  const save = (everywhere: boolean) => {
-    if (!pcr) return;
+  const save = () => {
     setBusy(true);
-    const targets = everywhere ? pcrs : [pcr];
-    Promise.all(targets.map((p) => updatePcr(p.id, { settings: { screen } })))
-      .then(() => {
-        setDrafts((d) => (everywhere ? {} : Object.fromEntries(Object.entries(d).filter(([id]) => id !== pcr.id))));
-        onSaved();
+    saveScreen(screen)
+      .then((r) => {
+        setSaved(normalizeScreen(r.screen));
+        setDraft(null);
       })
       .catch((err: unknown) => onError(err instanceof ApiError ? err.message : String(err)))
       .finally(() => setBusy(false));
   };
 
-  if (!pcr) return null;
+  if (!saved) return null;
 
   const sel = selected ? pattern.widgets.find((w) => w.kind === selected) : undefined;
   const selSpec = sel ? WIDGET_SPECS[sel.kind] : undefined;
-  const others = pcrs.some((p) => p.id !== pcr.id && JSON.stringify(normalizeScreen(p.settings.screen)) !== JSON.stringify(screen));
 
   const paletteRow = (kind: WidgetKind) => {
     const spec = WIDGET_SPECS[kind];
@@ -352,23 +354,18 @@ export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[];
           <h2>Guest screen</h2>
           <Info
             side="start"
-            text="The guest's phone screen is nine sections, three by three. Drag a widget onto the screen, drag it again to move it, drag it off to remove it. Pictures take whole sections; the tally, the cue banner and the buttons float over them. Phones that are connected take a saved design at once."
+            text="One design for the whole station: the guests of every studio get it. The guest's phone screen is nine sections, three by three. Drag a widget onto the screen, drag it again to move it, drag it off to remove it. Pictures take whole sections; the tally, the cue banner and the buttons float over them. Phones that are connected take a saved design at once."
           />
         </div>
         <div class="sd-actions">
-          <button class="btn secondary small" disabled={!dirty || busy} onClick={() => setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([id]) => id !== pcr.id)))}>
+          <button class="btn secondary small" disabled={!dirty || busy} onClick={() => setDraft(null)}>
             <Icon name="undo" />
             Undo
           </button>
-          <button class="btn small" disabled={!dirty || busy} onClick={() => save(false)}>
+          <button class="btn small" disabled={!dirty || busy} onClick={save}>
             <Icon name="check" />
             Save
           </button>
-          {pcrs.length > 1 && (
-            <button class="btn secondary small" disabled={busy || (!dirty && !others)} onClick={() => save(true)}>
-              Save for every studio
-            </button>
-          )}
         </div>
       </header>
 
@@ -397,7 +394,7 @@ export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[];
               <button
                 class="chip tip tip-end"
                 data-tip="Uses this design for every number of guests."
-                onClick={() => setDrafts((d) => ({ ...d, [pcr.id]: { patterns: screen.patterns.map(() => ({ widgets: pattern.widgets.map((w) => ({ ...w })) })) } }))}
+                onClick={() => setDraft({ patterns: screen.patterns.map(() => ({ widgets: pattern.widgets.map((w) => ({ ...w })) })) })}
               >
                 <Icon name="copy" />
                 Copy to all

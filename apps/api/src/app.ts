@@ -15,6 +15,7 @@ import { inviteRoutes } from './routes/invite.ts';
 import { livekitRoutes } from './routes/livekit.ts';
 import { pcrRoutes } from './routes/pcrs.ts';
 import { roomRoutes } from './routes/room.ts';
+import { stationRoutes } from './routes/station.ts';
 import { systemRoutes } from './routes/system.ts';
 import type { RoomRegistry } from './rooms/controller.ts';
 
@@ -90,6 +91,7 @@ export async function buildApp(ctx: AppContext): Promise<FastifyInstance> {
   await app.register(roomRoutes, { prefix: '/api/v1' });
   await app.register(livekitRoutes, { prefix: '/api/v1' });
   await app.register(gatewayRoutes, { prefix: '/api/v1' });
+  await app.register(stationRoutes, { prefix: '/api/v1' });
   await app.register(systemRoutes, { prefix: '/api/v1' });
 
   app.setNotFoundHandler(async (_req, reply) => reply.code(404).send({ error: 'Not found.' }));

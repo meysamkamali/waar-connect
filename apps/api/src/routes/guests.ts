@@ -4,7 +4,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
-import { identityFor } from '@waar-connect/shared';
+import { DEFAULT_LANGUAGE, identityFor } from '@waar-connect/shared';
 import { z } from 'zod';
 import { contacts, events, guests, invites, pcrs } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
@@ -38,7 +38,7 @@ export async function guestRoutes(app: FastifyInstance): Promise<void> {
     if (!pcr) return notFound(reply, 'PCR');
 
     let displayName = body.displayName ?? '';
-    let language = body.language ?? 'ku';
+    let language = body.language ?? DEFAULT_LANGUAGE;
     let contactId: string | null = null;
     if (body.contactId) {
       const [contact] = await db.select().from(contacts).where(eq(contacts.id, body.contactId)).limit(1);

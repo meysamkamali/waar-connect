@@ -82,8 +82,9 @@ ones beside it), the row lists every copy under the picture's meters: its size, 
 bar against what it may send (the cap for the full-size copy, its own ceiling for a small one;
 `apps/web/src/lib/copies.ts`), "paused" for a copy nobody takes.
 
-**Decided 2026-11-11 (the guest's screen):** the admin designs the guest's screen, per studio, in
-Admin under "Guest screen". The screen is **nine sections, three by three**. Widgets fill it, by
+**Decided 2026-11-11 (the guest's screen):** the admin designs the guest's screen in Admin under
+"Guest screen" (per studio at first; since the evening of the same day one design for the whole
+station, see below). The screen is **nine sections, three by three**. Widgets fill it, by
 drag and drop:
 
 - **Pictures** take whole sections and do not lie on top of each other: the studio feed (2×2, 1×1,
@@ -156,6 +157,25 @@ level of the mix-minus, the stream's numbers as tiles, the locked sources and wh
 The output page keeps a **clean frame**: while a guest is on, nothing lies over the picture; the
 page's state shows on the slate, and for three seconds when the mouse moves (or always with
 `?stats=1`).
+
+**Decided 2026-11-11 (evening): languages, cues, and one guest screen for the station.**
+
+- **Languages**, in the station's order: English, Bahdini, Sorani, Arabic
+  (`packages/shared/src/languages.ts`). Bahdini is the code `ku`, written in Arabic letters, right
+  to left; until this day the same code was Kurmanji in Latin letters, which is no longer offered,
+  as Turkish is not (it never had a page). A guest seated without a choice gets Bahdini.
+- **Cues** are the station's, edited by the admin under "Cues": one row per cue, one text per
+  language, in the order they stand on the producer's desk (`packages/shared/src/cues.ts`,
+  `station_settings` key `cues`, `GET`/`PUT /cues`). The desk names a cue by its English text
+  and sends it in the language of the guest's page; without a text in that language the English
+  one goes out. The station starts with five cues in all four languages.
+- **The guest's screen is one design for the whole station** (`station_settings` key
+  `guest_screen`, `GET`/`PUT /screen`, `apps/api/src/routes/station.ts`). A saved design goes to
+  the connected phones of every studio. Until the admin saves one, a design a studio was given
+  earlier that day carries over (the first such studio by name), else the station's own.
+
+The Kurdish and Arabic texts (the guest's page and the cues) were written by the assistant and
+need a native speaker's eye.
 
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes

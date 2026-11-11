@@ -3,6 +3,7 @@
 // seated guest shows where they are right now, their link to copy, and the way to take them off.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
+import { DEFAULT_LANGUAGE } from '@waar-connect/shared';
 import { useEffect, useState } from 'preact/hooks';
 import { ApiError, createInvite, deleteGuest, listContacts, seatGuest, type Contact, type GuestRecord, type RoomSnapshot } from '../api.ts';
 import { ArmButton, CopyButton, Icon, Info } from '../components/ui.tsx';
@@ -26,7 +27,7 @@ const reachLine = (c: Contact) => [c.phone, c.whatsapp && `WhatsApp ${c.whatsapp
 export function GuestList({ pcrId, guests, snapshot, onChanged, onError }: { pcrId: string; guests: GuestRecord[]; snapshot: RoomSnapshot | null; onChanged: () => Promise<void> | void; onError: (m: string) => void }) {
   const [query, setQuery] = useState('');
   const [found, setFound] = useState<Contact[]>([]);
-  const [lang, setLang] = useState('ku');
+  const [lang, setLang] = useState(DEFAULT_LANGUAGE);
   const [busy, setBusy] = useState(false);
   const typed = query.trim();
 

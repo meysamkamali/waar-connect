@@ -1,6 +1,7 @@
 // The guest contact book: phone, WhatsApp, Telegram, Skype, email, anything else. Producers edit it.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
+import { DEFAULT_LANGUAGE } from '@waar-connect/shared';
 import { asc, eq, ilike, or } from 'drizzle-orm';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -50,7 +51,7 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     const { language, ...rest } = body;
     const [row] = await db
       .insert(contacts)
-      .values({ ...rest, language: language ?? 'ku' })
+      .values({ ...rest, language: language ?? DEFAULT_LANGUAGE })
       .returning();
     return reply.code(201).send({ contact: row });
   });

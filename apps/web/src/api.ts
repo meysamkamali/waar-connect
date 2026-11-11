@@ -1,5 +1,5 @@
 // Calls to the waar Connect API (same origin, /api/v1). Sessions are cookies, sent automatically.
-import type { FacePrefs, GatewayStatus, GuestPrefs, GuestScreen, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
+import type { Cue, FacePrefs, GatewayStatus, GuestPrefs, GuestScreen, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -38,7 +38,7 @@ export interface JoinInfo {
   livekit: { url: string; token: string; identity: string };
   /** How this phone should connect unless something else was pushed to it; set per PCR by the engineer. */
   prefs?: GuestPrefs;
-  /** The guest's screen as the admin designed it for this studio. */
+  /** The guest's screen as the admin designed it for the station. */
   screen?: GuestScreen;
 }
 
@@ -90,8 +90,6 @@ export interface PcrSettings {
   guest: GuestPrefs;
   /** The producer's face camera as it is sent. */
   face: FacePrefs;
-  /** The guest's screen as the admin designed it: one pattern per number of guests on it. */
-  screen?: GuestScreen;
 }
 /** The gateway as the API knows it: set up at all, and its last report if one came recently. */
 export interface GatewayView {
@@ -214,6 +212,12 @@ export const act = (id: string, action: RoomAction) => call<{ snapshot: RoomSnap
 export const outputToken = (id: string, slot: number) => call<KioskToken & { slot: number; name: string }>('POST', `/pcrs/${id}/outputs/${slot}/token`);
 export const studioToken = (id: string) => call<KioskToken>('POST', `/pcrs/${id}/studio-token`);
 export const gatewayStatus = () => call<GatewayView>('GET', '/gateway/status');
+/** The guest's screen, one design for the whole station. */
+export const getScreen = () => call<{ screen: GuestScreen }>('GET', '/screen');
+export const saveScreen = (screen: GuestScreen) => call<{ screen: GuestScreen }>('PUT', '/screen', { screen });
+/** The producer's ready-made cues, each with its text per language. */
+export const listCues = () => call<{ cues: Cue[] }>('GET', '/cues');
+export const saveCues = (cues: Cue[]) => call<{ cues: Cue[] }>('PUT', '/cues', { cues });
 export const setDiscovery = (extraIps: string[]) => call<{ extraIps: string[] }>('PUT', '/gateway/discovery', { extraIps });
 
 /** Temporary, test phase: the VM's CPU and memory for the staff top bar. */

@@ -7,7 +7,7 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { defaultScreen, normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs, type GuestScreen } from '@waar-connect/shared';
+import { LANGUAGE_CODES, normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs, type GuestScreen } from '@waar-connect/shared';
 
 export const userRole = pgEnum('user_role', ['admin', 'producer', 'engineer']);
 
@@ -47,7 +47,11 @@ export interface PcrSettings {
   ifbAllowed: boolean;
   /** A guest goes to the studio, and on air, only after the engineer approved them. */
   approval: boolean;
-  /** The guest's screen as the admin designed it: one pattern per number of guests on it. Absent: the station's own. */
+  /**
+   * Only on rows of 2026-11-11: that day the guest's screen was designed per studio. It is the
+   * station's now (`station_settings`, key guest_screen); routes/station.ts reads this once, to carry a
+   * design over.
+   */
   screen?: GuestScreen | undefined;
   /** Languages offered on guest invites: ku, ckb, ar, en, tr. */
   languages: string[];
@@ -73,8 +77,7 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     slots,
     ifbAllowed: true,
     approval: true,
-    screen: defaultScreen(),
-    languages: ['ku', 'ckb', 'ar', 'en'],
+    languages: [...LANGUAGE_CODES],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
     returnSource: null,
     returnHeight: null,
