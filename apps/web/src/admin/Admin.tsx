@@ -176,6 +176,9 @@ function PcrEditor({ pcr, gateway, onSaved, onError }: { pcr: Pcr; gateway: Gate
         <label class="inline" style={{ alignSelf: 'end' }}>
           <input type="checkbox" checked={s.ifbAllowed} onChange={(e) => setS({ ...s, ifbAllowed: (e.currentTarget as HTMLInputElement).checked })} /> producer may talk to a guest who is on air (IFB)
         </label>
+        <label class="inline" style={{ alignSelf: 'end' }} title="The engineer approves each guest on the Engineer page after checking the line. Without it the producer cannot send the guest to the studio or put them on air.">
+          <input type="checkbox" checked={s.approval !== false} onChange={(e) => setS({ ...s, approval: (e.currentTarget as HTMLInputElement).checked })} /> a guest goes on air only after the engineer approved them
+        </label>
       </div>
       <div class="form-grid" style={{ marginTop: '8px' }}>
         {s.outputNames.map((n, i) => (

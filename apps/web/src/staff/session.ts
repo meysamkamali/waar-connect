@@ -25,7 +25,7 @@ import {
   type Room,
 } from 'livekit-client';
 import type { StaffJoin } from '../api.ts';
-import type { GuestReport } from '../lib/report.ts';
+import type { GuestLive, GuestReport } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel } from '../lib/room.ts';
 import { loadStation, resolveDeviceId } from '../lib/station.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
@@ -50,6 +50,8 @@ export class StaffSession {
   readonly tiles = signal<StaffTile[]>([]);
   readonly hands = signal<Record<string, boolean>>({});
   readonly helps = signal<Record<string, number>>({});
+  /** Each guest's quality numbers as the phone last measured them (wc.live, every two seconds). */
+  readonly live = signal<Record<string, GuestLive>>({});
   /** What each guest's phone last said about itself (wc.report). */
   readonly reports = signal<Record<string, GuestReport>>({});
   readonly talking = signal(false);
@@ -118,7 +120,13 @@ export class StaffSession {
         }
         if (topic === 'wc.hand') this.hands.value = { ...this.hands.value, [p.identity]: msg['on'] === true };
         if (topic === 'wc.help') this.helps.value = { ...this.helps.value, [p.identity]: Date.now() };
-        if (topic === 'wc.report') this.reports.value = { ...this.reports.value, [p.identity]: msg as unknown as GuestReport };
+        if (topic === 'wc.report') {
+          const r = msg as unknown as GuestReport;
+          this.reports.value = { ...this.reports.value, [p.identity]: r };
+          // The report carries the same numbers: a phone still on an older page sends only this, every ten seconds.
+          if (r.up) this.live.value = { ...this.live.value, [p.identity]: { quality: r.quality, up: r.up, seenAt: Date.now() } };
+        }
+        if (topic === 'wc.live') this.live.value = { ...this.live.value, [p.identity]: { ...(msg as unknown as Omit<GuestLive, 'seenAt'>), seenAt: Date.now() } };
       });
   }
 

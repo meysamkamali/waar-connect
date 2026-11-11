@@ -74,6 +74,8 @@ export interface User {
 export interface PcrSettings {
   slots: number;
   ifbAllowed: boolean;
+  /** A guest goes to the studio, and on air, only after the engineer approved them. */
+  approval: boolean;
   languages: string[];
   outputNames: string[];
   /** NDI source the gateway publishes as the return feed; null = the return feed page on the studio PC. */

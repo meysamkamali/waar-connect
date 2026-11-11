@@ -47,6 +47,7 @@ export function isTechnicalPatch(body: { name?: unknown; settings?: Record<strin
 const Settings = z.object({
   slots: z.int().min(1).max(16),
   ifbAllowed: z.boolean(),
+  approval: z.boolean(),
   languages: z.array(z.string().min(2).max(8)).min(1).max(8),
   outputNames: z.array(z.string().trim().max(40)).max(16),
   returnSource: z.string().trim().max(200).nullable(),
@@ -68,6 +69,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
   const out: PcrSettings = {
     ...base,
     outputNames: [...base.outputNames],
+    approval: base.approval ?? true,
     returnSource: base.returnSource ?? null,
     returnHeight: base.returnHeight ?? null,
     returnKbps: base.returnKbps ?? null,
@@ -77,6 +79,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
   if (patch) {
     if (patch.slots !== undefined) out.slots = patch.slots;
     if (patch.ifbAllowed !== undefined) out.ifbAllowed = patch.ifbAllowed;
+    if (patch.approval !== undefined) out.approval = patch.approval;
     if (patch.languages !== undefined) out.languages = patch.languages;
     if (patch.outputNames !== undefined) out.outputNames = [...patch.outputNames];
     if (patch.returnSource !== undefined) out.returnSource = patch.returnSource?.trim() || null;
@@ -160,7 +163,8 @@ export async function pcrRoutes(app: FastifyInstance): Promise<void> {
       .returning();
     // The running controller holds the slots and the IFB rule; when those change it rebuilds from
     // LiveKit on the next request. A technical change leaves the live room alone.
-    if (settings.slots !== current.settings.slots || settings.ifbAllowed !== current.settings.ifbAllowed) rooms.drop(current.livekitRoom);
+    const live = (s: PcrSettings) => `${s.slots}/${s.ifbAllowed}/${s.approval}`;
+    if (live(settings) !== live(mergeSettings(current.settings, undefined))) rooms.drop(current.livekitRoom);
     await db.insert(events).values({ pcrId: current.id, actor: req.user!.id, type: 'pcr.updated', payload: { name: row!.name, settings: row!.settings } });
     return { pcr: row };
   });

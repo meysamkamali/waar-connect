@@ -49,7 +49,7 @@ const PROD = 'producer:p';
 const ENG = 'engineer:e';
 const OUT1 = 'out:slot-1';
 
-async function roomWithEveryone(settings = { slots: 4, ifbAllowed: true }) {
+async function roomWithEveryone(settings = { slots: 4, ifbAllowed: true, approval: false }) {
   const fake = new FakeControl();
   const c = new RoomController('ep-1', fake, settings);
   await c.load();
@@ -130,7 +130,7 @@ describe('room controller', () => {
     await c.act({ type: 'ifb', guest: A, on: false }, ENG);
     assert.deepEqual(fake.subsOf(A), ['pgm-a', 'pgm-v']);
 
-    const strict = await roomWithEveryone({ slots: 4, ifbAllowed: false });
+    const strict = await roomWithEveryone({ slots: 4, ifbAllowed: false, approval: false });
     await strict.c.act({ type: 'admit', guest: A }, PROD);
     await strict.c.act({ type: 'slot', guest: A, slot: 1 }, PROD);
     await strict.c.act({ type: 'handoff', guest: A }, PROD);
@@ -179,7 +179,7 @@ describe('room controller', () => {
       join(PROD, [track('p-talk', TrackSource.MICROPHONE)], { 'wc.role': 'producer', 'wc.talk_to': 'all', 'wc.face_to': '', 'wc.talk_allowed': '' }),
       join('out:slot-3'),
     ];
-    const c = new RoomController('ep-1', fake, { slots: 4, ifbAllowed: true });
+    const c = new RoomController('ep-1', fake, { slots: 4, ifbAllowed: true, approval: false });
     await c.load();
     const snap = c.snapshot();
     assert.equal(snap.guests[0]?.place, 'studio');
@@ -189,8 +189,46 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf('out:slot-3'), ['a-cam']);
   });
 
+  it('where the studio asks for it, a guest goes to the studio and on air only with the engineer\'s approval', async () => {
+    const { fake, c } = await roomWithEveryone({ slots: 4, ifbAllowed: true, approval: true });
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await assert.rejects(c.act({ type: 'handoff', guest: A }, PROD), /not approved/);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.place, 'green', 'still in the green room');
+
+    await c.act({ type: 'ready', guest: A, on: true }, ENG);
+    assert.equal(fake.attrs.get(A)?.['wc.ready'], '1', 'the approval is on the participant, so it survives a reconnect');
+    await c.act({ type: 'handoff', guest: A }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.tally, 'standby');
+
+    // withdrawn while on stand by: not on air
+    await c.act({ type: 'ready', guest: A, on: false }, ENG);
+    await assert.rejects(c.act({ type: 'tally', guest: A, tally: 'onair' }, PROD), /withdrew/);
+    await c.act({ type: 'ready', guest: A, on: true }, ENG);
+    await c.act({ type: 'tally', guest: A, tally: 'onair' }, PROD);
+
+    // withdrawn while on air: the guest is not cut, and stand by is always allowed
+    await c.act({ type: 'ready', guest: A, on: false }, ENG);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.tally, 'onair');
+    await c.act({ type: 'tally', guest: A, tally: 'standby' }, PROD);
+    assert.equal(fake.attrs.get(A)?.['wc.tally'], 'standby');
+
+    // back in the green room the approval the engineer gave is kept
+    await c.act({ type: 'ready', guest: A, on: true }, ENG);
+    await c.act({ type: 'bringBack', guest: A }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.ready, true);
+    await c.act({ type: 'handoff', guest: A }, PROD);
+  });
+
+  it('a studio that does not ask for the approval sends guests without it', async () => {
+    const { c } = await roomWithEveryone({ slots: 4, ifbAllowed: true, approval: false });
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await c.act({ type: 'handoff', guest: A }, PROD);
+    await c.act({ type: 'tally', guest: A, tally: 'onair' }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.tally, 'onair');
+  });
+
   it('slots are exclusive, bounded and locked while on the studio side', async () => {
-    const { c } = await roomWithEveryone({ slots: 2, ifbAllowed: false });
+    const { c } = await roomWithEveryone({ slots: 2, ifbAllowed: false, approval: false });
     await c.act({ type: 'admit', guest: A }, PROD);
     await c.act({ type: 'admit', guest: B }, PROD);
     await assert.rejects(c.act({ type: 'slot', guest: A, slot: 3 }, PROD), /1 to 2/);
@@ -231,7 +269,7 @@ describe('room controller', () => {
     assert.deepEqual(fake.subsOf('studio'), []);
   });
   it('send to studio takes the first free slot and bring back frees it', async () => {
-    const { fake, c } = await roomWithEveryone({ slots: 2, ifbAllowed: false });
+    const { fake, c } = await roomWithEveryone({ slots: 2, ifbAllowed: false, approval: false });
     await c.act({ type: 'admit', guest: A }, PROD);
     await c.act({ type: 'admit', guest: B }, PROD);
     await c.act({ type: 'handoff', guest: A }, PROD);

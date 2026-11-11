@@ -45,6 +45,8 @@ export interface PcrSettings {
   slots: number;
   /** An engineer may talk to a guest who is in the studio (IFB override). */
   ifbAllowed: boolean;
+  /** A guest goes to the studio, and on air, only after the engineer approved them. */
+  approval: boolean;
   /** Languages offered on guest invites: ku, ckb, ar, en, tr. */
   languages: string[];
   /** Label of each output slot as the vision mixer operator knows it, e.g. "SDI 3" or "NDI Guest 1". */
@@ -68,6 +70,7 @@ export function defaultPcrSettings(slots: number): PcrSettings {
   return {
     slots,
     ifbAllowed: true,
+    approval: true,
     languages: ['ku', 'ckb', 'ar', 'en'],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
     returnSource: null,

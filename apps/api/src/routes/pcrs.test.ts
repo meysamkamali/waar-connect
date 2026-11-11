@@ -84,3 +84,14 @@ test('an engineer patch is technical only', () => {
   assert.equal(isTechnicalPatch({ settings: { slots: 8 } }), false);
   assert.equal(isTechnicalPatch({ settings: { face: {}, ifbAllowed: false } }), false);
 });
+
+test('the engineer\'s approval: asked for by default, also on rows written before it existed; the admin can switch it off', () => {
+  const base = defaultPcrSettings(2);
+  assert.equal(base.approval, true);
+  assert.equal(mergeSettings(base, { approval: false }).approval, false);
+  assert.equal(mergeSettings(mergeSettings(base, { approval: false }), { slots: 3 }).approval, false, 'untouched by other changes');
+  const old = { ...base } as Partial<typeof base>;
+  delete old.approval;
+  assert.equal(mergeSettings(old as typeof base, undefined).approval, true);
+  assert.equal(isTechnicalPatch({ settings: { approval: false } }), false, 'a studio rule, not a technical setting: the admin\'s');
+});

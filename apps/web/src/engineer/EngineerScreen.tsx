@@ -1,443 +1,134 @@
 // /app/engineer — the engineer's view of the whole station. There is no studio to sit in first:
 // every PCR is on the page (/app/engineer/:id shows one alone).
-// Every feed in a room is a tile: the studio return, the producer, and every guest from the moment
-// they open their link (still at the door). Sound is on demand, per feed; listening to a guest also
-// lets through the producer's voice while the producer talks to that guest. Selecting a feed opens
-// its technical side: a guest's phone settings, the producer's face camera, or the return feed's
-// source, picture and bitrate. Below sits how a guest's phone connects by default: the codec order,
-// picture and bitrate every new guest starts with.
+// Per studio: its two own sources (the return feed and the producer) and one row per guest, from the
+// moment they open their link. A guest's row keeps the line and picture meters in view as bars, and
+// carries the approval for air: where the studio asks for it, the producer cannot send a guest to
+// the studio or put them on air before the engineer approved them here.
+// Sound is on demand, per guest; listening to a guest also lets through the producer's voice while
+// the producer talks to that guest. Settings (a guest's phone, the producer's camera, the return
+// feed, how phones connect) open in the side panel.
 // The engineer only receives: no microphone, no camera, so the page joins by itself.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
-import {
-  CODEC_NAMES,
-  CODEC_TITLES,
-  DEFAULT_GUEST_PREFS,
-  DEGRADE_MODES,
-  describeChoice,
-  ENCODER_KINDS,
-  ENCODER_TITLES,
-  FACE_HEIGHTS,
-  FACE_RATES,
-  GUEST_HEIGHTS,
-  GUEST_RATES,
-  MAX_CODEC_CHOICES,
-  normalizeFacePrefs,
-  normalizeGuestPrefs,
-  pickCodecLine,
-  RETURN_HEIGHTS,
-  RETURN_KBPS_CHOICES,
-  roleOf,
-  STUDIO_IDENTITY,
-  talksTo,
-  type CodecChoice,
-  type CodecName,
-  type CodecSupport,
-  type EncoderKind,
-  type FacePrefs,
-  type GuestPrefs,
-  type GuestState,
-  type StaffState,
-} from '@waar-connect/shared';
+import { CODEC_TITLES, normalizeGuestPrefs, roleOf, STUDIO_IDENTITY, talksTo, type CodecName, type CodecSupport, type GuestState, type StaffState } from '@waar-connect/shared';
 import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useState } from 'preact/hooks';
-import { returnLine, SourcePicker } from '../admin/Admin.tsx';
-import { act, ApiError, gatewayStatus, getPcr, getRoom, joinPcr, listPcrs, updatePcr, type GatewayView, type Pcr, type PcrSettings, type PcrView, type RoomSnapshot, type User } from '../api.ts';
+import { act, ApiError, gatewayStatus, getPcr, getRoom, joinPcr, listPcrs, updatePcr, type GatewayView, type Pcr, type PcrView, type RoomSnapshot } from '../api.ts';
 import { AudioSinks, VideoView } from '../components/media.tsx';
-import { DEGRADE_LABELS, phoneModel, type GuestReport } from '../lib/report.ts';
-import { formatSummary } from '../lib/stats.ts';
+import { Icon, Info } from '../components/ui.tsx';
+import { assess, type Quality } from '../lib/quality.ts';
+import { phoneModel, type GuestReport } from '../lib/report.ts';
 import { PhonePanel } from '../staff/GuestCard.tsx';
 import { StaffSession, type StaffTile } from '../staff/session.ts';
+import { FaceEditor, GuestPrefsEditor, prefsLine, ReturnEditor, type Save } from './editors.tsx';
+import { GuestRow } from './GuestRow.tsx';
 
-type FeedKind = 'studio' | 'producer' | 'guest';
-
-interface Feed {
-  identity: string;
-  kind: FeedKind;
-  name: string;
-  badge: string;
-  tone: '' | 'standby' | 'onair';
-  /** One line under the picture: what this feed is doing technically. */
-  sub: string;
-  tile: StaffTile | undefined;
-  connected: boolean;
-  /** The engineer can listen to it (the studio's sound is never sent to staff). */
-  hasSound: boolean;
-}
-
-/** Shown while nobody sits at the producer desk, so the face camera settings stay reachable. */
+/** Stands for the producer's seat while nobody sits there, so the face camera settings stay reachable. */
 const NO_PRODUCER = 'producer:';
-const PLACE_LABEL: Readonly<Record<GuestState['place'], string>> = { lobby: 'at the door', green: 'green room', studio: 'studio', left: 'left' };
-const GUEST_KBPS_CHOICES = [400, 800, 1500, 2500, 4000, 6000, 8000];
-const FACE_KBPS_CHOICES = [150, 300, 600, 1000, 1500, 2500, 4000];
+
+/** What one studio adds to the station's numbers at the top of the page. */
+interface DeskSummary {
+  guests: number;
+  waiting: number;
+  problems: number;
+  onAir: number;
+}
 
 const message = (err: unknown) => (err instanceof ApiError ? err.message : err instanceof Error ? err.message : String(err));
-const withValue = (choices: readonly number[], value: number) => (choices.includes(value) ? [...choices] : [...choices, value].sort((a, b) => a - b));
-const numberOf = (e: Event) => Number((e.currentTarget as HTMLSelectElement).value);
 
 function encoderMark(support: CodecSupport | undefined): string {
-  return support === 'hw' ? ' ⚡' : support === 'sw' ? ' (software)' : '';
+  return support === 'hw' ? ' (hardware)' : support === 'sw' ? ' (software)' : '';
 }
 
-/** One line on a guest's phone for the tile: codec, picture and cap from its own report, and what arrives here. */
-function guestLine(r: GuestReport | undefined, tile: StaffTile | undefined): string {
-  const parts: string[] = [];
-  if (r) {
-    const codec = r.codec as CodecName;
-    parts.push(`${CODEC_TITLES[codec] ?? r.codec}${encoderMark(r.codecs?.[codec])}`);
-    if (r.height) parts.push(`${r.height}p${r.fps ? Math.round(r.fps) : ''}`);
-    parts.push(`cap ${r.kbps}`);
-  }
-  if (tile?.stats) parts.push(`in ${tile.stats.kbps} kbit/s`, `loss ${tile.stats.lossPct}%`);
-  return parts.length ? parts.join(' · ') : 'no report yet';
+/** The phone in a few words: codec on the wire, model, network, battery. */
+function guestFacts(r: GuestReport | undefined): string {
+  if (!r) return '';
+  const codec = (r.wire ?? r.codec) as CodecName;
+  const parts = [`${CODEC_TITLES[codec] ?? codec}${encoderMark(r.codecs?.[codec])}`, phoneModel(r.ua)];
+  if (r.net) parts.push(r.net);
+  if (r.relay) parts.push('relay');
+  if (r.battery !== undefined) parts.push(`battery ${r.battery} %`);
+  return parts.join(' · ');
 }
 
-function FeedTile({ feed, selected, level, listening, onSelect, onListen }: { feed: Feed; selected: boolean; level: number; listening: boolean; onSelect: () => void; onListen: () => void }) {
-  const video = feed.tile && !feed.tile.videoMuted ? feed.tile.video : null;
-  const empty = !feed.connected ? 'not connected' : feed.kind === 'producer' ? 'face camera off' : 'no picture yet';
+/** Studio first (on air, then stand by), then the green room, then the door. */
+function placeRank(g: GuestState): number {
+  if (g.place === 'studio') return g.tally === 'onair' ? 0 : g.tally === 'standby' ? 1 : 2;
+  return g.place === 'green' ? 3 : 4;
+}
+
+function Count({ n, label, tone }: { n: number; label: string; tone?: 'warn' | 'bad' | 'air' }) {
   return (
-    <article class={`feed ${selected ? 'selected' : ''} ${feed.connected ? '' : 'offline'}`} onClick={onSelect}>
+    <span class={`eng-count ${n > 0 ? (tone ?? '') : 'zero'}`}>
+      <b>{n}</b>
+      {label}
+    </span>
+  );
+}
+
+function Counts({ s, approval }: { s: DeskSummary; approval: boolean }) {
+  return (
+    <>
+      <Count n={s.guests} label={s.guests === 1 ? 'guest' : 'guests'} />
+      {approval && <Count n={s.waiting} label="to approve" tone="warn" />}
+      <Count n={s.problems} label={s.problems === 1 ? 'problem' : 'problems'} tone="bad" />
+      {s.onAir > 0 && <Count n={s.onAir} label="on air" tone="air" />}
+    </>
+  );
+}
+
+/** The return feed or the producer: a small picture, its state in a line, and its settings on a click. */
+function SourceTile(p: { name: string; sub: string; tile: StaffTile | undefined; connected: boolean; empty: string; selected: boolean; level?: number | undefined; listening?: boolean | undefined; onSelect: () => void; onListen?: (() => void) | undefined }) {
+  const video = p.tile && !p.tile.videoMuted ? p.tile.video : null;
+  return (
+    <div
+      class={`eng-source ${p.selected ? 'selected' : ''} ${p.connected ? '' : 'offline'}`}
+      role="button"
+      tabIndex={0}
+      aria-pressed={p.selected}
+      onClick={p.onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          p.onSelect();
+        }
+      }}
+    >
       <div class="guest-video">
         <VideoView track={video} />
-        {!video && <div class="guest-novideo">{empty}</div>}
-        <div class="guest-overlay">
-          <span class="name">{feed.name}</span>
-          <span class={`slot ${feed.tone ? `tally ${feed.tone}` : ''}`}>{feed.badge}</span>
-          {feed.tile && feed.kind !== 'studio' && <span class={`slot quality-${feed.tile.quality}`}>{feed.tile.quality}</span>}
-        </div>
+        {!video && <div class="guest-novideo">{p.empty}</div>}
       </div>
-      <div class="level" title="Sound level as the server hears it">
-        <div class="level-fill" style={{ width: `${Math.round(Math.min(1, level * 2.5) * 100)}%` }} />
-      </div>
-      <div class="feed-foot">
-        <span class="muted small">{feed.sub}</span>
-        {feed.hasSound && (
-          <button
-            class={`chip ${listening ? 'on' : ''}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              onListen();
-            }}
-          >
-            {listening ? '🔊 listening' : '🔈 listen'}
-          </button>
-        )}
-      </div>
-    </article>
-  );
-}
-
-type Save = (patch: Partial<PcrSettings>) => Promise<void>;
-
-/** The producer's face camera: picture, frame rate and bitrate, kept per PCR and followed by the producer's console. */
-function FaceEditor({ pcr, tile, onSave }: { pcr: Pcr; tile: StaffTile | undefined; onSave: Save }) {
-  const saved = normalizeFacePrefs(pcr.settings.face);
-  const [draft, setDraft] = useState<FacePrefs | null>(null);
-  const [busy, setBusy] = useState(false);
-  const f = draft ?? saved;
-  const set = (patch: Partial<FacePrefs>) => setDraft({ ...f, ...patch });
-  return (
-    <>
-      <pre class="stats">{tile?.video && !tile.videoMuted ? formatSummary('IN ', tile.stats) : 'The face camera is off. It runs only while the producer is face to face with a guest.'}</pre>
-      <div class="form-grid">
-        <label>
-          Picture
-          <select value={f.height} onChange={(e) => set({ height: numberOf(e) })}>
-            {FACE_HEIGHTS.map((h) => (
-              <option key={h} value={h}>
-                {h}p
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Frame rate
-          <select value={f.fps} onChange={(e) => set({ fps: numberOf(e) })}>
-            {FACE_RATES.map((r) => (
-              <option key={r} value={r}>
-                {r} fps
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Bitrate cap
-          <select value={f.kbps} onChange={(e) => set({ kbps: numberOf(e) })}>
-            {withValue(FACE_KBPS_CHOICES, f.kbps).map((k) => (
-              <option key={k} value={k}>
-                {k} kbit/s
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <button
-          class="btn small"
-          disabled={busy || draft === null}
-          onClick={() => {
-            setBusy(true);
-            void onSave({ face: f })
-              .then(() => setDraft(null))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Save
-        </button>
-        <span class="muted small">The producer's console picks a change up within a few seconds and starts its camera again with it.</span>
-      </div>
-    </>
-  );
-}
-
-/** The return feed: which NDI source, how large, how many bits. The gateway picks a change up within 15 s. */
-function ReturnEditor({ pcr, gateway, tile, onSave }: { pcr: Pcr; gateway: GatewayView | null; tile: StaffTile | undefined; onSave: Save }) {
-  type Draft = Pick<PcrSettings, 'returnSource' | 'returnHeight' | 'returnKbps'>;
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [busy, setBusy] = useState(false);
-  const s = pcr.settings;
-  const d: Draft = draft ?? { returnSource: s.returnSource ?? null, returnHeight: s.returnHeight ?? null, returnKbps: s.returnKbps ?? null };
-  const defaults = gateway?.status?.defaults;
-  return (
-    <>
-      <pre class="stats">
-        {formatSummary('IN ', tile?.stats)}
-        {'\n'}
-        {returnLine(pcr, gateway)}
-      </pre>
-      <div class="form-grid" style={{ gridTemplateColumns: '1fr' }}>
-        <label>
-          NDI source
-          <SourcePicker value={d.returnSource} gateway={gateway} onChange={(v) => setDraft({ ...d, returnSource: v })} />
-        </label>
-      </div>
-      <div class="form-grid">
-        <label>
-          Picture
-          <select value={d.returnHeight ?? ''} onChange={(e) => setDraft({ ...d, returnHeight: numberOf(e) || null })}>
-            <option value="">gateway default{defaults ? ` (${defaults.height ? `${defaults.height}p` : 'source size'})` : ''}</option>
-            {RETURN_HEIGHTS.map((h) => (
-              <option key={h} value={h}>
-                {h}p
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Bitrate cap
-          <select value={d.returnKbps ?? ''} onChange={(e) => setDraft({ ...d, returnKbps: numberOf(e) || null })}>
-            <option value="">gateway default{defaults ? ` (${defaults.kbps} kbit/s)` : ''}</option>
-            {RETURN_KBPS_CHOICES.map((k) => (
-              <option key={k} value={k}>
-                {k} kbit/s
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <button
-          class="btn small"
-          disabled={busy || draft === null}
-          onClick={() => {
-            setBusy(true);
-            void onSave(d)
-              .then(() => setDraft(null))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Save
-        </button>
-        <span class="muted small">The gateway takes a change within 15 seconds; the picture drops for a moment while it restarts the feed.</span>
-      </div>
-    </>
-  );
-}
-
-/**
- * How a guest's phone connects when nothing else was pushed to it: the codec order (tried from the
- * top), picture, frame rate, bitrate cap and what gives way first on a short line.
- */
-function GuestPrefsEditor({ pcr, phones, onSave, onSaveAll }: { pcr: Pcr; phones: { name: string; codecs: GuestReport['codecs'] }[]; onSave: Save; onSaveAll: Save | undefined }) {
-  const saved = normalizeGuestPrefs(pcr.settings.guest);
-  const [draft, setDraft] = useState<GuestPrefs | null>(null);
-  const [busy, setBusy] = useState(false);
-  const p = draft ?? saved;
-  const set = (patch: Partial<GuestPrefs>) => setDraft({ ...p, ...patch });
-  const setLine = (i: number, patch: Partial<CodecChoice>) => set({ codecs: p.codecs.map((c, j) => (j === i ? { ...c, ...patch } : c)) });
-  const move = (i: number, by: number) => {
-    const j = i + by;
-    if (j < 0 || j >= p.codecs.length) return;
-    const codecs = [...p.codecs];
-    [codecs[i], codecs[j]] = [codecs[j]!, codecs[i]!];
-    set({ codecs });
-  };
-  const add = () => {
-    const taken = new Set(p.codecs.map((c) => `${c.codec}/${c.encoder}`));
-    for (const encoder of ENCODER_KINDS) {
-      for (const codec of CODEC_NAMES) {
-        if (!taken.has(`${codec}/${encoder}`)) return set({ codecs: [...p.codecs, { codec, encoder }] });
-      }
-    }
-  };
-  const repeated = (i: number) => p.codecs.findIndex((c) => c.codec === p.codecs[i]!.codec && c.encoder === p.codecs[i]!.encoder) !== i;
-
-  return (
-    <article class="eng-card">
-      <div class="eng-prefs">
-        <div>
-          <h3>Codec order</h3>
-          <ol class="codec-order">
-            {p.codecs.map((c, i) => (
-              <li key={i} class={repeated(i) ? 'repeated' : ''}>
-                <span class="muted small">{i + 1}</span>
-                <select value={c.codec} onChange={(e) => setLine(i, { codec: (e.currentTarget as HTMLSelectElement).value as CodecName })}>
-                  {CODEC_NAMES.map((n) => (
-                    <option key={n} value={n}>
-                      {CODEC_TITLES[n]}
-                    </option>
-                  ))}
-                </select>
-                <select value={c.encoder} onChange={(e) => setLine(i, { encoder: (e.currentTarget as HTMLSelectElement).value as EncoderKind })}>
-                  {ENCODER_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {ENCODER_TITLES[k]}
-                    </option>
-                  ))}
-                </select>
-                <button class="chip" title="Try it earlier" disabled={i === 0} onClick={() => move(i, -1)}>
-                  ↑
-                </button>
-                <button class="chip" title="Try it later" disabled={i === p.codecs.length - 1} onClick={() => move(i, 1)}>
-                  ↓
-                </button>
-                <button class="chip" title="Take this line out" disabled={p.codecs.length <= 1} onClick={() => set({ codecs: p.codecs.filter((_, j) => j !== i) })}>
-                  ✕
-                </button>
-                {repeated(i) && <span class="muted small">same as a line above</span>}
-              </li>
-            ))}
-          </ol>
-          <button class="chip" disabled={p.codecs.length >= MAX_CODEC_CHOICES} onClick={add}>
-            + add a line
-          </button>
-          <p class="muted small">
-            A phone takes the first line it can do. “Hardware” and “software” match only a phone that says which encoder it has; “any encoder” matches every phone that can send the codec. When no line fits, the phone
-            sends H.264. A codec that fails on a phone is skipped there and the next line is taken.
-          </p>
-        </div>
-        <div>
-          <h3>Picture and bitrate</h3>
-          <div class="form-grid">
-            <label>
-              Picture
-              <select value={p.height} onChange={(e) => set({ height: numberOf(e) })}>
-                {GUEST_HEIGHTS.map((h) => (
-                  <option key={h} value={h}>
-                    {h}p
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Frame rate
-              <select value={p.fps} onChange={(e) => set({ fps: numberOf(e) })}>
-                {GUEST_RATES.map((r) => (
-                  <option key={r} value={r}>
-                    {r} fps
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Bitrate cap
-              <select value={p.kbps} onChange={(e) => set({ kbps: numberOf(e) })}>
-                {withValue(GUEST_KBPS_CHOICES, p.kbps).map((k) => (
-                  <option key={k} value={k}>
-                    {k} kbit/s
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              When the line is short
-              <select value={p.degrade} onChange={(e) => set({ degrade: (e.currentTarget as HTMLSelectElement).value as GuestPrefs['degrade'] })}>
-                {DEGRADE_MODES.map((m) => (
-                  <option key={m} value={m}>
-                    {DEGRADE_LABELS[m]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          {phones.length > 0 && (
-            <>
-              <h3 style={{ marginTop: '12px' }}>With this order, the phones here would send</h3>
-              <ul class="list small">
-                {phones.map((ph) => {
-                  const line = pickCodecLine(p.codecs, ph.codecs);
-                  return (
-                    <li key={ph.name}>
-                      <strong>{ph.name}</strong>
-                      <span class="muted">{line >= 0 ? `line ${line + 1}: ${describeChoice(p.codecs[line]!)}` : 'no line fits: H.264'}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </>
+      <div class="eng-source-body">
+        <div class="eng-source-name">
+          {p.name}
+          {p.onListen && (
+            <button
+              class={`chip ${p.listening ? 'on' : ''}`}
+              aria-pressed={p.listening}
+              aria-label={p.listening ? 'Listening' : 'Listen'}
+              onClick={(e) => {
+                e.stopPropagation();
+                p.onListen?.();
+              }}
+            >
+              <Icon name={p.listening ? 'sound' : 'silent'} />
+            </button>
           )}
         </div>
-      </div>
-      <div class="row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          class="btn"
-          disabled={busy || draft === null}
-          onClick={() => {
-            setBusy(true);
-            void onSave({ guest: p })
-              .then(() => setDraft(null))
-              .finally(() => setBusy(false));
-          }}
-        >
-          Save
-        </button>
-        {onSaveAll && (
-          <button
-            class="btn secondary small"
-            title="Write this order, picture and bitrate to every studio on this page"
-            disabled={busy}
-            onClick={() => {
-              setBusy(true);
-              void onSaveAll({ guest: p })
-                .then(() => setDraft(null))
-                .finally(() => setBusy(false));
-            }}
-          >
-            Save for every studio
-          </button>
+        <div class="eng-source-sub">{p.sub}</div>
+        {p.level !== undefined && (
+          <div class="eng-sound-track">
+            <div class="eng-sound-fill" style={{ width: `${Math.round(Math.min(1, p.level * 2.5) * 100)}%` }} />
+          </div>
         )}
-        <button class="btn secondary small" disabled={draft === null} onClick={() => setDraft(null)}>
-          Undo changes
-        </button>
-        <button class="btn secondary small" onClick={() => setDraft(normalizeGuestPrefs(DEFAULT_GUEST_PREFS))}>
-          Station defaults
-        </button>
-        <span class="muted small">
-          Used when a guest connects or reloads. A setting pushed to one phone from its own panel wins on that phone; “studio preferences” in that panel brings the phone back to these.
-        </span>
       </div>
-    </article>
+    </div>
   );
-}
-
-/** The codec order and the picture of a studio's guest preferences in one line. */
-function prefsLine(p: GuestPrefs): string {
-  return `${p.codecs.map(describeChoice).join(' › ')} · ${p.height}p${p.fps} · ${p.kbps} kbit/s`;
 }
 
 /**
  * One studio on the engineer's page: its own connection to that studio's room (receive only), its
- * feeds, the technical side of the selected feed, and folded away how its guests connect.
+ * sources and guests, and the settings of whatever is selected.
  */
 function PcrDesk({
   pcrId,
@@ -447,10 +138,11 @@ function PcrDesk({
   onError,
   reloadKey,
   saveAll,
+  onSummary,
 }: {
   pcrId: string;
   gateway: GatewayView | null;
-  /** The selected feed when it is one of this studio's, else null. */
+  /** What is selected when it belongs to this studio, else null. */
   selected: string | null;
   onSelect: (identity: string | null) => void;
   onError: (text: string) => void;
@@ -458,11 +150,13 @@ function PcrDesk({
   reloadKey: number;
   /** Saves a setting to every studio on the page; absent when this is the only one. */
   saveAll: Save | undefined;
+  onSummary: (pcrId: string, summary: (DeskSummary & { approval: boolean }) | null) => void;
 }) {
   const session = useMemo(() => new StaffSession(), []);
   const [view, setView] = useState<PcrView | null>(null);
   const [snap, setSnap] = useState<RoomSnapshot | null>(null);
   const [listening, setListening] = useState<string[]>([]);
+  const [now, setNow] = useState(() => Date.now());
 
   const refresh = () =>
     getPcr(pcrId)
@@ -480,19 +174,63 @@ function PcrDesk({
         .catch(() => undefined);
     pollRoom();
     const room = setInterval(pollRoom, 2000);
+    const clock = setInterval(() => setNow(Date.now()), 1000); // numbers that stop coming turn grey
     // Nothing to ask the browser for (no microphone, no camera): join at once.
     joinPcr(pcrId)
       .then((j) => session.connect(j))
       .catch((err: unknown) => onError(message(err)));
     return () => {
       clearInterval(room);
+      clearInterval(clock);
       void session.leave();
+      onSummary(pcrId, null);
     };
   }, [pcrId, session]);
 
   useEffect(() => session.setFocus(selected), [selected, session]);
 
-  if (!view) {
+  const pcr = view?.pcr;
+  const needsApproval = pcr ? pcr.settings.approval !== false : true;
+  const prefs = normalizeGuestPrefs(pcr?.settings.guest);
+  const staff = snap?.staff ?? [];
+  const connected = new Set(snap?.connected ?? []);
+  const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
+  const reportFor = (identity: string) => session.reports.value[identity];
+  const nameOf = (identity: string) => view?.guests.find((g) => g.identity === identity)?.displayName ?? tileFor(identity)?.name ?? identity.replace(/^guest:/, '');
+
+  const qualityOf = (g: GuestState): Quality => {
+    if (!connected.has(g.identity)) return assess({});
+    const tile = tileFor(g.identity);
+    const report = reportFor(g.identity);
+    const live = session.live.value[g.identity];
+    const camera = report?.width && report.height ? Math.min(report.width, report.height) : report?.height;
+    return assess({
+      line: tile && tile.quality !== 'unknown' ? tile.quality : (live?.quality ?? report?.quality),
+      up: live?.up ?? report?.up,
+      capKbps: report?.kbps ?? prefs.kbps,
+      cameraHeight: camera ?? prefs.height,
+      askedFps: report?.fpsAsked ?? prefs.fps,
+      recv: tile?.stats,
+      ageMs: live ? now - live.seenAt : undefined,
+    });
+  };
+
+  const guests = (snap?.guests ?? []).filter((g) => g.place !== 'left');
+  const rows = guests
+    .map((g, i) => ({ g, i, on: connected.has(g.identity), q: qualityOf(g) }))
+    .sort((a, b) => placeRank(a.g) - placeRank(b.g) || a.i - b.i);
+  const summary: DeskSummary = {
+    guests: rows.filter((r) => r.on).length,
+    waiting: needsApproval ? rows.filter((r) => r.on && !r.g.ready).length : 0,
+    problems: rows.filter((r) => r.on && r.q.tone === 'bad').length,
+    onAir: rows.filter((r) => r.g.place === 'studio' && r.g.tally === 'onair').length,
+  };
+  const summaryKey = `${summary.guests}/${summary.waiting}/${summary.problems}/${summary.onAir}/${needsApproval}`;
+  useEffect(() => {
+    if (pcr) onSummary(pcrId, { ...summary, approval: needsApproval });
+  }, [summaryKey, pcr === undefined]);
+
+  if (!view || !pcr) {
     return (
       <section class="eng-pcr">
         <p class="muted">Loading…</p>
@@ -500,52 +238,12 @@ function PcrDesk({
     );
   }
 
-  const pcr = view.pcr;
-  const guests = snap?.guests ?? [];
-  const staff = snap?.staff ?? [];
-  const connected = new Set(snap?.connected ?? []);
-  const tileFor = (identity: string) => session.tiles.value.find((t) => t.identity === identity);
-  const reportFor = (identity: string) => session.reports.value[identity];
-  const nameOf = (identity: string) => view.guests.find((g) => g.identity === identity)?.displayName ?? tileFor(identity)?.name ?? identity.replace(/^guest:/, '');
   const producers = staff.filter((s) => s.role === 'producer' && connected.has(s.identity));
-
   const producerLine = (p: StaffState): string => {
-    const talk = p.talkTo === 'none' ? 'not talking' : p.talkTo === 'all' ? 'talking to every green-room guest' : `talking to ${p.talkTo.map(nameOf).join(', ')}`;
+    const talk = p.talkTo === 'none' ? 'not talking' : p.talkTo === 'all' ? 'talking to the green room' : `talking to ${p.talkTo.map(nameOf).join(', ')}`;
     return p.faceTo ? `${talk} · face to face with ${nameOf(p.faceTo)}` : talk;
   };
   const studioTile = tileFor(STUDIO_IDENTITY);
-
-  const feeds: Feed[] = [
-    {
-      identity: STUDIO_IDENTITY,
-      kind: 'studio',
-      name: 'Studio return',
-      badge: 'program',
-      tone: '',
-      sub: `${pcr.settings.returnSource ?? 'from the return feed page'}${studioTile?.stats ? ` · in ${studioTile.stats.kbps} kbit/s` : ''}`,
-      tile: studioTile,
-      connected: snap?.studioConnected ?? false,
-      hasSound: false,
-    },
-    ...(producers.length
-      ? producers.map(
-          (p): Feed => ({ identity: p.identity, kind: 'producer', name: tileFor(p.identity)?.name ?? 'Producer', badge: 'producer', tone: '', sub: producerLine(p), tile: tileFor(p.identity), connected: true, hasSound: true }),
-        )
-      : [{ identity: NO_PRODUCER, kind: 'producer', name: 'Producer', badge: 'producer', tone: '', sub: 'nobody at the producer desk', tile: undefined, connected: false, hasSound: false } satisfies Feed]),
-    ...guests.map(
-      (g): Feed => ({
-        identity: g.identity,
-        kind: 'guest',
-        name: nameOf(g.identity),
-        badge: g.place === 'studio' ? `studio${g.slot !== null ? ` · slot ${g.slot}` : ''} · ${g.tally === 'onair' ? 'ON AIR' : 'stand by'}` : PLACE_LABEL[g.place],
-        tone: g.place === 'studio' && g.tally !== 'off' ? g.tally : '',
-        sub: guestLine(reportFor(g.identity), tileFor(g.identity)),
-        tile: tileFor(g.identity),
-        connected: connected.has(g.identity),
-        hasSound: true,
-      }),
-    ),
-  ];
 
   // Sound: the guests the engineer chose, and a producer's talk when chosen itself or while it goes to a chosen guest.
   const guestIds = new Set(guests.map((g) => g.identity));
@@ -578,105 +276,143 @@ function PcrDesk({
         throw err;
       });
 
-  const sel = feeds.find((f) => f.identity === selected);
-  const selReport = sel?.kind === 'guest' ? reportFor(sel.identity) : undefined;
+  const approve = (identity: string, on: boolean) =>
+    void act(pcrId, { type: 'ready', guest: identity, on })
+      .then((r) => setSnap(r.snapshot))
+      .catch((err: unknown) => onError(message(err)));
+
+  const toggle = (identity: string) => onSelect(selected === identity ? null : identity);
+  const selGuest = rows.find((r) => r.g.identity === selected);
+  const selProducer = selected !== null && (selected === NO_PRODUCER || producers.some((p) => p.identity === selected));
+  const selStudio = selected === STUDIO_IDENTITY;
+  const open = selGuest !== undefined || selProducer || selStudio;
   const phones = guests.filter((g) => reportFor(g.identity)?.codecs).map((g) => ({ name: nameOf(g.identity), codecs: reportFor(g.identity)!.codecs }));
-  const online = guests.filter((g) => connected.has(g.identity)).length;
   const close = (
-    <button class="link" onClick={() => onSelect(null)}>
-      close ✕
+    <button class="chip" onClick={() => onSelect(null)} aria-label="Close">
+      <Icon name="close" />
     </button>
   );
 
   return (
     <section class="eng-pcr">
-      <header class="row between eng-pcr-head">
-        <div class="row" style={{ alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+      <header class="eng-pcr-head">
+        <div class="eng-pcr-title">
           <h2 class="eng-pcr-name">{pcr.name}</h2>
-          <span class={`badge ${snap?.studioConnected ? 'live' : ''}`}>{snap?.studioConnected ? 'return feed on' : 'no return feed'}</span>
-          <span class={`status ${session.status.value === 'connected' ? 'ok' : 'warn'}`}>{session.status.value}</span>
-          <span class="muted small">
-            {online === 1 ? '1 guest connected' : `${online} guests connected`} · {producers.length ? 'producer at the desk' : 'no producer'}
-          </span>
+          <span class={`eng-pill ${snap?.studioConnected ? 'on' : 'off'}`}>return feed</span>
+          <span class={`eng-pill ${producers.length ? 'on' : ''}`}>producer</span>
+          {session.status.value !== 'connected' && <span class="status warn">{session.status.value}</span>}
         </div>
-        <div class="row" style={{ alignItems: 'center' }}>
-          <span class="muted small">{listening.length ? `listening to ${listening.length}` : 'sound off'}</span>
-          <button class="btn secondary small" onClick={listenAll} disabled={guests.length === 0}>
-            Listen to all guests
-          </button>
-          <button class="btn secondary small" onClick={() => setListening([])} disabled={listening.length === 0}>
-            Silence
+        <div class="eng-counts">
+          <Counts s={summary} approval={needsApproval} />
+          <button class="btn secondary small" onClick={listening.length ? () => setListening([]) : listenAll} disabled={guests.length === 0}>
+            <Icon name={listening.length ? 'silent' : 'sound'} /> {listening.length ? 'Silence' : 'Listen to all'}
           </button>
         </div>
       </header>
 
-      <div class={`eng-layout ${sel ? '' : 'solo'}`}>
-        <div class="feeds">
-          {feeds.map((f) => (
-            <FeedTile
-              key={f.identity}
-              feed={f}
-              selected={selected === f.identity}
-              level={session.levels.value[f.identity] ?? 0}
-              listening={listening.includes(f.identity)}
-              onSelect={() => onSelect(selected === f.identity ? null : f.identity)}
-              onListen={() => toggleListen(f.identity)}
+      <div class={`eng-layout ${open ? '' : 'solo'}`}>
+        <div class="eng-main">
+          <div class="eng-sources">
+            <SourceTile
+              name="Studio return"
+              sub={`${pcr.settings.returnSource ?? 'from the return feed page'}${studioTile?.stats ? ` · ${studioTile.stats.kbps} kbit/s` : ''}`}
+              tile={studioTile}
+              connected={snap?.studioConnected ?? false}
+              empty={snap?.studioConnected ? 'no picture yet' : 'not connected'}
+              selected={selStudio}
+              onSelect={() => toggle(STUDIO_IDENTITY)}
             />
-          ))}
+            {producers.length ? (
+              producers.map((p) => (
+                <SourceTile
+                  key={p.identity}
+                  name={tileFor(p.identity)?.name ?? 'Producer'}
+                  sub={producerLine(p)}
+                  tile={tileFor(p.identity)}
+                  connected
+                  empty="face camera off"
+                  selected={selected === p.identity}
+                  level={session.levels.value[p.identity] ?? 0}
+                  listening={listening.includes(p.identity)}
+                  onSelect={() => toggle(p.identity)}
+                  onListen={() => toggleListen(p.identity)}
+                />
+              ))
+            ) : (
+              <SourceTile name="Producer" sub="nobody at the desk" tile={undefined} connected={false} empty="not connected" selected={selected === NO_PRODUCER} onSelect={() => toggle(NO_PRODUCER)} />
+            )}
+          </div>
+
+          <div class="eng-guests">
+            {rows.length === 0 && <div class="eng-empty">No guest in {pcr.name}</div>}
+            {rows.map(({ g, on, q }) => (
+              <GuestRow
+                key={g.identity}
+                name={nameOf(g.identity)}
+                state={g}
+                connected={on}
+                video={tileFor(g.identity)?.video ?? null}
+                level={session.levels.value[g.identity] ?? 0}
+                quality={q}
+                facts={guestFacts(reportFor(g.identity))}
+                needsApproval={needsApproval}
+                listening={listening.includes(g.identity)}
+                selected={selected === g.identity}
+                onApprove={(yes) => approve(g.identity, yes)}
+                onListen={() => toggleListen(g.identity)}
+                onSettings={() => toggle(g.identity)}
+              />
+            ))}
+          </div>
+
+          <details class="eng-fold">
+            <summary>How phones connect · {prefsLine(prefs)}</summary>
+            <GuestPrefsEditor key={JSON.stringify(pcr.settings.guest ?? null)} pcr={pcr} phones={phones} onSave={save} onSaveAll={saveAll} />
+          </details>
         </div>
 
-        {sel && (
+        {open && (
           <aside class="eng-side">
-            {sel.kind === 'guest' && (
+            {selGuest && (
               <>
                 <div class="row between">
-                  <h3 class="eng-side-title">{sel.name}</h3>
+                  <h3 class="eng-side-title">{nameOf(selGuest.g.identity)}</h3>
                   {close}
                 </div>
-                <div class="muted small">
-                  {pcr.name} · {sel.badge}
-                  {selReport ? ` · ${phoneModel(selReport.ua)}` : ''}
-                  {sel.connected ? '' : ' · not connected'}
-                </div>
-                {sel.connected ? (
+                {selGuest.on ? (
                   <div class="guest-controls">
-                    <PhonePanel tile={sel.tile} report={selReport} cmd={(command) => void act(pcrId, { type: 'command', guest: sel.identity, command }).catch((err: unknown) => onError(message(err)))} />
+                    <PhonePanel
+                      tile={tileFor(selGuest.g.identity)}
+                      report={reportFor(selGuest.g.identity)}
+                      cmd={(command) => void act(pcrId, { type: 'command', guest: selGuest.g.identity, command }).catch((err: unknown) => onError(message(err)))}
+                    />
                   </div>
                 ) : (
-                  <p class="muted">This guest is not connected right now.</p>
+                  <p class="muted">Not connected.</p>
                 )}
               </>
             )}
-            {sel.kind === 'producer' && (
+            {selProducer && (
               <>
                 <div class="row between">
-                  <h3 class="eng-side-title">Producer camera · {pcr.name}</h3>
+                  <h3 class="eng-side-title">Producer camera</h3>
                   {close}
                 </div>
-                <div class="muted small">{sel.sub}</div>
-                <FaceEditor key={`${pcr.settings.face?.height}-${pcr.settings.face?.fps}-${pcr.settings.face?.kbps}`} pcr={pcr} tile={sel.tile} onSave={save} />
+                <FaceEditor key={`${pcr.settings.face?.height}-${pcr.settings.face?.fps}-${pcr.settings.face?.kbps}`} pcr={pcr} tile={selected ? tileFor(selected) : undefined} onSave={save} />
               </>
             )}
-            {sel.kind === 'studio' && (
+            {selStudio && (
               <>
                 <div class="row between">
-                  <h3 class="eng-side-title">Studio return · {pcr.name}</h3>
+                  <h3 class="eng-side-title">Studio return</h3>
                   {close}
                 </div>
-                <ReturnEditor key={`${pcr.settings.returnSource}-${pcr.settings.returnHeight}-${pcr.settings.returnKbps}`} pcr={pcr} gateway={gateway} tile={sel.tile} onSave={save} />
+                <ReturnEditor key={`${pcr.settings.returnSource}-${pcr.settings.returnHeight}-${pcr.settings.returnKbps}`} pcr={pcr} gateway={gateway} tile={studioTile} onSave={save} />
               </>
             )}
           </aside>
         )}
       </div>
-
-      <details class="eng-fold">
-        <summary>
-          How a guest's phone connects in {pcr.name}
-          <span class="muted small"> · {prefsLine(normalizeGuestPrefs(pcr.settings.guest))}</span>
-        </summary>
-        <GuestPrefsEditor key={JSON.stringify(pcr.settings.guest ?? null)} pcr={pcr} phones={phones} onSave={save} onSaveAll={saveAll} />
-      </details>
 
       <AudioSinks tracks={audible} />
     </section>
@@ -688,12 +424,13 @@ function PcrDesk({
  * receive-only connection, so every guest of the station shows the moment they open their link.
  * With an id in the address only that studio is shown.
  */
-export function EngineerScreen({ id, user, nav }: { id?: string | undefined; user: User; nav: ComponentChildren }) {
+export function EngineerScreen({ id, nav }: { id?: string | undefined; nav: ComponentChildren }) {
   const [pcrs, setPcrs] = useState<Pcr[] | null>(null);
   const [gateway, setGateway] = useState<GatewayView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ pcr: string; identity: string } | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [sums, setSums] = useState<Record<string, DeskSummary & { approval: boolean }>>({});
 
   useEffect(() => {
     const load = () =>
@@ -723,22 +460,46 @@ export function EngineerScreen({ id, user, nav }: { id?: string | undefined; use
             })
       : undefined;
 
+  const onSummary = (pcrId: string, s: (DeskSummary & { approval: boolean }) | null) =>
+    setSums((prev) => {
+      const next = { ...prev };
+      if (s) next[pcrId] = s;
+      else delete next[pcrId];
+      return next;
+    });
+  const station = shown
+    .map((p) => sums[p.id])
+    .filter((s): s is DeskSummary & { approval: boolean } => s !== undefined)
+    .reduce((a, s) => ({ guests: a.guests + s.guests, waiting: a.waiting + s.waiting, problems: a.problems + s.problems, onAir: a.onAir + s.onAir, approval: a.approval || s.approval }), {
+      guests: 0,
+      waiting: 0,
+      problems: 0,
+      onAir: 0,
+      approval: false,
+    });
+
   return (
     <div class="screen page staff engineer">
       {nav}
-      <header class="row between">
-        <div class="row" style={{ alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+      <header class="eng-top">
+        <div class="eng-top-title">
           <h1>Engineer</h1>
-          <span class="muted small">
-            {pcrs === null ? 'loading…' : id ? 'one studio' : shown.length === 1 ? 'every connection in 1 studio' : `every connection in ${shown.length} studios`}
-          </span>
+          <Info
+            side="start"
+            below
+            text="Each bar is green when fit for air, amber when it needs watching and red when it is not fit; the marks on a bar are its limits. Phones send their numbers every two seconds; grey means no fresh numbers. Sound plays only where you press Listen. This page only receives: it never uses a microphone or a camera."
+          />
           {id && (
             <a class="link" href="/app/engineer">
-              show every studio
+              every studio
             </a>
           )}
         </div>
-        <span class="muted small">Click a feed for its technical side. Sound plays only where you press listen.</span>
+        {shown.length > 1 && (
+          <div class="eng-counts">
+            <Counts s={station} approval={station.approval} />
+          </div>
+        )}
       </header>
       {error && (
         <p class="help bad" onClick={() => setError(null)}>
@@ -746,7 +507,7 @@ export function EngineerScreen({ id, user, nav }: { id?: string | undefined; use
         </p>
       )}
 
-      {pcrs !== null && shown.length === 0 && <p class="muted">{id ? 'This studio does not exist or is closed.' : 'No studio built yet. The admin builds them under Admin.'}</p>}
+      {pcrs !== null && shown.length === 0 && <div class="eng-empty">{id ? 'This studio does not exist or is closed' : 'No studio built yet'}</div>}
 
       {shown.map((p) => (
         <PcrDesk
@@ -758,10 +519,9 @@ export function EngineerScreen({ id, user, nav }: { id?: string | undefined; use
           onError={setError}
           reloadKey={reloadKey}
           saveAll={saveAll}
+          onSummary={onSummary}
         />
       ))}
-
-      <p class="muted small">{user.name}: this page only receives. It never asks for a microphone or a camera.</p>
     </div>
   );
 }

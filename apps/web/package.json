@@ -10,7 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test src/lib/camera.test.ts"
+    "test": "node --test src/lib/camera.test.ts src/lib/quality.test.ts"
   },
   "dependencies": {
     "@preact/signals": "^2.0.0",

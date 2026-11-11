@@ -91,7 +91,12 @@ export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boo
               <h3>Guest hears</h3>
               <HearsSwitch p={p} wide />
             </section>
-            <button class="btn focus-main" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
+            <button
+              class="btn focus-main"
+              onClick={() => p.onAction({ type: 'handoff', guest: g.identity })}
+              disabled={!p.connected || (p.needsApproval && !g.ready)}
+              title={p.needsApproval && !g.ready ? 'Waiting for the engineer to approve this guest for air' : undefined}
+            >
               Send to studio →
             </button>
           </>
@@ -105,7 +110,11 @@ export function GuestFocus(p: GuestCardProps & { solo: boolean; onSolo: (on: boo
                 <button class={`btn ${g.tally === 'standby' ? 'warn' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'standby' })}>
                   Stand by
                 </button>
-                <button class={`btn ${g.tally === 'onair' ? 'danger' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'onair' })}>
+                <button
+                  class={`btn ${g.tally === 'onair' ? 'danger' : 'secondary'}`}
+                  onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'onair' })}
+                  disabled={p.needsApproval && !g.ready && g.tally !== 'onair'}
+                >
                   On air
                 </button>
               </div>

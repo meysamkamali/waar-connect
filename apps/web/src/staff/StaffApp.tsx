@@ -43,7 +43,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
   const nav = <Nav user={user} open={open} page={page} onLogout={() => setUser(null)} />;
   let body;
   if (page === 'pcrs' && id) body = <RoomScreen id={id} user={user} />;
-  else if (page === 'engineer') body = <EngineerScreen id={id} user={user} nav={nav} />;
+  else if (page === 'engineer') body = <EngineerScreen id={id} nav={nav} />;
   else if (page === 'contacts') body = <Contacts user={user} nav={nav} />;
   else if (page === 'admin' || page === 'station') {
     if (user.role !== 'admin') {

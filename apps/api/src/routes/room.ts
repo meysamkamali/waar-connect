@@ -59,6 +59,8 @@ export async function roomRoutes(app: FastifyInstance): Promise<void> {
     if (!controller) return reply.code(409).send({ error: 'This studio is closed.' });
 
     const user = req.user!;
+    // The approval for air is the engineer's to give: the one who checked the line.
+    if (body.type === 'ready' && user.role === 'producer') return reply.code(403).send({ error: 'Only the engineer approves a guest for air.' });
     const staffIdentity = identityFor(user.role === 'engineer' ? 'engineer' : 'producer', user.id);
     const action: RoomAction =
       body.type === 'talk' ? { type: 'talk', staff: staffIdentity, to: body.to } : body.type === 'face' ? { type: 'face', staff: staffIdentity, guest: body.guest } : body;

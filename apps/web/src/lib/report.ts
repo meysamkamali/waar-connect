@@ -95,6 +95,17 @@ export interface GuestReport {
   error?: string | undefined;
 }
 
+/**
+ * The phone's quality numbers, sent every two seconds (data topic wc.live) so the engineer's meters
+ * move: the full report above comes only every ten. `seenAt` is set by the staff page on arrival, on
+ * its own clock, so the age of the numbers does not depend on the phone's clock.
+ */
+export interface GuestLive {
+  quality: string;
+  up?: StatsSummary | undefined;
+  seenAt: number;
+}
+
 export function describeReport(r: GuestReport): string {
   const parts = [
     r.height ? `${r.width ?? Math.round((r.height * 16) / 9)}x${r.height}@${r.fps ? Math.round(r.fps) : '?'}` : 'no camera',

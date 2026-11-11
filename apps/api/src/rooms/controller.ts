@@ -29,6 +29,8 @@ import { routedSource } from './tracks.ts';
 export interface RoomSettings {
   slots: number;
   ifbAllowed: boolean;
+  /** A guest goes to the studio, and on air, only after the engineer approved them. */
+  approval: boolean;
 }
 
 export type RoomAction =
@@ -294,6 +296,7 @@ export class RoomController {
       case 'handoff': {
         const g = this.#guest(action.guest);
         if (g.place !== 'green') throw new ActionError('Only a guest in the green room can be sent to the studio.');
+        if (this.settings.approval && !g.ready) throw new ActionError('The engineer has not approved this guest for air yet.');
         if (g.slot === null) {
           // No slot chosen (the normal case): the first one no guest holds.
           const taken = new Set([...this.#guests.values()].filter((o) => o !== g).map((o) => o.slot));
@@ -312,6 +315,8 @@ export class RoomController {
       case 'tally': {
         const g = this.#guest(action.guest);
         if (g.place !== 'studio') throw new ActionError('Tally applies to guests in the studio.');
+        // An approval the engineer withdrew keeps a guest off air; one who is on air already is not cut.
+        if (action.tally === 'onair' && this.settings.approval && !g.ready) throw new ActionError('The engineer withdrew the approval: this guest cannot go on air.');
         g.tally = action.tally;
         return;
       }

@@ -619,6 +619,8 @@ export class GuestSession {
     } catch {
       this.up.value = undefined;
     }
+    // The engineer's meters: what goes out right now, every two seconds. The full report stays at ten.
+    if (this.up.value) void this.#send('wc.live', { quality: this.quality.value, up: this.up.value });
     await this.#checkCodec(this.up.value?.codec);
     await this.#checkCopies(this.up.value).catch(() => undefined);
   }

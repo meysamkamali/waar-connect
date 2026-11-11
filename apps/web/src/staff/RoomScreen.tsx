@@ -175,6 +175,7 @@ export function RoomScreen({ id, user }: { id: string; user: User }) {
     connected: snap?.connected.includes(g.identity) ?? false,
     outputNames: settings.outputNames,
     ifbAllowed: settings.ifbAllowed,
+    needsApproval: settings.approval !== false,
     ifb: snap?.ifbOverride.includes(g.identity) ?? false,
     hearsMe: talkList === null || talkList.includes(g.identity) || (mvTalk && mvIds.includes(g.identity)),
     sees: me?.faceTo === g.identity ? 'me' : g.program ? 'studio' : 'none',

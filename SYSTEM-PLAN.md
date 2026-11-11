@@ -64,6 +64,21 @@ line is taken; with no line left it sends H.264. A setting pushed to one phone w
 until "studio preferences" is pressed in its panel. The engineer may change these technical settings
 of a PCR; everything else about a PCR stays with the admin.
 
+**Decided 2026-11-11:** the **engineer's approval** is back, as a per-PCR setting that is on by
+default (`settings.approval`). The engineer approves each guest on the engineer page after checking
+line and picture (`GuestState.ready`); without it the server refuses "send to studio" and "on air".
+An approval withdrawn while the guest is on air does not cut them: it stops the next "on air". Only
+the engineer (or the admin) may give it; the producer sees "approved" or "not approved" on the guest.
+The engineer page was redrawn around this: per studio its two sources (return feed, producer) and one
+row per guest whose meters are always in view as bars with their limits marked, in two groups.
+**Line**: the media server's verdict, packet loss, network delay (round trip) and the delay at the
+engineer's desk. **Picture**: bitrate against its cap, resolution against the camera's, frame rate
+against what was asked. Green is fit for air, amber to be watched, red not fit; the worst meter
+decides the guest's verdict (`apps/web/src/lib/quality.ts`, limits in `LIMITS`). The phone sends
+its numbers every two seconds (data topic `wc.live`); numbers older than eight seconds turn grey and
+are not judged. From this date the pages carry **no guide text**: what only explains opens in a
+balloon.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by

@@ -25,6 +25,8 @@ export interface GuestCardProps {
   connected: boolean;
   outputNames: string[];
   ifbAllowed: boolean;
+  /** This studio sends a guest to air only with the engineer's approval (`state.ready`). */
+  needsApproval: boolean;
   ifb: boolean;
   /** The producer's voice is routed to this guest. */
   hearsMe: boolean;
@@ -58,6 +60,11 @@ export function GuestVideo(p: GuestCardProps & { className?: string }) {
       <div class="guest-overlay">
         <span class="name">{guestName(p)}</span>
         {g.place === 'studio' && <span class={`tally ${g.tally}`}>{g.tally === 'onair' ? 'ON AIR' : 'STAND BY'}</span>}
+        {p.needsApproval && g.place !== 'left' && (
+          <span class={`slot approval ${g.ready ? 'yes' : 'no'}`} title={g.ready ? 'The engineer approved this guest for air' : 'The engineer has not approved this guest yet: they cannot go to the studio'}>
+            {g.ready ? 'approved ✓' : 'not approved'}
+          </span>
+        )}
         {g.place === 'green' && g.mv && (
           <span class="slot mv" title={p.mvWith.length ? `In the multiview with ${p.mvWith.join(', ')}` : 'In the multiview, alone so far'}>
             MV
@@ -428,7 +435,12 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
             guest hears
             <HearsSwitch p={p} />
           </div>
-          <button class="btn" onClick={() => p.onAction({ type: 'handoff', guest: g.identity })} disabled={!p.connected}>
+          <button
+            class="btn"
+            onClick={() => p.onAction({ type: 'handoff', guest: g.identity })}
+            disabled={!p.connected || (p.needsApproval && !g.ready)}
+            title={p.needsApproval && !g.ready ? 'Waiting for the engineer to approve this guest for air' : undefined}
+          >
             Send to studio →
           </button>
         </>
@@ -439,7 +451,12 @@ export function GuestControls(p: GuestCardProps & { openConn?: boolean }) {
           <button class={`btn ${g.tally === 'standby' ? 'warn' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'standby' })}>
             Stand by
           </button>
-          <button class={`btn ${g.tally === 'onair' ? 'danger' : 'secondary'}`} onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'onair' })}>
+          <button
+            class={`btn ${g.tally === 'onair' ? 'danger' : 'secondary'}`}
+            onClick={() => p.onAction({ type: 'tally', guest: g.identity, tally: 'onair' })}
+            disabled={p.needsApproval && !g.ready && g.tally !== 'onair'}
+            title={p.needsApproval && !g.ready ? 'The engineer withdrew the approval' : undefined}
+          >
             On air
           </button>
           {p.ifbAllowed && (

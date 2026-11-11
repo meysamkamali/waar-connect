@@ -39,7 +39,10 @@ export interface GuestState {
   studioSound: boolean;
   /** Green room: sees the program picture. */
   program: boolean;
-  /** Engineer's mark that the connection has been checked. */
+  /**
+   * The engineer approved this guest for air: line and picture were checked. Where the PCR asks for
+   * it, a guest without it cannot be sent to the studio or put on air.
+   */
   ready: boolean;
 }
 
