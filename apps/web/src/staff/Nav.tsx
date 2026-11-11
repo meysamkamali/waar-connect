@@ -1,10 +1,22 @@
-// Top bar of the staff pages: where you are, who you are, the other pages.
+// Top bar of the staff pages: the logo (home), the pages, the server's load, and who you are.
+// Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
+
 import { useEffect, useState } from 'preact/hooks';
 import { logout, systemLoad, type SystemLoad, type User } from '../api.ts';
+import { Icon, type IconName } from '../components/ui.tsx';
+import { initials } from '../lib/contact.ts';
 import type { StaffPage } from './StaffApp.tsx';
 
-/** Temporary, test phase: the VM's CPU and memory, so the gateway's cost can be watched from any staff page. */
-function VmLoad() {
+const PAGES: readonly { page: StaffPage; href: string; label: string; icon: IconName; admin?: boolean }[] = [
+  { page: 'pcrs', href: '/app/producer', label: 'Studios', icon: 'camera' },
+  { page: 'engineer', href: '/app/engineer', label: 'Engineer', icon: 'sliders' },
+  { page: 'contacts', href: '/app/contacts', label: 'Contacts', icon: 'user' },
+  { page: 'admin', href: '/app/admin', label: 'Admin', icon: 'grid', admin: true },
+  { page: 'station', href: '/app/admin/station', label: 'This station', icon: 'monitor', admin: true },
+];
+
+/** Temporary, test phase: the server's CPU and memory, so the gateway's cost can be watched from any staff page. */
+function ServerLoad() {
   const [load, setLoad] = useState<SystemLoad | null>(null);
   useEffect(() => {
     const poll = () => void systemLoad().then(setLoad).catch(() => setLoad(null));
@@ -13,49 +25,62 @@ function VmLoad() {
     return () => clearInterval(timer);
   }, []);
   if (!load) return null;
-  const hot = load.cpuPct >= 80;
-  const warm = load.cpuPct >= 60;
+  const tone = load.cpuPct >= 80 ? 'bad' : load.cpuPct >= 60 ? 'warn' : '';
   return (
     <span
-      class={`small ${hot ? 'bad' : 'muted'}`}
-      style={warm && !hot ? { color: '#e0b040' } : undefined}
-      title={`${load.cores} cores · load ${load.load1.toFixed(2)} · ${load.memUsedMb} of ${load.memTotalMb} MB used`}
+      class={`nav-load ${tone} tip tip-end tip-below`}
+      data-tip={`The server right now: ${load.cpuPct} % of ${load.cores} cores (load ${load.load1.toFixed(2)}), ${(load.memUsedMb / 1024).toFixed(1)} of ${Math.round(load.memTotalMb / 1024)} GB of memory in use. Shown during the test phase.`}
+      role="meter"
+      aria-label="Server CPU"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={load.cpuPct}
     >
-      VM cpu {load.cpuPct}% · ram {(load.memUsedMb / 1024).toFixed(1)}/{Math.round(load.memTotalMb / 1024)} GB
+      <span>CPU</span>
+      <span class="nav-load-bar">
+        <i style={{ width: `${Math.min(100, load.cpuPct)}%` }} />
+      </span>
+      <b>{load.cpuPct}%</b>
     </span>
   );
 }
 
 export function Nav({ user, open, page, onLogout }: { user: User; open: boolean; page: StaffPage; onLogout: () => void }) {
-  const link = (href: string, label: string, active: boolean) => (
-    <a href={href} class={active ? 'active' : ''}>
-      {label}
-    </a>
-  );
+  // In the test phase there is no sign-in and every page is open; later the admin's pages show only to the admin.
+  const pages = PAGES.filter((p) => !p.admin || open || user.role === 'admin');
   return (
-    <header class="row between">
-      <nav class="topnav">
-        <img class="logo" src="/app/logo.svg" alt="" />
-        {link('/app/producer', 'Studios', page === 'pcrs')}
-        {link('/app/engineer', 'Engineer', page === 'engineer')}
-        {link('/app/contacts', 'Contacts', page === 'contacts')}
-        {link('/app/admin', 'Admin', page === 'admin')}
-        {link('/app/admin/station', 'This station', page === 'station')}
-      </nav>
-      <div class="row" style={{ alignItems: 'center' }}>
-        <VmLoad />
-        <span class="muted small">
-          {user.name} · {user.role}
-          {open && ' · test phase, no sign-in'}
+    <header class="nav">
+      <div class="nav-main">
+        <a class="nav-logo" href="/app/" aria-label="waar Connect: the station">
+          <img src="/app/logo.svg" alt="" />
+        </a>
+        <nav class="nav-links" aria-label="Pages">
+          {pages.map((p) => (
+            <a key={p.page} href={p.href} class={page === p.page ? 'active' : ''} aria-current={page === p.page ? 'page' : undefined}>
+              <Icon name={p.icon} />
+              {p.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+      <div class="nav-side">
+        <ServerLoad />
+        <span class="nav-user tip tip-end tip-below" data-tip={`${user.name} · ${user.role}${open ? '. Test phase: no sign-in.' : ''}`}>
+          <span class="ct-avatar" aria-hidden="true">
+            {initials(user.name)}
+          </span>
+          <span>{user.name}</span>
         </span>
         {!open && (
           <button
-            class="btn secondary small"
+            class="chip"
+            aria-label="Sign out"
+            title="Sign out"
             onClick={() => {
               void logout().finally(onLogout);
             }}
           >
-            Sign out
+            <Icon name="exit" />
           </button>
         )}
       </div>

@@ -2,6 +2,7 @@
 // producer or as the engineer, the contact book, or the admin pages (PCRs and the station lock).
 import { useEffect, useState } from 'preact/hooks';
 import { me, type User } from '../api.ts';
+import { Icon, Info } from '../components/ui.tsx';
 import { BUILD, watchBuild } from '../lib/version.ts';
 import { Admin } from '../admin/Admin.tsx';
 import { Station } from '../admin/Station.tsx';
@@ -21,9 +22,10 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
   useEffect(() => watchBuild(setNewer), []);
   const banner = newer ? (
     <div class="build-banner">
-      A newer version is on the server (build {newer}; this screen is {BUILD}).{' '}
-      <button class="link" onClick={() => location.reload()}>
-        Reload now
+      <span>A newer version is ready</span>
+      <Info side="start" below text={`The server has build ${newer}; this screen is ${BUILD}. Reload to get the new one.`} />
+      <button class="btn small" onClick={() => location.reload()}>
+        <Icon name="refresh" /> Reload
       </button>
     </div>
   ) : null;
@@ -50,7 +52,7 @@ export function StaffApp({ id, page = 'pcrs' }: { id?: string; page?: StaffPage 
       body = (
         <div class="screen page">
           {nav}
-          <p class="help bad">Admin only.</p>
+          <div class="eng-empty">This page is the admin's</div>
         </div>
       );
     } else body = page === 'admin' ? <Admin nav={nav} /> : <Station nav={nav} />;

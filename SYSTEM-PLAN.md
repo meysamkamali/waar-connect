@@ -145,6 +145,15 @@ back, exposure, holds, zoom, light, microphone, voice processing), and the phone
 studio preferences). The commands sent to the phone are the same as before. The numbers as one
 block of text stay under "All numbers".
 
+**The top bar, the return feed page and the output page** closed the round. The top bar: the logo
+leads home, the pages are tabs with the current one marked, the server's load is a small meter
+(test phase), and the person is a round mark with the rest in a balloon; once sign-in exists the
+admin's pages show only to the admin. The return feed page shows what goes out: the picture, the
+level of the mix-minus, the stream's numbers as tiles, the locked sources and who is in the room.
+The output page keeps a **clean frame**: while a guest is on, nothing lies over the picture; the
+page's state shows on the slate, and for three seconds when the mouse moves (or always with
+`?stats=1`).
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by
