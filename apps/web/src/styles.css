@@ -862,3 +862,43 @@ label.switch { display: inline-flex; align-items: center; gap: 10px; font-size: 
 .adm-table tr:last-child td { border-bottom: 0; }
 .adm-tag { margin-inline-start: 8px; padding: 1px 7px; border-radius: 6px; background: #121720; border: 1px solid #3a4557; font-size: 0.72rem; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { .switch-track, .switch-track::after, .adm-tab { transition: none; } }
+
+/* ---- This station and the contact book (2026-11-11), in the admin's cards ---- */
+.adm-fields textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid #3a4557; background: #121720; color: var(--fg); font: inherit; font-size: 0.9rem; resize: vertical; }
+.adm-fields .span-all { grid-column: 1 / -1; }
+.adm-fields .adm-field > input, .adm-fields .adm-field > select { width: 100%; }
+.st-name { flex: 1 1 280px; max-width: 420px; grid-template-columns: minmax(0, 1fr); }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 440px)); gap: 18px; }
+.st-desk { display: grid; gap: 10px; align-content: start; padding: 14px; border-radius: 12px; background: #1b2332; min-width: 0; }
+.st-desk > h3 { display: flex; gap: 8px; align-items: center; margin: 0; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+.st-desk .adm-fields { grid-template-columns: minmax(0, 1fr); }
+.st-picture { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #06080b; }
+.st-picture video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.st-picture span { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 0.85rem; }
+.st-level { height: 8px; border-radius: 4px; background: #0d1117; overflow: hidden; }
+.st-level-fill { height: 100%; border-radius: 4px; background: var(--ok); transition: width 100ms linear; }
+.st-level.none { background: repeating-linear-gradient(135deg, #0d1117 0 6px, #1a2230 6px 12px); }
+
+.ct-count { padding: 2px 10px; border-radius: 999px; background: #1f283a; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ct-search { position: relative; display: block; color: var(--muted); }
+.ct-search .icon { position: absolute; inset-inline-start: 12px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.ct-search input { width: min(320px, 62vw); padding: 9px 12px; padding-inline-start: 36px; font-size: 0.9rem; }
+.contacts .adm-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.ct-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: 10px; }
+.ct-list > .ct-form { grid-column: 1 / -1; }
+.ct-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; border-radius: 12px; background: var(--bg-2); border: 1px solid transparent; transition: border-color 120ms ease; }
+.ct-row:hover { border-color: #3a4557; }
+.ct-avatar { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, #16466f 0%, #2b3f73 100%); color: #fff; font-weight: 700; font-size: 0.95rem; letter-spacing: 0.02em; }
+.ct-main { display: grid; gap: 7px; min-width: 0; }
+.ct-head { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+.ct-head strong { font-size: 1rem; }
+.ct-onscreen { padding: 2px 8px; border-radius: 6px; background: #121720; border: 1px dashed #3a4557; font-size: 0.74rem; color: var(--muted); cursor: default; }
+.ct-reach { display: flex; flex-wrap: wrap; gap: 6px; }
+.ct-chan { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 10px; border-radius: 999px; background: #121720; border: 1px solid #2c3648; font-size: 0.82rem; color: var(--fg); text-decoration: none; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+a.ct-chan:hover { border-color: var(--blue-2); color: var(--fg); }
+a.ct-chan:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px; }
+.ct-chan .icon { color: var(--blue-2); }
+.ct-chan-label { color: var(--muted); font-size: 0.74rem; }
+.ct-notes { font-size: 0.84rem; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
+.ct-actions { display: flex; gap: 6px; }
+.ct-actions .chip { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; }

@@ -111,6 +111,16 @@ Undo, and "Close studio"), the studio PC's page addresses with copy buttons, and
 designer for that studio. The NDI gateway, which serves every studio, has its own card last: its
 state, the senders it sees as a table, and the senders on other networks.
 
+**This station** and the **contact book** followed. This station: two desks side by side, the
+producer's (camera, microphone) and the return feed's (capture input, mix-minus input); each
+choice shows what it gives, the camera's live picture and the input's live level, so the right
+input is picked by looking and listening. A device that is unplugged stays in the lock, marked
+"not connected". Contacts: a card per guest with a round mark, the language, the name on screen,
+and each way to reach them as a chip that opens its own app where the value allows it (a phone
+number dials, an international WhatsApp number opens wa.me, a Telegram user name opens t.me,
+Skype and email open theirs; `apps/web/src/lib/contact.ts`); search and "Add contact" at the top,
+editing in place.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by
