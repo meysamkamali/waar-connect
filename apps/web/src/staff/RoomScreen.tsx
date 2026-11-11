@@ -11,9 +11,10 @@ import { act, ApiError, getPcr, getRoom, joinPcr, type PcrView, type RoomAction,
 import { AudioSinks, VideoView } from '../components/media.tsx';
 import { Icon, Tip } from '../components/ui.tsx';
 import { describeStation, loadStation } from '../lib/station.ts';
-import { GuestCard, guestName, PhonePanel, type GuestCardProps, type Sees } from './GuestCard.tsx';
+import { GuestCard, guestName, type GuestCardProps, type Sees } from './GuestCard.tsx';
 import { GuestFocus } from './GuestFocus.tsx';
 import { GuestList } from './GuestList.tsx';
+import { PhonePanel } from './PhonePanel.tsx';
 import { StaffSession } from './session.ts';
 
 function Count({ n, label, tone }: { n: number; label: string; tone?: 'warn' | 'air' }) {
@@ -274,9 +275,7 @@ export function RoomScreen({ id }: { id: string; user: User }) {
               <Icon name="close" />
             </button>
           </div>
-          <div class="guest-controls">
-            <PhonePanel tile={tileFor(phoneGuest.identity)} report={session.reports.value[phoneGuest.identity]} cmd={(command) => doAction({ type: 'command', guest: phoneGuest.identity, command })} />
-          </div>
+          <PhonePanel tile={tileFor(phoneGuest.identity)} report={session.reports.value[phoneGuest.identity]} cmd={(command) => doAction({ type: 'command', guest: phoneGuest.identity, command })} />
         </aside>
       )}
 

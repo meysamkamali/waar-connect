@@ -134,6 +134,17 @@ on or back), the cues, and the tools. The phone's settings open in a drawer besi
 "Show out" and "remove" take two presses (the first arms the button for three seconds) instead of
 a dialog. The full-screen view of one guest is as it was.
 
+**The phone's panel** (`apps/web/src/staff/PhonePanel.tsx`, beside the producer's room and on the
+engineer's page) shows what the phone sends and what arrives at the desk side by side (bitrate
+against its cap and what holds it back, picture, codec and encoder, the small copies, loss, round
+trip, jitter, buffer, path), values out of range in amber or red. Under it the bandwidth test with
+its progress, its steps as a table and the cap it recommends; then the settings in groups, each
+choice a row with the one in force lit: picture (size, frame rate, what the phone keeps when short,
+bitrate cap, copies), connection (codec, path; marked "reconnects"), camera and sound (front or
+back, exposure, holds, zoom, light, microphone, voice processing), and the phone's page (reload,
+studio preferences). The commands sent to the phone are the same as before. The numbers as one
+block of text stay under "All numbers".
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by

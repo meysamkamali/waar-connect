@@ -18,7 +18,7 @@ import { AudioSinks, VideoView } from '../components/media.tsx';
 import { Icon, Info } from '../components/ui.tsx';
 import { assess, type Quality } from '../lib/quality.ts';
 import { phoneModel, type GuestReport } from '../lib/report.ts';
-import { PhonePanel } from '../staff/GuestCard.tsx';
+import { PhonePanel } from '../staff/PhonePanel.tsx';
 import { StaffSession, type StaffTile } from '../staff/session.ts';
 import { FaceEditor, GuestPrefsEditor, prefsLine, ReturnEditor, type Save } from './editors.tsx';
 import { GuestRow } from './GuestRow.tsx';
@@ -380,13 +380,11 @@ function PcrDesk({
                   {close}
                 </div>
                 {selGuest.on ? (
-                  <div class="guest-controls">
-                    <PhonePanel
-                      tile={tileFor(selGuest.g.identity)}
-                      report={reportFor(selGuest.g.identity)}
-                      cmd={(command) => void act(pcrId, { type: 'command', guest: selGuest.g.identity, command }).catch((err: unknown) => onError(message(err)))}
-                    />
-                  </div>
+                  <PhonePanel
+                    tile={tileFor(selGuest.g.identity)}
+                    report={reportFor(selGuest.g.identity)}
+                    cmd={(command) => void act(pcrId, { type: 'command', guest: selGuest.g.identity, command }).catch((err: unknown) => onError(message(err)))}
+                  />
                 ) : (
                   <p class="muted">Not connected.</p>
                 )}

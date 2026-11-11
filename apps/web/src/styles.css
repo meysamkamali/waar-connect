@@ -1004,3 +1004,48 @@ a.ct-chan:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px;
 .pcr-name { font-size: 1.2rem; font-weight: 700; }
 .pcr-slots { display: flex; flex-wrap: wrap; gap: 6px; }
 .pcr-go { display: inline-flex; align-items: center; gap: 7px; color: var(--blue-2); font-weight: 600; font-size: 0.92rem; }
+
+/* ---- The phone's panel (2026-11-11): what it sends and what arrives, the test, the settings in groups ---- */
+.pp { display: grid; gap: 12px; min-width: 0; }
+.pp h4 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+.pp-alert { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; padding: 8px 10px; border-radius: 10px; background: rgba(230, 181, 69, 0.14); border: 1px solid var(--warn); font-size: 0.84rem; }
+.pp-alert.bad { background: rgba(229, 72, 77, 0.14); border-color: var(--bad); }
+.pp-alert .btn { margin-inline-start: auto; display: inline-flex; align-items: center; gap: 6px; }
+.pp-facts { display: flex; flex-wrap: wrap; gap: 6px; }
+.pp-facts span { padding: 2px 8px; border-radius: 6px; background: #121720; border: 1px solid #3a4557; font-size: 0.74rem; }
+.pp-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 420px) { .pp-cols { grid-template-columns: minmax(0, 1fr); } }
+.pp-col { display: grid; gap: 8px; align-content: start; padding: 10px; border-radius: 10px; background: #121720; min-width: 0; }
+.pp-col dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 0.78rem; }
+.pp-col dt { color: var(--muted); white-space: nowrap; }
+.pp-col dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.pp-col dd.warn { color: var(--warn); }
+.pp-col dd.bad { color: #ff8f93; }
+.pp-none { font-size: 0.78rem; color: var(--muted); }
+.pp-bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; }
+.pp-bar .chip, .pp-ctl .chip { display: inline-flex; align-items: center; gap: 6px; }
+.pp-age, .pp-value { font-size: 0.76rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pp-result { font-size: 0.86rem; font-weight: 600; }
+.pp-group { display: grid; gap: 9px; padding-top: 12px; border-top: 1px solid #2a3446; }
+.pp-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px 10px; align-items: center; }
+.pp-label { display: inline-flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--muted); }
+.pp-label .info { width: 17px; height: 17px; font-size: 0.66rem; }
+.pp-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
+.pp-ctl .seg { display: flex; flex: 1 1 auto; min-width: 0; }
+.pp-ctl .seg button { flex: 1 1 0; min-width: 0; padding: 6px 6px; font-size: 0.8rem; white-space: nowrap; }
+.pp-ctl .chip { font-size: 0.78rem; }
+.pp-ctl .chip small { font-size: 0.66rem; opacity: 0.75; }
+.pp-ctl .chip.off, .pp-ctl .chip:disabled { opacity: 0.4; cursor: default; }
+.pp-ctl input[type='range'] { flex: 1 1 120px; min-width: 0; margin: 0; padding: 0; }
+.pp-note { padding: 1px 7px; border-radius: 6px; border: 1px solid var(--warn); color: var(--warn); font-size: 0.62rem; letter-spacing: 0.06em; cursor: default; }
+.pp-progress { height: 6px; border-radius: 3px; background: #0d1117; overflow: hidden; }
+.pp-progress i { display: block; height: 100%; border-radius: 3px; background: var(--blue-2); transition: width 400ms ease; }
+.pp-table { font-size: 0.78rem; }
+.pp-table th, .pp-table td { padding: 6px 8px; }
+.pp-table td { font-variant-numeric: tabular-nums; }
+.pp-table tr.ok .pp-mark { color: var(--ok); }
+.pp-table tr.bad .pp-mark { color: #ff8f93; }
+.pp-raw > summary { cursor: pointer; font-size: 0.8rem; color: var(--muted); }
+.pp-raw > summary:hover { color: var(--fg); }
+.pp-raw[open] > summary { margin-bottom: 6px; }
+.pp-raw .stats { margin: 0; padding: 6px 8px; border-radius: 6px; background: #0d1117; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
