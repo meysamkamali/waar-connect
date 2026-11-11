@@ -69,6 +69,15 @@ starts serving as soon as both certificates are present.
 - **LAN DNS**: the router answers `*.waar.work` with 10.0.0.40 for devices inside the station. Add
   overrides so `connect.waar.work` and `media.connect.waar.work` resolve to 10.0.0.41 inside; outside,
   public DNS already points both names at the station's public IP.
+- **The VM's own names.** The API and the gateway reach the media server by name
+  (`LIVEKIT_URL=wss://media.connect.waar.work:8443`), so the VM must not depend on those router
+  overrides. `/etc/hosts` on the VM carries
+  `127.0.0.1 connect.waar.work media.connect.waar.work` (added 2026-11-11, a copy of the file before
+  it is `/etc/hosts.before-waar-connect-names`). That day the router stopped answering the two names
+  with 10.0.0.41 and gave 10.0.0.40 instead: after the next restart the return feeds stayed at
+  "frames arrive; the room is not connected yet" and the room pages answered 500, until the names
+  were pinned. Devices inside the station still need the router overrides; without them the pages
+  do not open by name from the LAN.
 
 ## Checks
 
