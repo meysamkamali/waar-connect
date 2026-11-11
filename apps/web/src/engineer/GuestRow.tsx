@@ -6,7 +6,7 @@ import type { GuestState } from '@waar-connect/shared';
 import type { RemoteVideoTrack } from 'livekit-client';
 import { VideoView } from '../components/media.tsx';
 import { Icon, Tip } from '../components/ui.tsx';
-import { LIMITS, METER_GROUPS, toneOf, verdictWord, type Meter, type Quality, type Tone } from '../lib/quality.ts';
+import { LIMITS, METER_GROUPS, toneOf, verdictWord, type Copy, type Meter, type Quality, type Tone } from '../lib/quality.ts';
 
 export interface GuestRowProps {
   name: string;
@@ -49,6 +49,26 @@ export function MeterBar({ m }: { m: Meter }) {
         {m.marks?.map((x) => (
           <i key={x} class="qm-mark" style={{ left: `${x * 100}%` }} />
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** One copy of the picture as the phone sends it: its size, its bitrate, and a bar against what it may send. */
+export function CopyBar({ c, stale }: { c: Copy; stale: boolean }) {
+  const pct = Math.round(c.fill * 100);
+  const text = c.paused ? 'paused' : c.ceilingKbps ? `${c.kbps} of ${c.ceilingKbps} kbit/s` : `${c.kbps} kbit/s`;
+  const hint = c.full
+    ? 'The full-size copy: what the studio gets. Its bitrate against the cap.'
+    : 'A small copy beside the full-size one: small pictures and weak viewers take it. Its bitrate against its own ceiling. Paused while nobody takes it or the line is short.';
+  return (
+    <div class={`qm copy ${c.paused || stale ? 'tone-none' : 'tone-info'} tip`} data-tip={`${hint}${c.fps && !c.paused ? ` ${Math.round(c.fps)} frames a second.` : ''}`}>
+      <div class="qm-label">
+        <span>{c.name} copy</span>
+      </div>
+      <div class="qm-value">{text}</div>
+      <div class="qm-track" role="meter" aria-label={`${c.name} copy`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-valuetext={text}>
+        <div class="qm-fill" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -148,6 +168,13 @@ export function GuestRow(p: GuestRowProps) {
                     <MeterBar key={m.key} m={m} />
                   ))}
                 </div>
+                {group.key === 'picture' && p.connected && q.copies.length > 1 && (
+                  <div class="eng-group-meters eng-copies">
+                    {q.copies.map((c, i) => (
+                      <CopyBar key={i} c={c} stale={q.stale} />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}

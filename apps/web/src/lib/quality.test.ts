@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { assess, mainKbps, METER_GROUPS, toneOf, verdictWord, type Meter, type MeterKey, type QualityInput } from './quality.ts';
+import { assess, copiesOf, mainKbps, METER_GROUPS, toneOf, verdictWord, type Meter, type MeterKey, type QualityInput } from './quality.ts';
 import type { StatsSummary } from './stats.ts';
 
 const up = (over: Partial<StatsSummary> = {}): StatsSummary => ({
@@ -101,6 +101,39 @@ test('the meters in two groups, each with its own colour', () => {
   assert.deepEqual(tones, { line: 'bad', picture: 'ok' });
   assert.deepEqual(METER_GROUPS.flatMap((g) => g.meters).sort(), q.meters.map((m) => m.key).sort(), 'every meter is in one group');
   assert.deepEqual(by.get('loss')!.marks, [0.1, 0.4], 'the limits are marked on the bar');
+});
+
+test('every copy the phone sends: its size, its bitrate, and what it may send', () => {
+  const copies = assess(good).copies;
+  assert.deepEqual(
+    copies.map((c) => [c.name, c.kbps, c.ceilingKbps, c.full, c.paused]),
+    [
+      ['720p', 1900, 2500, true, false],
+      ['360p', 300, 500, false, false],
+      ['180p', 100, 150, false, false],
+    ],
+  );
+  assert.ok(Math.abs(copies[0]!.fill - 0.76) < 0.01 && Math.abs(copies[1]!.fill - 0.6) < 0.01 && Math.abs(copies[2]!.fill - 0.667) < 0.01);
+  // at a low cap the small copies get a share of it, not their own ceilings
+  assert.deepEqual(copiesOf(up(), 400).map((c) => c.ceilingKbps), [400, 140, 48]);
+  // a paused copy, and a phone held upright
+  const held = up({
+    layers: [
+      { rid: 'f', width: 1080, height: 1920, fps: 25, kbps: 2100, codec: 'h264', mode: undefined },
+      { rid: 'h', width: 540, height: 960, fps: 25, kbps: 0, codec: 'h264', mode: undefined },
+      { rid: 'q', width: undefined, height: undefined, fps: undefined, kbps: 0, codec: 'h264', mode: undefined },
+    ],
+  });
+  assert.deepEqual(copiesOf(held, 4000).map((c) => [c.name, c.paused, c.fill]), [
+    ['1080p', false, 0.525],
+    ['540p', true, 0],
+    ['quarter', true, 0],
+  ]);
+  // one stream only: nothing to list
+  assert.deepEqual(copiesOf(up({ layers: [{ rid: 'f', width: 1280, height: 720, fps: 25, kbps: 1900, codec: 'h264', mode: undefined }] }), 2500), []);
+  assert.deepEqual(copiesOf(undefined, 2500), []);
+  assert.deepEqual(assess({}).copies, []);
+  assert.equal(copiesOf(up(), undefined)[1]!.ceilingKbps, undefined, 'no cap known: no ceiling to draw against');
 });
 
 test('no numbers, or old ones: shown grey and not judged', () => {

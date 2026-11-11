@@ -37,6 +37,7 @@ import {
 } from 'livekit-client';
 import type { JoinInfo } from '../api.ts';
 import { CODEC_LABELS, isCodecName, probeCodecs, type CodecName, type CodecSupport } from '../lib/codecs.ts';
+import { SMALL_COPIES, smallCopyCeiling } from '../lib/copies.ts';
 import { SWEEP_STEPS, type Degrade, type GuestReport, type SweepResult, type TestStep } from '../lib/report.ts';
 import { connectRoom, createRoom, profileFromParams, qualityLabel, videoPublishOptions, type PublishProfile } from '../lib/room.ts';
 import { TrackStats, type StatsSummary } from '../lib/stats.ts';
@@ -63,11 +64,6 @@ export interface GuestOverride {
   cam?: CameraRequest | undefined;
 }
 
-// Ceilings of the small simulcast copies (see lib/room.ts) and their share of the cap at low caps.
-const SMALL_COPIES: Record<string, { own: number; share: number }> = {
-  q: { own: 150_000, share: 0.12 },
-  h: { own: 500_000, share: 0.35 },
-};
 const DEGRADES: readonly Degrade[] = ['resolution', 'framerate', 'balanced'];
 const toPreference = (d: Degrade): RTCDegradationPreference => (d === 'resolution' ? 'maintain-resolution' : d === 'framerate' ? 'maintain-framerate' : 'balanced');
 function loadOverride(): GuestOverride {
@@ -521,8 +517,7 @@ export class GuestSession {
     const params = sender.getParameters();
     if (!params.encodings?.length) return;
     for (const e of params.encodings) {
-      const small = e.rid ? SMALL_COPIES[e.rid] : undefined;
-      e.maxBitrate = small ? Math.round(Math.min(small.own, kbps * 1000 * small.share)) : kbps * 1000;
+      e.maxBitrate = (e.rid ? smallCopyCeiling(e.rid, kbps) : undefined) ?? kbps * 1000;
     }
     await sender.setParameters(params);
   }

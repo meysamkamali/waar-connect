@@ -77,7 +77,10 @@ against what was asked. Green is fit for air, amber to be watched, red not fit; 
 decides the guest's verdict (`apps/web/src/lib/quality.ts`, limits in `LIMITS`). The phone sends
 its numbers every two seconds (data topic `wc.live`); numbers older than eight seconds turn grey and
 are not judged. From this date the pages carry **no guide text**: what only explains opens in a
-balloon.
+balloon. Where a phone sends several copies of its picture (the full-size one and the two small
+ones beside it), the row lists every copy under the picture's meters: its size, its bitrate and a
+bar against what it may send (the cap for the full-size copy, its own ceiling for a small one;
+`apps/web/src/lib/copies.ts`), "paused" for a copy nobody takes.
 
 **Decided 2026-11-11 (the guest's screen):** the admin designs the guest's screen, per studio, in
 Admin under "Guest screen". The screen is **nine sections, three by three**. Widgets fill it, by

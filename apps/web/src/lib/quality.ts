@@ -5,6 +5,7 @@
 // and a round trip under 400 ms pass.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
+import { smallCopyCeiling } from './copies.ts';
 import type { StatsSummary } from './stats.ts';
 
 /** ok: fine · warn: watch it · bad: not fit for air · none: no number to judge. */
@@ -53,7 +54,26 @@ export interface QualityInput {
   ageMs?: number | undefined;
 }
 
+/** One copy the phone sends of its picture: the full-size one, or a small one beside it. */
+export interface Copy {
+  /** The copy by its size, "1080p" (the short side); its name on the wire while it has no size. */
+  name: string;
+  /** What it sends right now, kbit/s; 0 while it is paused. */
+  kbps: number;
+  /** The most it may send, kbit/s: the cap for the full-size copy, its own ceiling for a small one. */
+  ceilingKbps: number | undefined;
+  /** How much of the bar is filled, 0 to 1: what it sends of what it may. */
+  fill: number;
+  fps: number | undefined;
+  /** The full-size copy. */
+  full: boolean;
+  /** Paused: nobody takes this copy, or the line is too short for it. */
+  paused: boolean;
+}
+
 export interface Quality {
+  /** Every copy the phone sends, largest first, when it sends more than one. */
+  copies: Copy[];
   meters: Meter[];
   /** The worst meter decides. */
   tone: Tone;
@@ -223,7 +243,32 @@ export function assess(input: QualityInput): Quality {
   } else add(none('delay', 'Delay here', delayHint));
 
   reasons.sort((a, b) => RANK[b.tone] - RANK[a.tone]);
-  return { meters, tone: toneOf(meters), reasons: reasons.map((r) => r.text), stale };
+  return { copies: copiesOf(up, input.capKbps), meters, tone: toneOf(meters), reasons: reasons.map((r) => r.text), stale };
+}
+
+const WIRE_NAMES: Readonly<Record<string, string>> = { f: 'full', h: 'half', q: 'quarter' };
+
+/**
+ * The copies the phone sends of its picture, largest first, each with its bitrate against what it may
+ * send. Empty when there is one stream only: the meters say everything about that one.
+ */
+export function copiesOf(up: StatsSummary | undefined, capKbps: number | undefined): Copy[] {
+  const layers = up?.layers;
+  if (!layers || layers.length < 2) return [];
+  return layers.map((l, i) => {
+    const short = l.width && l.height ? Math.min(l.width, l.height) : l.height;
+    const small = i > 0 && l.rid && capKbps ? smallCopyCeiling(l.rid, capKbps) : undefined;
+    const ceilingKbps = i === 0 ? capKbps : small !== undefined ? Math.round(small / 1000) : undefined;
+    return {
+      name: short ? `${short}p` : l.rid ? (WIRE_NAMES[l.rid] ?? l.rid) : 'copy',
+      kbps: l.kbps,
+      ceilingKbps,
+      fill: ceilingKbps ? clamp01(l.kbps / ceilingKbps) : 0,
+      fps: l.fps,
+      full: i === 0,
+      paused: l.kbps === 0,
+    };
+  });
 }
 
 /** The worst meter of a set decides its colour. */

@@ -1106,3 +1106,9 @@ a.ct-chan:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px;
   .nav-links a { padding: 7px 10px; }
 }
 .out-status { max-width: calc(100vw - 28px); overflow: hidden; text-overflow: ellipsis; }
+
+/* Engineer's row: every copy the phone sends, under the picture's meters */
+.eng-copies { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #2f3a4d; }
+.qm.tone-info .qm-fill { background: var(--blue-2); }
+.qm.copy .qm-track { height: 8px; }
+.qm.copy .qm-fill { min-width: 0; }
