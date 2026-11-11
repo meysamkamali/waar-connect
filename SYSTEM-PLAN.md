@@ -103,6 +103,14 @@ shape of its widget (three sections by one, 960x180 for a 540p return, never wid
 replaces the fixed place described below. The old bottom bar with text buttons and the "info"
 panel are gone from the guest's screen: the engineer has the numbers.
 
+The same day the **Admin page** was redrawn to the same standard: one studio is in hand at a time,
+picked from tabs at the top (a dot shows its return feed's state, a mark shows unsaved changes; "New
+studio" is the last tab). Below: the studio's card (name, output slots and their names, the two
+rules as switches, the return feed's source, picture and bitrate, the invite languages; one Save,
+Undo, and "Close studio"), the studio PC's page addresses with copy buttons, and the guest screen
+designer for that studio. The NDI gateway, which serves every studio, has its own card last: its
+state, the senders it sees as a table, and the senders on other networks.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by

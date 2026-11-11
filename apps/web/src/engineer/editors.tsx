@@ -96,7 +96,7 @@ export function FaceEditor({ pcr, tile, onSave }: { pcr: Pcr; tile: StaffTile | 
         >
           Save
         </button>
-        <Info text="The producer's console picks a change up within a few seconds and starts its camera again with it." />
+        <Info side="start" text="The producer's console picks a change up within a few seconds and starts its camera again with it." />
       </div>
     </>
   );
@@ -160,7 +160,7 @@ export function ReturnEditor({ pcr, gateway, tile, onSave }: { pcr: Pcr; gateway
         >
           Save
         </button>
-        <Info text="The gateway takes a change within 15 seconds; the picture drops for a moment while it restarts the feed." />
+        <Info side="start" text="The gateway takes a change within 15 seconds; the picture drops for a moment while it restarts the feed." />
       </div>
     </>
   );
@@ -336,7 +336,7 @@ export function GuestPrefsEditor({ pcr, phones, onSave, onSaveAll }: { pcr: Pcr;
         <button class="btn secondary small" onClick={() => setDraft(normalizeGuestPrefs(DEFAULT_GUEST_PREFS))}>
           Station defaults
         </button>
-        <Info text="Used when a guest connects or reloads. A setting pushed to one phone from its own panel wins on that phone; “studio preferences” in that panel brings the phone back to these." />
+        <Info side="start" text="Used when a guest connects or reloads. A setting pushed to one phone from its own panel wins on that phone; “studio preferences” in that panel brings the phone back to these." />
       </div>
     </article>
   );

@@ -2,8 +2,8 @@
 // fills it with widgets, dragged from the palette onto the screen and moved about on it. Pictures
 // (studio feed, self camera, multiview) take whole sections; overlays (tally, cue banner, the guest's
 // buttons) float over them, docked in a section. There is one design per number of guests on the
-// screen, one to eight, and one set of designs per studio. The small screen here is drawn with the
-// phone's own styles, to scale.
+// screen, one to eight, and one set of designs per studio (the studio in hand on the admin page). The
+// small screen here is drawn with the phone's own styles, to scale.
 // Dragging is done with pointer events, so it works with a mouse, a pen and a finger; every widget
 // can also be placed, moved (arrow keys) and removed (Delete) from the keyboard.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
@@ -115,8 +115,7 @@ function Sample({ kind, guests }: { kind: WidgetKind; guests: number }) {
   }
 }
 
-export function ScreenDesigner({ pcrs, onSaved, onError }: { pcrs: Pcr[]; onSaved: () => void; onError: (m: string) => void }) {
-  const [pcrId, setPcrId] = useState(pcrs[0]?.id ?? '');
+export function ScreenDesigner({ pcrs, pcrId, onSaved, onError }: { pcrs: Pcr[]; pcrId: string; onSaved: () => void; onError: (m: string) => void }) {
   const pcr = pcrs.find((p) => p.id === pcrId) ?? pcrs[0];
   const [drafts, setDrafts] = useState<Record<string, GuestScreen>>({});
   const [guests, setGuests] = useState(1);
@@ -355,15 +354,6 @@ export function ScreenDesigner({ pcrs, onSaved, onError }: { pcrs: Pcr[]; onSave
             side="start"
             text="The guest's phone screen is nine sections, three by three. Drag a widget onto the screen, drag it again to move it, drag it off to remove it. Pictures take whole sections; the tally, the cue banner and the buttons float over them. Phones that are connected take a saved design at once."
           />
-          {pcrs.length > 1 && (
-            <span class="seg">
-              {pcrs.map((p) => (
-                <button key={p.id} class={p.id === pcr.id ? 'on' : ''} onClick={() => setPcrId(p.id)}>
-                  {p.name}
-                </button>
-              ))}
-            </span>
-          )}
         </div>
         <div class="sd-actions">
           <button class="btn secondary small" disabled={!dirty || busy} onClick={() => setDrafts((d) => Object.fromEntries(Object.entries(d).filter(([id]) => id !== pcr.id)))}>
