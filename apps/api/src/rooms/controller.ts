@@ -10,6 +10,8 @@ import {
   guestAttributes,
   guestsOnScreen,
   guestFromAttributes,
+  NDI_OUT_LINGER_MS,
+  ndiOutSlots,
   roleOf,
   slotOfOutput,
   staffAttributes,
@@ -156,6 +158,17 @@ export class RoomController {
       await this.#apply();
       return this.snapshot();
     });
+  }
+
+  /**
+   * The slots whose NDI source should be up now: one for every guest in the green room or the studio
+   * (see ndiOutSlots). A guest who dropped out of the room still counts for NDI_OUT_LINGER_MS, so a
+   * reload or a short break in the line does not take the source off the mixer; one who was shown out
+   * stops counting at once.
+   */
+  outputSlots(now = Date.now()): number[] {
+    const lingering = [...this.#departed.values()].filter((d) => now - d.at < NDI_OUT_LINGER_MS).map((d) => d.state);
+    return ndiOutSlots(this.settings.slots, [...this.#guests.values(), ...lingering]);
   }
 
   snapshot(): RoomSnapshot {
@@ -331,6 +344,8 @@ export class RoomController {
         return;
       }
       case 'kick': {
+        // A guest who already dropped out of the room: forget the place kept for their return.
+        if (!this.#guests.has(action.guest) && this.#departed.delete(action.guest)) return;
         const g = this.#guest(action.guest);
         g.place = 'left';
         this.#departed.delete(g.identity);

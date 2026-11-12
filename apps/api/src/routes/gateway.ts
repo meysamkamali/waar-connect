@@ -105,7 +105,9 @@ export function parseExtraIps(input: unknown): string[] | { error: string } {
 }
 
 export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
-  const { db, cfg, gateway } = app.ctx;
+  const { db, cfg, gateway, rooms } = app.ctx;
+  /** The slots each studio had sources for the last time its room could be read; used while it cannot. */
+  const lastSlots = new Map<string, number[]>();
   const staff = app.requireRole('admin', 'producer', 'engineer');
   const admin = app.requireRole('admin');
 
@@ -125,8 +127,9 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * What the gateway is to do. Every open PCR with an NDI return source, with a token for identity
-   * `studio`; and every slot of every PCR whose NDI out is on, with its NDI name, its format and a token
-   * for that slot's output identity.
+   * `studio`; and, for every PCR whose NDI out is on, the slots a guest needs now (from the green room
+   * on, see ndiOutSlots), each with its NDI name, its format and a token for that slot's output
+   * identity. A slot nobody needs is not listed, and the gateway stops its output.
    */
   app.get('/gateway/returns', { preHandler: fromGateway }, async () => {
     const rows = await db.select().from(pcrs).where(isNull(pcrs.archivedAt));
@@ -136,7 +139,13 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
       const out = normalizeNdiOut(pcr.settings.ndiOut);
       if (!out.on) continue;
       const names = ndiOutNames(pcr.name, pcr.settings.outputNames);
-      for (let slot = 1; slot <= pcr.settings.slots; slot++) {
+      // When the room cannot be read (LiveKit does not answer), what ran before stays: a source in use
+      // must not vanish over a hiccup. With nothing known, every slot.
+      const controller = await rooms.get(pcr.livekitRoom).catch(() => null);
+      const wanted = controller ? controller.outputSlots() : (lastSlots.get(pcr.id) ?? Array.from({ length: pcr.settings.slots }, (_, i) => i + 1));
+      if (controller) lastSlots.set(pcr.id, wanted);
+      for (const slot of wanted) {
+        if (slot > pcr.settings.slots) continue;
         const name = names[slot - 1] ?? `${pcr.name} ${slot}`;
         const token = await mintToken(cfg, 'output', { room: pcr.livekitRoom, identity: ndiOutputIdentity(slot), name: `${name} (NDI)` });
         outputs.push({ pcrId: pcr.id, pcrName: pcr.name, room: pcr.livekitRoom, slot, name, height: out.height, rate: out.rate, url: token.url, token: token.token });

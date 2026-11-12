@@ -290,11 +290,11 @@ function StudioCard({
           NDI output
           <Info
             side="start"
-            text="Every slot of the studio goes out as an NDI source on the station's network, named after the studio and the slot. A fixed picture and frame rate keep the vision mixer's input in one format whatever a phone sends; “as the guest sends” passes the picture on untouched, which costs the server least. 50i is interlaced: 25 frames a second of two fields each. While nobody sits on a slot, its source sends black."
+            text="Each slot of the studio goes out as an NDI source on the station's network, named after the studio and the slot. A source comes up when a guest enters the green room, so it is there before the guest goes over, and sends black until then; it goes two minutes after its guest has left. A fixed picture and frame rate keep the vision mixer's input in one format whatever a phone sends; “as the guest sends” passes the picture on untouched, which costs the server least. 50i is interlaced: 25 frames a second of two fields each."
           />
         </h3>
         <div class="adm-switches">
-          <Switch on={d.ndiOut.on} label="Send every slot as an NDI source" onChange={(on) => set({ ndiOut: { ...d.ndiOut, on } })} />
+          <Switch on={d.ndiOut.on} label="Send each slot as an NDI source" onChange={(on) => set({ ndiOut: { ...d.ndiOut, on } })} />
         </div>
         <div class="adm-fields">
           <label>
@@ -366,11 +366,11 @@ function StudioCard({
 
 function outputPill(o: OutputFeedStatus | undefined, gateway: GatewayView | null): { tone: Tone; text: string; tip: string } {
   if (!gateway?.status) return { tone: gateway && !gateway.configured ? 'none' : 'bad', text: gateway && !gateway.configured ? 'no gateway' : 'gateway offline', tip: 'The gateway makes the NDI sources. It is not reporting.' };
-  if (!o) return { tone: 'warn', text: 'starting', tip: 'The gateway takes a new setting within 15 seconds.' };
+  if (!o) return { tone: 'none', text: 'waits for a guest', tip: 'This source comes up when a guest enters the green room, and goes two minutes after its guest has left.' };
   const format = o.out?.format ?? '';
   const seen = o.receivers === 1 ? '1 receiver' : `${o.receivers} receivers`;
   if (o.state === 'sending') return { tone: 'ok', text: `guest out · ${format}`, tip: `A guest goes out${o.in ? `, arriving as ${o.in.width}×${o.in.height} at ${o.in.fps} frames a second` : ''}. ${seen} connected.` };
-  if (o.state === 'slate') return { tone: 'none', text: `black · ${format}`, tip: `Nobody sits on this slot: the source sends black. ${seen} connected.` };
+  if (o.state === 'slate') return { tone: 'none', text: `black · ${format}`, tip: `A guest is in the green room: the source is up and sends black until they go over. ${seen} connected.` };
   if (o.state === 'error') return { tone: 'bad', text: 'fault', tip: o.detail ?? 'The output has a fault.' };
   return { tone: 'warn', text: 'starting', tip: o.detail ?? 'The output is coming up.' };
 }

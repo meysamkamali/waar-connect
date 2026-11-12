@@ -1,7 +1,9 @@
-// NDI out: every slot of a studio as an NDI source on the station's network, made by the gateway.
+// NDI out: the slots of a studio as NDI sources on the station's network, made by the gateway.
 // The admin sets the picture's size and frame rate per studio: each either as it arrives from the
 // guest, or fixed, so that the vision mixer's input keeps its format whatever a phone sends. A fixed
 // frame rate may be interlaced: 50i is 25 frames a second, each of two fields.
+// A slot's source is up only while a guest needs it (ndiOutSlots): from the green room on, through
+// the studio, until the guest has left. An empty studio runs no output at all.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 /** Fixed picture heights offered, 16:9. */
@@ -87,10 +89,39 @@ export function ndiOutNames(pcrName: string, outputNames: readonly string[]): st
   return base.map((name, i) => (base.filter((other) => other.toLowerCase() === name.toLowerCase()).length > 1 ? `${name} ${i + 1}` : name));
 }
 
+/**
+ * How long a source stays up after its guest dropped out of the room: a reload of the guest's page
+ * or a short break in the line must not take the source off the mixer.
+ */
+export const NDI_OUT_LINGER_MS = 120_000;
+
+/**
+ * The slots whose NDI source is up: one for every guest in the green room or the studio, none for
+ * an empty studio. A guest who holds a slot has that one; every other such guest warms the next free
+ * slot, which is the one a send to the studio takes (the first no guest holds), so the source is on
+ * the network before the guest goes over. Guests still at the door do not count.
+ */
+export function ndiOutSlots(slots: number, guests: readonly { place: string; slot: number | null }[]): number[] {
+  const up = new Set<number>();
+  let waiting = 0;
+  for (const g of guests) {
+    if (g.place !== 'green' && g.place !== 'studio') continue;
+    if (g.slot !== null && g.slot >= 1 && g.slot <= slots) up.add(g.slot);
+    else waiting++;
+  }
+  for (let n = 1; n <= slots && waiting > 0; n++) {
+    if (up.has(n)) continue;
+    up.add(n);
+    waiting--;
+  }
+  return [...up].sort((a, b) => a - b);
+}
+
 export const OUT_STATES = ['starting', 'slate', 'sending', 'error'] as const;
 /**
- * starting: the output is coming up · slate: nobody sits on the slot, black goes out · sending: the
- * guest on the slot goes out · error: see detail.
+ * starting: the output is coming up · slate: no guest sits on the slot yet, black goes out ·
+ * sending: the guest on the slot goes out · error: see detail. A slot no guest needs has no output
+ * and so no state.
  */
 export type OutState = (typeof OUT_STATES)[number];
 

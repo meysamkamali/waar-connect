@@ -123,8 +123,14 @@ NDI® is a registered trademark of Vizrt NDI AB.
 
 ## NDI out: every studio slot as an NDI source
 
-Where the admin has it on (Admin, the studio's card, "NDI output"), the gateway sends each slot of
-the studio as its own NDI source, named after the studio and the slot's output name: `PCR 1 Guest 1`,
+Where the admin has it on (Admin, the studio's card, "NDI output"), the gateway sends a slot of the
+studio as its own NDI source **while a guest needs it**: from the moment a guest is let into the
+green room (the next free slot is warmed, the one a send to the studio takes), through the studio,
+until two minutes after the guest dropped out or at once when they are shown out. An empty studio
+runs no output process. The API decides (`ndiOutSlots` in `shared/ndiout.ts`, the room
+controller's `outputSlots`) and lists only those slots; the gateway asks every `POLL_SECONDS` (5)
+and starts or stops processes to match. When the API cannot read a room, it lists what it listed
+before, so a source in use does not vanish over a hiccup. Each source is named after the studio and the slot's output name: `PCR 1 Guest 1`,
 which the network shows as `MACHINE (PCR 1 Guest 1)`. Slots with the same output name get their
 number. The API lists the wanted outputs with the returns (`GET /api/v1/gateway/returns`,
 `outputs`), each with its format and a token for the slot's output identity `out:slot-N:ndi`; the
@@ -150,7 +156,8 @@ it ends. What it does with a guest's picture:
 - **Sound**: the guest's microphone, 48 kHz, two channels, as 32-bit float. A full-scale voice goes
   out as 1.0, the scale the return feed reads; `OUT_AUDIO_GAIN_DB` in `.env` shifts it (a mixer
   that expects the SMPTE alignment wants 20).
-- **Empty slot**: black, once a second, silent. A guest whose pictures stop while they still sit on
+- **Slot without its guest yet** (the guest is still in the green room): black, once a second,
+  silent. A guest whose pictures stop while they still sit on
   the slot keeps the last picture for 15 seconds; a guest who left the slot gives way to black after
   2.5 seconds (the server ends the subscription without an event).
 

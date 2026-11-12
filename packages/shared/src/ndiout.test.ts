@@ -1,7 +1,21 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ndiOutputIdentity, outputIdentity, roleOf, slotOfOutput } from './model.ts';
-import { DEFAULT_NDI_OUT, describeNdiOut, formatLabel, ndiOutNames, normalizeNdiOut, outSize, outTiming } from './ndiout.ts';
+import { DEFAULT_NDI_OUT, describeNdiOut, formatLabel, ndiOutNames, ndiOutSlots, normalizeNdiOut, outSize, outTiming } from './ndiout.ts';
+
+test('sources are up only for guests in the green room or the studio', () => {
+  const g = (place: string, slot: number | null = null) => ({ place, slot });
+  assert.deepEqual(ndiOutSlots(4, []), [], 'an empty studio runs nothing');
+  assert.deepEqual(ndiOutSlots(4, [g('lobby'), g('left')]), [], 'a guest at the door does not count');
+  assert.deepEqual(ndiOutSlots(4, [g('green')]), [1], 'a guest in the green room warms the slot they will get');
+  assert.deepEqual(ndiOutSlots(4, [g('green'), g('green')]), [1, 2]);
+  assert.deepEqual(ndiOutSlots(4, [g('studio', 2)]), [2], 'a guest in the studio keeps their slot');
+  assert.deepEqual(ndiOutSlots(4, [g('studio', 1), g('green')]), [1, 2], 'the next guest gets the first free slot');
+  assert.deepEqual(ndiOutSlots(4, [g('studio', 2), g('green')]), [1, 2], 'the first free slot may lie below a taken one');
+  assert.deepEqual(ndiOutSlots(4, [g('green', 3), g('green')]), [1, 3], 'a slot chosen ahead is that guest\'s');
+  assert.deepEqual(ndiOutSlots(2, [g('green'), g('green'), g('green')]), [1, 2], 'never more than the studio has');
+  assert.deepEqual(ndiOutSlots(2, [g('studio', 7)]), [1], 'a slot the studio no longer has: the first free one instead');
+});
 
 test('the setting: on with the house format by default, each part fixed or as the guest sends', () => {
   assert.deepEqual(DEFAULT_NDI_OUT, { on: true, height: 1080, rate: '50i' });

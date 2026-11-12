@@ -48,8 +48,11 @@ const schema = z.object({
    * same scale the return feed reads; a mixer that expects the SMPTE alignment wants 20.
    */
   OUT_AUDIO_GAIN_DB: z.coerce.number().min(-40).max(40).default(0),
-  /** How often the gateway asks the API which PCRs want a return feed. */
-  POLL_SECONDS: z.coerce.number().min(3).max(120).default(15),
+  /**
+   * How often the gateway asks the API which return feeds and which NDI outputs are wanted. A slot's
+   * NDI source comes up within this time of a guest entering the green room.
+   */
+  POLL_SECONDS: z.coerce.number().min(3).max(120).default(5),
   /** How often the gateway reports its sources and feeds to the API. */
   REPORT_SECONDS: z.coerce.number().min(2).max(60).default(5),
 });

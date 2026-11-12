@@ -301,3 +301,49 @@ describe('room controller', () => {
     await assert.rejects(c.act({ type: 'handoff', guest: A }, PROD), /slots are taken/);
   });
 });
+
+describe('which slots need an NDI source', () => {
+  it('follows the guests: let in, sent over, brought back, dropped, shown out', async () => {
+    const { c } = await roomWithEveryone();
+    assert.deepEqual(c.outputSlots(), [], 'guests at the door need nothing');
+    await c.act({ type: 'admit', guest: A }, PROD);
+    assert.deepEqual(c.outputSlots(), [1], 'the slot the guest will get is warmed');
+    await c.act({ type: 'admit', guest: B }, PROD);
+    assert.deepEqual(c.outputSlots(), [1, 2]);
+    await c.act({ type: 'handoff', guest: B }, PROD);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === B)?.slot, 1);
+    assert.deepEqual(c.outputSlots(), [1, 2], 'B sits on 1, A warms the next free one');
+    await c.act({ type: 'kick', guest: A }, PROD);
+    assert.deepEqual(c.outputSlots(), [1], 'a guest shown out stops counting at once');
+    await c.act({ type: 'bringBack', guest: B }, PROD);
+    assert.deepEqual(c.outputSlots(), [1], 'back in the green room the source stays');
+
+    const left = Date.now();
+    await c.onParticipantLeft(B);
+    assert.deepEqual(c.outputSlots(left + 30_000), [1], 'a guest who dropped still counts for a while');
+    assert.deepEqual(c.outputSlots(left + 180_000), [], 'and then no longer');
+  });
+
+  it('a guest who drops while on a slot keeps that slot up for the same while', async () => {
+    const { c } = await roomWithEveryone();
+    await c.act({ type: 'admit', guest: A }, PROD);
+    await c.act({ type: 'admit', guest: B }, PROD);
+    await c.act({ type: 'handoff', guest: A }, PROD);
+    await c.act({ type: 'handoff', guest: B }, PROD);
+    const left = Date.now();
+    await c.onParticipantLeft(A);
+    assert.deepEqual(c.outputSlots(left + 30_000), [1, 2]);
+    assert.deepEqual(c.outputSlots(left + 180_000), [2]);
+  });
+
+  it('showing out a guest who already dropped ends their source at once', async () => {
+    const { c } = await roomWithEveryone();
+    await c.act({ type: 'admit', guest: A }, PROD);
+    const left = Date.now();
+    await c.onParticipantLeft(A);
+    assert.deepEqual(c.outputSlots(left + 5_000), [1]);
+    await c.act({ type: 'kick', guest: A }, PROD);
+    assert.deepEqual(c.outputSlots(left + 5_000), []);
+    await assert.rejects(c.act({ type: 'kick', guest: A }, PROD), /not in the room/);
+  });
+});

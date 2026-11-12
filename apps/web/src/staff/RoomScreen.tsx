@@ -4,7 +4,7 @@
 // a drawer beside the room, and one guest can fill the screen (GuestFocus).
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
-import { normalizeFacePrefs, roleOf, type Cue, type FacePrefs, type GuestState } from '@waar-connect/shared';
+import { normalizeFacePrefs, normalizeNdiOut, roleOf, type Cue, type FacePrefs, type GuestState } from '@waar-connect/shared';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'preact-iso';
 import { act, ApiError, getPcr, getRoom, joinPcr, listCues, type PcrView, type RoomAction, type RoomSnapshot, type User } from '../api.ts';
@@ -265,13 +265,27 @@ export function RoomScreen({ id }: { id: string; user: User }) {
             const outs = (snap?.outputs ?? []).filter((o) => o.slot === n);
             const ndi = outs.some((o) => o.identity.endsWith(':ndi'));
             const page = outs.some((o) => !o.identity.endsWith(':ndi'));
-            const outTip = ndi && page ? 'This slot goes out as an NDI source, and its output page is open on the studio PC.' : ndi ? 'This slot goes out as an NDI source.' : page ? 'The output page for this slot is open on the studio PC.' : 'Nothing takes this slot: no NDI source and no output page. The studio does not get this guest.';
+            // NDI sources come up with the guests: an empty slot without one is as it should be
+            const ndiOn = normalizeNdiOut(settings.ndiOut).on;
+            const missing = !ndi && !page && Boolean(g);
+            const outTip =
+              ndi && page
+                ? 'This slot goes out as an NDI source, and its output page is open on the studio PC.'
+                : ndi
+                  ? 'This slot goes out as an NDI source.'
+                  : page
+                    ? 'The output page for this slot is open on the studio PC.'
+                    : !ndiOn
+                      ? 'Nothing takes this slot: no NDI source and no output page. The studio does not get this guest.'
+                      : g
+                        ? 'The NDI source of this slot is not up. It follows a guest within seconds; if it stays away, look at the gateway in Admin.'
+                        : 'The NDI source of this slot comes up when a guest enters the green room.';
             return (
               <div class={`room-slot ${g ? g.tally : 'empty'}`} key={n}>
                 <div class="room-slot-head">
                   <span class="room-slot-n">{n}</span>
                   <span>{settings.outputNames[n - 1]}</span>
-                  <i class={`adm-dot ${ndi || page ? 'ok' : ''} tip tip-end`} data-tip={outTip} />
+                  <i class={`adm-dot ${ndi || page ? 'ok' : missing ? 'warn' : ''} tip tip-end`} data-tip={outTip} />
                 </div>
                 {g && card(g)}
               </div>

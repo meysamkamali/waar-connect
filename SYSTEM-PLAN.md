@@ -196,6 +196,16 @@ nobody sits on a slot the source sends black once a second, so it stays in the m
 whose line stalls keeps their last picture for 15 seconds. The admin page shows each source's
 name, format, state and how many receivers are connected.
 
+**Decided 2026-11-12 (later): a source only while a guest needs it** (the user's rule, to spare the
+server). A slot's NDI source comes up when a guest enters the green room, stays through the studio,
+and goes when the guest has left; an empty studio runs no output. Which slot: a guest who holds one
+has that one, every other guest in the green room warms the next free slot, the one a send to the
+studio takes, so the source is on the network before the guest goes over (`ndiOutSlots` in
+`shared/ndiout.ts`). A guest who drops out of the room counts for two more minutes
+(`NDI_OUT_LINGER_MS`), so a reload or a short break does not take the source off the mixer; one who
+is shown out stops counting at once. The API lists only those slots for the gateway, which asks
+every 5 seconds: a source is up within about 7 seconds of the guest being let in.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by
