@@ -93,6 +93,11 @@ if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: activ
   for net in 10.0.0.0/24 10.100.1.0/24; do
     ufw allow from "$net" to any port 5353 proto udp comment 'mDNS for NDI discovery' >/dev/null 2>&1 || true
   done
+  # NDI out: receivers on the station's NDI network connect to the gateway's sources, TCP 5960 and up
+  # (one port per source) and UDP ports NDI picks itself. That network is the station's closed video
+  # network, so everything from it is let in. Without this rule a mixer sees the sources and gets no
+  # picture.
+  ufw allow from 10.100.1.0/24 comment 'station NDI network: NDI sources out' >/dev/null 2>&1 || true
 fi
 
 echo "== ndi runtime"

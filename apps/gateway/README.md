@@ -157,6 +157,15 @@ it ends. What it does with a guest's picture:
 The report carries one entry per output: state (starting, slate, sending, error), the guest, what
 arrives, what goes out (`1080i50`), and how many receivers are connected.
 
+**Firewall.** A receiver connects to the VM: TCP 5960 (the list of sources) and one TCP port per
+source from 5961 up, plus UDP ports NDI picks itself. The VM's firewall must let the station's NDI
+network in (`ufw allow from 10.100.1.0/24`, which `install-gateway.sh` sets); without it a mixer
+lists the sources and gets no picture (seen 2026-11-12: the ports did not answer from another
+machine).
+
+**Cost**, measured on the station's server (2026-11-12, a 720p guest at 25 a second): 0.7 of a core
+per slot fitted into 1080i50, 0.4 passed on as 720p; an empty slot next to nothing.
+
 The sources are announced on the station's NDI network with the VM's address there. A receiver
 running on the VM itself (a test) must connect over one of the VM's real addresses: discovery on
 the machine can hand out the public address the VM keeps on `lo` for the TURN hairpin, and over
