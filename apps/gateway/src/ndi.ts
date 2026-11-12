@@ -531,13 +531,16 @@ export class Ndi {
     return new Sender(this, inst, name, clocked);
   }
 
-  /** A receiver connected to one source, BGRA/BGRX, progressive frames only; full bandwidth or the sender's proxy stream. */
-  createReceiver(source: NdiSource, receiverName: string, opts: { lowBandwidth?: boolean } = {}): Receiver {
+  /**
+   * A receiver connected to one source, BGRA/BGRX; full bandwidth or the sender's proxy stream.
+   * Interlaced pictures arrive de-interlaced (progressive) unless `fields` asks for them as sent.
+   */
+  createReceiver(source: NdiSource, receiverName: string, opts: { lowBandwidth?: boolean; fields?: boolean } = {}): Receiver {
     const inst = this.f.recvCreate({
       source_to_connect_to: { p_ndi_name: source.name, p_url_address: source.url },
       color_format: COLOR_BGRX_BGRA,
       bandwidth: opts.lowBandwidth ? BANDWIDTH_LOWEST : BANDWIDTH_HIGHEST,
-      allow_video_fields: false,
+      allow_video_fields: opts.fields === true,
       p_ndi_recv_name: receiverName,
     });
     if (!inst) throw new Error(`NDIlib_recv_create_v3 failed for ${source.name}`);

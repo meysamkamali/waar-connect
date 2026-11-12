@@ -154,3 +154,8 @@ it ends. What it does with a guest's picture:
 The report carries one entry per output: state (starting, slate, sending, error), the guest, what
 arrives, what goes out (`1080i50`), and how many receivers are connected.
 
+The sources are announced on the station's NDI network with the VM's address there. A receiver
+running on the VM itself (a test) must connect over one of the VM's real addresses: discovery on
+the machine can hand out the public address the VM keeps on `lo` for the TURN hairpin, and over
+that one the connection is made and the sound arrives but no picture does (seen 2026-11-12).
+
