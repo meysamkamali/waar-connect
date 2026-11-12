@@ -40,6 +40,7 @@ redirect to port 8443, so a link without the port still works.
 | Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
 | Gateway (NDI return into the rooms) | `waar-connect-gateway.service`, user `waarconnect`, no port; `/opt/waar-connect/apps/gateway/.env` holds the token shared with the API | systemd, `install-gateway.sh` |
 | NDI runtime | `/usr/local/lib/libndi.so.6` from the NDI SDK for Linux; licence texts in `/usr/local/share/doc/ndi/` | `install-gateway.sh --accept-ndi-license` |
+| libyuv (fits pictures for the NDI outputs) | Ubuntu package `libyuv0` (`/usr/lib/x86_64-linux-gnu/libyuv.so.0`); without it the gateway fits in JavaScript, too slowly for 1080p at 25 a second | `install-gateway.sh` (apt) |
 | Second NIC (station NDI network) | `ens37`, 10.100.1.0/24 by DHCP from the MikroTik at 10.100.1.1; `/etc/netplan/60-ens37.yaml` (from `netplan-ens37.yaml`) | netplan |
 
 ## Install

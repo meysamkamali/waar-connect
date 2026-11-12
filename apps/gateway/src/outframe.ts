@@ -2,8 +2,9 @@
 // packed; that is what the decoder gives and what NDI takes): turning a guest's picture upright,
 // fitting it into the output's size without stretching it (black beside it or above and below),
 // weaving two pictures into one interlaced frame, and black for an empty slot.
-// Plain JavaScript on typed arrays. A picture that already has the output's size and stands upright
-// is not touched at all: the caller sends the decoder's buffer as it is.
+// Plain JavaScript on typed arrays; where the machine has libyuv, yuv.ts does the fitting and the
+// turning many times faster, to the same result. A picture that already has the output's size and
+// stands upright is not touched at all: the caller sends the decoder's buffer as it is.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 /** Degrees the decoded frame must be turned clockwise to stand upright (a phone held on its side). */
@@ -94,11 +95,21 @@ export function rotateI420(src: Uint8Array, sw: number, sh: number, rotation: Ro
   return up;
 }
 
+/** Something that fits pictures into an output size: this file's Fitter, or libyuv's (yuv.ts). */
+export interface PictureFitter {
+  /**
+   * Draws the picture `src` (sw x sh, to be turned by `rotation`) into `dst` (dw x dh, even numbers):
+   * upright, whole, its shape kept, black around it where the shapes differ.
+   */
+  fit(src: Uint8Array, sw: number, sh: number, rotation: Rotation, dst: Uint8Array, dw: number, dh: number): void;
+}
+
 /**
- * Fits pictures into an output size. Keeps its work buffers and its tables between frames, so a
- * stream of pictures of one size costs no allocation.
+ * Fits pictures into an output size, in JavaScript. Keeps its work buffers and its tables between
+ * frames, so a stream of pictures of one size costs no allocation. About forty milliseconds for
+ * 720p into 1080p on the station's server: too slow for 25 a second there, hence yuv.ts.
  */
-export class Fitter {
+export class Fitter implements PictureFitter {
   #upright = new Uint8Array(0);
   #rowA = new Uint8Array(0);
   #rowB = new Uint8Array(0);

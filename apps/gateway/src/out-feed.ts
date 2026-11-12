@@ -5,8 +5,9 @@
 // rate weaves two pictures into one frame when the guest sends enough of them. While nobody sits on
 // the slot, black goes out once a second, so the source stays on the network and in the mixer.
 //
-// A picture that already has the output's size goes out untouched; fitting (two-tap scaling in
-// JavaScript) costs most of a core for 1080p at 25 a second, which is why each slot runs in a process
+// A picture that already has the output's size goes out untouched. Fitting is libyuv's work where
+// the machine has it (yuv.ts), a few milliseconds a picture; without it the JavaScript fitter takes
+// most of a core for 1080p and cannot keep 25 a second on an older one. Each slot runs in a process
 // of its own (out-worker.ts).
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
@@ -15,7 +16,7 @@ import { ATTR, formatLabel, outSize, outTiming, type OutputFeedStatus, type OutR
 import type { Config } from './config.ts';
 import { log } from './log.ts';
 import { FramePool, type Ndi, type Sender } from './ndi.ts';
-import { blackI420, Fitter, i420Bytes, interleavedToPlanar, nominalRate, uprightSize, weaveI420, type Rotation } from './outframe.ts';
+import { blackI420, Fitter, i420Bytes, interleavedToPlanar, nominalRate, uprightSize, weaveI420, type PictureFitter, type Rotation } from './outframe.ts';
 
 export interface OutTarget {
   pcrId: string;
@@ -94,7 +95,7 @@ export class OutFeed {
   #lastSlate = 0;
   #pumping = false;
 
-  readonly #fitter = new Fitter();
+  readonly #fitter: PictureFitter;
   readonly #fitPool = new FramePool(4);
   readonly #weavePool = new FramePool(2);
   #fitted: { seq: number; picture: Picture }[] = [];
@@ -103,8 +104,9 @@ export class OutFeed {
   #loop: Promise<void> | undefined;
   #idleTimer: ReturnType<typeof setInterval> | undefined;
 
-  constructor(ndi: Ndi, cfg: Config, target: OutTarget) {
+  constructor(ndi: Ndi, cfg: Config, target: OutTarget, fitter: PictureFitter = new Fitter()) {
     this.#ndi = ndi;
+    this.#fitter = fitter;
     this.target = target;
     this.#gain = 10 ** (cfg.OUT_AUDIO_GAIN_DB / 20);
   }

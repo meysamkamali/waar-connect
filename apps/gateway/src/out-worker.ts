@@ -1,9 +1,9 @@
 // One studio slot's NDI output in a process of its own. The gateway starts one of these per slot
 // (OutProcess in feed-process.ts) and talks to it over the process channel.
 //
-// Why a process: fitting a guest's picture into a fixed size runs on JavaScript's one thread, most of
-// a core for 1080p at 25 a second; four slots in one process would share it. It also keeps a fault to
-// itself: an NDI call that hangs ends this process alone, and the gateway starts it again.
+// Why a process: reading, fitting and handing on a guest's pictures runs on JavaScript's one thread;
+// four slots in one process would share it. It also keeps a fault to itself: an NDI call that hangs
+// ends this process alone, and the gateway starts it again.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { dispose } from '@livekit/rtc-node';
@@ -13,9 +13,11 @@ import type { FromWorker, ToWorker } from './feed-process.ts';
 import { log } from './log.ts';
 import { Ndi } from './ndi.ts';
 import { OutFeed, type OutTarget } from './out-feed.ts';
+import { loadFitter } from './yuv.ts';
 
 const cfg = loadConfig();
 const ndi = Ndi.load(cfg.NDI_LIB);
+const fit = loadFitter(cfg.YUV_LIB);
 
 let feed: OutFeed | undefined;
 let stopping = false;
@@ -43,9 +45,11 @@ process.on('message', (raw) => {
   switch (message.type) {
     case 'start':
       if (feed || stopping) return;
-      feed = new OutFeed(ndi, cfg, message.target);
+      feed = new OutFeed(ndi, cfg, message.target, fit.fitter);
       feed.start();
-      log('info', 'NDI output process started', { pcr: message.target.pcrName, slot: message.target.slot, name: message.target.name, pid: process.pid });
+      log('info', 'NDI output process started', { pcr: message.target.pcrName, slot: message.target.slot, name: message.target.name, pid: process.pid, fitting: fit.by });
+      if (fit.by === 'javascript' && message.target.height !== null)
+        log('warn', 'NDI output: libyuv is not installed, pictures are fitted in JavaScript; a 1080p output of a smaller picture may fall short of 25 a second (apt install libyuv0)', { name: message.target.name });
       break;
     case 'update':
       feed?.update(message.target);

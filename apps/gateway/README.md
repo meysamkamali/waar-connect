@@ -136,8 +136,11 @@ it ends. What it does with a guest's picture:
 - **Upright**: a frame that arrives turned (a phone's sensor frame with a rotation) is turned.
 - **Size**: "as the guest sends" passes the decoder's I420 picture on as it is. A fixed size (16:9)
   fits the picture into it, its shape kept, black beside or above it; a picture that already has the
-  size is not touched. Fitting is two-tap scaling in JavaScript (`outframe.ts`): most of a core for
-  1080p at 25 a second, nothing when the sizes match. A phone set to the output's size costs least.
+  size is not touched. Fitting is libyuv's work (`yuv.ts`, the Ubuntu package `libyuv0`, loaded at
+  run time and checked against our own code when it loads): a few milliseconds a picture. Without
+  the library the JavaScript fitter in `outframe.ts` does it, about forty milliseconds for 720p into
+  1080p on the station's server, which gave 23 pictures a second instead of 25 (measured 2026-11-12);
+  the output's log says which one is in use. A phone set to the output's size costs least.
 - **Frame rate**: "as the guest sends" hands each picture to NDI as it arrives and states the
   nearest usual rate. A fixed rate lets NDI's clock pace the frames, each the newest picture; a
   guest slower than the rate repeats pictures, a faster one drops some.

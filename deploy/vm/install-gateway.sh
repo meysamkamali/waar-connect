@@ -80,6 +80,14 @@ else
   echo "avahi present"
 fi
 systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
+# libyuv fits a guest's picture into the NDI output's size; without it the gateway does that in
+# JavaScript, too slowly for 1080p at 25 a second.
+if ! dpkg -s libyuv0 >/dev/null 2>&1; then
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends libyuv0 >/dev/null
+  echo "libyuv installed"
+else
+  echo "libyuv present"
+fi
 if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
   # mDNS on both of the VM's networks: the server LAN (ens34) and the station's NDI network (ens37).
   for net in 10.0.0.0/24 10.100.1.0/24; do

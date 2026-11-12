@@ -13,6 +13,8 @@ const schema = z.object({
   GATEWAY_NAME: z.string().trim().min(1).default(() => hostname()),
   /** Path to libndi.so.6 / Processing.NDI.Lib.x64.dll; found automatically when empty. */
   NDI_LIB: z.string().trim().optional(),
+  /** Path to libyuv (Ubuntu: libyuv.so.0 from the package libyuv0), which fits pictures for the NDI outputs; found automatically when empty, and done without when absent. */
+  YUV_LIB: z.string().trim().optional(),
   /** Comma-separated IPs of NDI senders on other subnets, where mDNS discovery does not reach. */
   NDI_EXTRA_IPS: z.string().trim().default(''),
   /**
