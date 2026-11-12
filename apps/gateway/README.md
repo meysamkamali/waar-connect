@@ -120,3 +120,37 @@ Measured 2026-11-10 on the VM with three guests: too small to tell apart from th
 running three returns (2.89 cores with the strip, 2.92 without).
 
 NDI® is a registered trademark of Vizrt NDI AB.
+
+## NDI out: every studio slot as an NDI source
+
+Where the admin has it on (Admin, the studio's card, "NDI output"), the gateway sends each slot of
+the studio as its own NDI source, named after the studio and the slot's output name: `PCR 1 Guest 1`,
+which the network shows as `MACHINE (PCR 1 Guest 1)`. Slots with the same output name get their
+number. The API lists the wanted outputs with the returns (`GET /api/v1/gateway/returns`,
+`outputs`), each with its format and a token for the slot's output identity `out:slot-N:ndi`; the
+routing engine sends that identity exactly the guest on the slot.
+
+Each output runs in a process of its own (`out-worker.ts` runs one `OutFeed`), started again when
+it ends. What it does with a guest's picture:
+
+- **Upright**: a frame that arrives turned (a phone's sensor frame with a rotation) is turned.
+- **Size**: "as the guest sends" passes the decoder's I420 picture on as it is. A fixed size (16:9)
+  fits the picture into it, its shape kept, black beside or above it; a picture that already has the
+  size is not touched. Fitting is two-tap scaling in JavaScript (`outframe.ts`): most of a core for
+  1080p at 25 a second, nothing when the sizes match. A phone set to the output's size costs least.
+- **Frame rate**: "as the guest sends" hands each picture to NDI as it arrives and states the
+  nearest usual rate. A fixed rate lets NDI's clock pace the frames, each the newest picture; a
+  guest slower than the rate repeats pictures, a faster one drops some.
+- **Interlaced (50i)**: 25 frames a second stated as interlaced, upper field first. When two new
+  pictures came since the last frame (a guest sending 50 a second), the earlier one gives the upper
+  field and the later one the lower; otherwise one picture fills both fields.
+- **Sound**: the guest's microphone, 48 kHz, two channels, as 32-bit float. A full-scale voice goes
+  out as 1.0, the scale the return feed reads; `OUT_AUDIO_GAIN_DB` in `.env` shifts it (a mixer
+  that expects the SMPTE alignment wants 20).
+- **Empty slot**: black, once a second, silent. A guest whose pictures stop while they still sit on
+  the slot keeps the last picture for 15 seconds; a guest who left the slot gives way to black after
+  2.5 seconds (the server ends the subscription without an event).
+
+The report carries one entry per output: state (starting, slate, sending, error), the guest, what
+arrives, what goes out (`1080i50`), and how many receivers are connected.
+

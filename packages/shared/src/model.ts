@@ -91,6 +91,14 @@ export function outputIdentity(slot: number): string {
   return identityFor('out', String(slot));
 }
 
+/**
+ * The gateway's NDI output for a slot. Its own identity beside the output page's, so that both can be
+ * in the room at once: the page for a monitor, the gateway for the vision mixer.
+ */
+export function ndiOutputIdentity(slot: number): string {
+  return `${outputIdentity(slot)}:ndi`;
+}
+
 export function roleOf(identity: string): Role | undefined {
   if (identity === STUDIO_IDENTITY) return 'studio';
   const prefix = identity.slice(0, identity.indexOf(':'));
@@ -98,7 +106,7 @@ export function roleOf(identity: string): Role | undefined {
 }
 
 export function slotOfOutput(identity: string): number | null {
-  const m = /^out:slot-(\d+)$/.exec(identity);
+  const m = /^out:slot-(\d+)(?::ndi)?$/.exec(identity);
   return m ? Number(m[1]) : null;
 }
 

@@ -1,6 +1,8 @@
 // What the gateway (NDI in and out) reports to the API, and what the API shows the admin.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
+import type { OutputFeedStatus } from './ndiout.ts';
+
 export const RETURN_STATES = ['starting', 'waiting-source', 'no-signal', 'receiving', 'publishing', 'error'] as const;
 /**
  * starting: feed created, nothing happened yet · waiting-source: the NDI source is not on the network ·
@@ -53,6 +55,8 @@ export interface GatewayReport {
   /** What a PCR gets when it names no picture size or bitrate of its own (height null = the source's size). */
   defaults: { height: number | null; kbps: number; fps: number };
   returns: ReturnFeedStatus[];
+  /** Every studio slot the gateway sends out as an NDI source. Absent from a gateway older than NDI out. */
+  outputs?: OutputFeedStatus[] | undefined;
 }
 
 /** The last report with the time the API received it. */

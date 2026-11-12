@@ -7,7 +7,7 @@
 
 import type { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
-import { RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiSourceInfo } from '@waar-connect/shared';
+import { describeNdiOut, ndiOutNames, normalizeNdiOut, OUT_HEIGHTS, RETURN_HEIGHTS, RETURN_KBPS_CHOICES, type NdiOutSettings, type NdiSourceInfo, type OutputFeedStatus, type OutRate } from '@waar-connect/shared';
 import { ApiError, archivePcr, createPcr, gatewayStatus, listPcrs, setDiscovery, updatePcr, type GatewayView, type Pcr, type PcrSettings } from '../api.ts';
 import { CopyButton, Icon, Info, Switch, Tip } from '../components/ui.tsx';
 import { LANGUAGES } from '../staff/Contacts.tsx';
@@ -131,7 +131,9 @@ function Stepper({ value, min, max, label, onChange }: { value: number; min: num
 // ---- one studio --------------------------------------------------------------------------------------------
 
 /** What this page edits of a studio. The connection preferences are the engineer's, the guest screen has its designer. */
-type StudioDraft = { name: string } & Pick<PcrSettings, 'slots' | 'ifbAllowed' | 'approval' | 'languages' | 'outputNames' | 'returnSource' | 'returnHeight' | 'returnKbps'>;
+type StudioDraft = { name: string; ndiOut: NdiOutSettings } & Pick<PcrSettings, 'slots' | 'ifbAllowed' | 'approval' | 'languages' | 'outputNames' | 'returnSource' | 'returnHeight' | 'returnKbps'>;
+
+const RATE_LABELS: Readonly<Record<OutRate, string>> = { '25p': '25 progressive', '50p': '50 progressive', '50i': '50 interlaced (50i)' };
 
 function draftOf(pcr: Pcr): StudioDraft {
   const s = pcr.settings;
@@ -145,6 +147,7 @@ function draftOf(pcr: Pcr): StudioDraft {
     returnSource: s.returnSource ?? null,
     returnHeight: s.returnHeight ?? null,
     returnKbps: s.returnKbps ?? null,
+    ndiOut: normalizeNdiOut(s.ndiOut),
   };
 }
 
@@ -283,6 +286,47 @@ function StudioCard({
       </div>
 
       <div class="adm-group">
+        <h3>
+          NDI output
+          <Info
+            side="start"
+            text="Every slot of the studio goes out as an NDI source on the station's network, named after the studio and the slot. A fixed picture and frame rate keep the vision mixer's input in one format whatever a phone sends; “as the guest sends” passes the picture on untouched, which costs the server least. 50i is interlaced: 25 frames a second of two fields each. While nobody sits on a slot, its source sends black."
+          />
+        </h3>
+        <div class="adm-switches">
+          <Switch on={d.ndiOut.on} label="Send every slot as an NDI source" onChange={(on) => set({ ndiOut: { ...d.ndiOut, on } })} />
+        </div>
+        <div class="adm-fields">
+          <label>
+            Picture
+            <select disabled={!d.ndiOut.on} value={d.ndiOut.height ?? ''} onChange={(e) => set({ ndiOut: { ...d.ndiOut, height: (Number((e.currentTarget as HTMLSelectElement).value) || null) as NdiOutSettings['height'] } })}>
+              <option value="">as the guest sends</option>
+              {OUT_HEIGHTS.map((h) => (
+                <option key={h} value={h}>
+                  {h}p
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Frame rate
+            <select disabled={!d.ndiOut.on} value={d.ndiOut.rate ?? ''} onChange={(e) => set({ ndiOut: { ...d.ndiOut, rate: ((e.currentTarget as HTMLSelectElement).value || null) as NdiOutSettings['rate'] } })}>
+              <option value="">as the guest sends</option>
+              {(Object.keys(RATE_LABELS) as OutRate[]).map((r) => (
+                <option key={r} value={r}>
+                  {RATE_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div class="adm-field">
+            <span>Goes out as</span>
+            <span class="adm-format">{describeNdiOut(d.ndiOut)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="adm-group">
         <h3>Invite languages</h3>
         <div class="adm-chips">
           {LANGUAGES.map(([code, label]) => {
@@ -320,22 +364,68 @@ function StudioCard({
   );
 }
 
-/** The addresses the studio PC opens: the return feed page (when no NDI source is set) and one output page per slot. */
-function StudioPages({ pcr }: { pcr: Pcr }) {
+function outputPill(o: OutputFeedStatus | undefined, gateway: GatewayView | null): { tone: Tone; text: string; tip: string } {
+  if (!gateway?.status) return { tone: gateway && !gateway.configured ? 'none' : 'bad', text: gateway && !gateway.configured ? 'no gateway' : 'gateway offline', tip: 'The gateway makes the NDI sources. It is not reporting.' };
+  if (!o) return { tone: 'warn', text: 'starting', tip: 'The gateway takes a new setting within 15 seconds.' };
+  const format = o.out?.format ?? '';
+  const seen = o.receivers === 1 ? '1 receiver' : `${o.receivers} receivers`;
+  if (o.state === 'sending') return { tone: 'ok', text: `guest out · ${format}`, tip: `A guest goes out${o.in ? `, arriving as ${o.in.width}×${o.in.height} at ${o.in.fps} frames a second` : ''}. ${seen} connected.` };
+  if (o.state === 'slate') return { tone: 'none', text: `black · ${format}`, tip: `Nobody sits on this slot: the source sends black. ${seen} connected.` };
+  if (o.state === 'error') return { tone: 'bad', text: 'fault', tip: o.detail ?? 'The output has a fault.' };
+  return { tone: 'warn', text: 'starting', tip: o.detail ?? 'The output is coming up.' };
+}
+
+/**
+ * What leaves the studio's slots: the NDI source of each slot (when NDI out is on) with its state, and
+ * the addresses the studio PC opens: the return feed page (when no NDI source is set) and one output
+ * page per slot.
+ */
+function StudioPages({ pcr, gateway }: { pcr: Pcr; gateway: GatewayView | null }) {
   const origin = location.origin;
   const s = pcr.settings;
+  const ndiOut = normalizeNdiOut(s.ndiOut);
+  const names = ndiOutNames(pcr.name, s.outputNames);
+  const machine = (gateway?.status?.host ?? 'server').split('.')[0]?.toUpperCase() ?? 'SERVER';
+  /** The name as the network shows it: from the gateway's own list when it is there. */
+  const onNetwork = (name: string) => gateway?.status?.sources.find((src) => src.own && src.name.endsWith(`(${name})`))?.name ?? `${machine} (${name})`;
   return (
     <section class="adm-card">
       <header class="adm-card-head">
         <div class="adm-card-title">
-          <h2>Studio PC pages</h2>
+          <h2>Studio outputs</h2>
+        </div>
+      </header>
+      {ndiOut.on && (
+        <div class="adm-group">
+          <h3>NDI sources · {describeNdiOut(ndiOut)}</h3>
+          <div class="adm-links">
+            {names.map((name, i) => {
+              const pill = outputPill(gateway?.status?.outputs?.find((o) => o.pcrId === pcr.id && o.slot === i + 1), gateway);
+              return (
+                <div class="adm-link" key={i}>
+                  <span>
+                    Slot {i + 1} · {s.outputNames[i]}
+                  </span>
+                  <code>{onNetwork(name)}</code>
+                  <span class="adm-inline">
+                    <Pill tone={pill.tone} text={pill.text} tip={pill.tip} side="end" />
+                    <CopyButton text={onNetwork(name)} />
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <div class="adm-group">
+        <h3>
+          Pages for the studio PC
           <Info
             side="start"
             text={`Open each address in a browser on the studio PC: one output page per slot, and the return feed page when the return does not come from NDI. Capture devices for that PC are set under “This station”. LiveKit room ${pcr.livekitRoom}.`}
           />
-        </div>
-      </header>
-      <div class="adm-links">
+        </h3>
+        <div class="adm-links">
         <div class="adm-link">
           <span>Return feed in</span>
           {s.returnSource ? (
@@ -360,6 +450,7 @@ function StudioPages({ pcr }: { pcr: Pcr }) {
             <CopyButton text={`${origin}/app/out/${pcr.id}/${i + 1}`} />
           </div>
         ))}
+        </div>
       </div>
     </section>
   );
@@ -610,7 +701,7 @@ export function Admin({ nav }: { nav: ComponentChildren }) {
             }}
             onError={setError}
           />
-          <StudioPages pcr={pcr} />
+          <StudioPages pcr={pcr} gateway={gateway} />
         </>
       )}
 

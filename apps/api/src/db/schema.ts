@@ -7,7 +7,7 @@
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import { boolean, index, integer, jsonb, pgEnum, pgTable, real, text, timestamp, uuid } from 'drizzle-orm/pg-core';
-import { LANGUAGE_CODES, normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs, type GuestScreen } from '@waar-connect/shared';
+import { DEFAULT_NDI_OUT, LANGUAGE_CODES, normalizeFacePrefs, normalizeGuestPrefs, type FacePrefs, type GuestPrefs, type GuestScreen, type NdiOutSettings } from '@waar-connect/shared';
 
 export const userRole = pgEnum('user_role', ['admin', 'producer', 'engineer']);
 
@@ -47,6 +47,8 @@ export interface PcrSettings {
   ifbAllowed: boolean;
   /** A guest goes to the studio, and on air, only after the engineer approved them. */
   approval: boolean;
+  /** Every slot out as an NDI source, and the format it goes out in. Absent on rows from before it existed: the default. */
+  ndiOut?: NdiOutSettings | undefined;
   /**
    * Only on rows of 2026-11-11: that day the guest's screen was designed per studio. It is the
    * station's now (`station_settings`, key guest_screen); routes/station.ts reads this once, to carry a
@@ -77,6 +79,7 @@ export function defaultPcrSettings(slots: number): PcrSettings {
     slots,
     ifbAllowed: true,
     approval: true,
+    ndiOut: { ...DEFAULT_NDI_OUT },
     languages: [...LANGUAGE_CODES],
     outputNames: Array.from({ length: slots }, (_, i) => `Guest ${i + 1}`),
     returnSource: null,

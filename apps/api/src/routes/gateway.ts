@@ -6,7 +6,7 @@
 
 import { isNull } from 'drizzle-orm';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { GATEWAY_STALE_MS, RETURN_STATES, STUDIO_IDENTITY, type GatewayReport, type GatewayStatus } from '@waar-connect/shared';
+import { GATEWAY_STALE_MS, ndiOutNames, ndiOutputIdentity, normalizeNdiOut, OUT_STATES, RETURN_STATES, STUDIO_IDENTITY, type GatewayReport, type GatewayStatus } from '@waar-connect/shared';
 import { z } from 'zod';
 import { pcrs } from '../db/schema.ts';
 import { getSetting, setSetting } from '../db/settings.ts';
@@ -48,6 +48,25 @@ export const Report = z.object({
       }),
     )
     .max(64),
+  outputs: z
+    .array(
+      z.object({
+        pcrId: z.uuid(),
+        pcrName: z.string().max(80),
+        slot: z.int().min(1).max(16),
+        name: z.string().max(120),
+        state: z.enum(OUT_STATES),
+        detail: z.string().max(500).nullable(),
+        connected: z.boolean(),
+        guest: z.string().max(120).nullable(),
+        in: z.object({ width: z.int().min(0), height: z.int().min(0), fps: z.number().min(0) }).nullable(),
+        out: z.object({ width: z.int().min(0), height: z.int().min(0), format: z.string().max(40) }).nullable(),
+        receivers: z.int().min(0),
+        since: z.number(),
+      }),
+    )
+    .max(256)
+    .optional(),
   extraIps: z.array(z.string().max(120)).max(64),
   defaults: z.object({ height: z.int().min(0).nullable(), kbps: z.int().min(0), fps: z.number().min(0) }),
 });
@@ -104,10 +123,25 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
     if ((Array.isArray(given) ? given[0] : given) !== cfg.GATEWAY_TOKEN) await reply.code(401).send({ error: 'Gateway token mismatch.' });
   };
 
-  /** Every open PCR with an NDI return source, each with a 7-day token for identity `studio`. */
+  /**
+   * What the gateway is to do. Every open PCR with an NDI return source, with a token for identity
+   * `studio`; and every slot of every PCR whose NDI out is on, with its NDI name, its format and a token
+   * for that slot's output identity.
+   */
   app.get('/gateway/returns', { preHandler: fromGateway }, async () => {
     const rows = await db.select().from(pcrs).where(isNull(pcrs.archivedAt));
     const returns = [];
+    const outputs = [];
+    for (const pcr of rows) {
+      const out = normalizeNdiOut(pcr.settings.ndiOut);
+      if (!out.on) continue;
+      const names = ndiOutNames(pcr.name, pcr.settings.outputNames);
+      for (let slot = 1; slot <= pcr.settings.slots; slot++) {
+        const name = names[slot - 1] ?? `${pcr.name} ${slot}`;
+        const token = await mintToken(cfg, 'output', { room: pcr.livekitRoom, identity: ndiOutputIdentity(slot), name: `${name} (NDI)` });
+        outputs.push({ pcrId: pcr.id, pcrName: pcr.name, room: pcr.livekitRoom, slot, name, height: out.height, rate: out.rate, url: token.url, token: token.token });
+      }
+    }
     for (const pcr of rows) {
       const source = pcr.settings.returnSource;
       if (!source) continue;
@@ -123,7 +157,7 @@ export async function gatewayRoutes(app: FastifyInstance): Promise<void> {
         token: token.token,
       });
     }
-    return { returns, extraIps: await loadExtraIps() };
+    return { returns, outputs, extraIps: await loadExtraIps() };
   });
 
   app.post('/gateway/report', { preHandler: fromGateway }, async (req, reply) => {

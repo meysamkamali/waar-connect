@@ -1134,3 +1134,8 @@ a.ct-chan:focus-visible { outline: 3px solid var(--blue-2); outline-offset: 2px;
   .cue-move { grid-row: 1; }
   .cue-remove { grid-row: 1; grid-column: 3; }
 }
+
+/* Admin: the studio's NDI output */
+.adm-format { padding: 9px 11px; border-radius: 8px; background: #121720; border: 1px dashed #3a4557; font-size: 0.9rem; color: var(--fg); font-variant-numeric: tabular-nums; }
+.adm-fields select:disabled { opacity: 0.45; }
+.adm-link .adm-inline { flex-wrap: nowrap; justify-content: flex-end; }

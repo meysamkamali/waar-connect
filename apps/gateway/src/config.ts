@@ -40,6 +40,12 @@ const schema = z.object({
    * process, which one JavaScript thread shares; fine for one feed, too little for two at 1080p25.
    */
   GATEWAY_FEEDS: z.enum(['process', 'inline']).default('process'),
+  /**
+   * Gain on a guest's sound on its way out to NDI, in dB. NDI states sound as floats where 1.0 is
+   * +4 dBu; equipment differs in what it takes as full scale. 0 sends a full-scale voice as 1.0, the
+   * same scale the return feed reads; a mixer that expects the SMPTE alignment wants 20.
+   */
+  OUT_AUDIO_GAIN_DB: z.coerce.number().min(-40).max(40).default(0),
   /** How often the gateway asks the API which PCRs want a return feed. */
   POLL_SECONDS: z.coerce.number().min(3).max(120).default(15),
   /** How often the gateway reports its sources and feeds to the API. */

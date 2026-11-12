@@ -15,6 +15,8 @@ import {
   MAX_CODEC_CHOICES,
   normalizeFacePrefs,
   normalizeGuestPrefs,
+  normalizeNdiOut,
+  OUT_RATES,
   outputIdentity,
 } from '@waar-connect/shared';
 import { z } from 'zod';
@@ -55,6 +57,11 @@ const Settings = z.object({
   returnKbps: z.int().min(200).max(8000).nullable(),
   guest: GuestPrefsBody,
   face: FacePrefsBody,
+  ndiOut: z.object({
+    on: z.boolean(),
+    height: z.union([z.literal(1080), z.literal(720), z.literal(540)]).nullable(),
+    rate: z.enum(OUT_RATES).nullable(),
+  }),
 });
 const CreateBody = z.object({ name: z.string().trim().min(1).max(80), settings: Settings.partial().optional() });
 const PatchBody = z.object({ name: z.string().trim().min(1).max(80).optional(), settings: Settings.partial().optional() });
@@ -75,6 +82,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     returnKbps: base.returnKbps ?? null,
     guest: normalizeGuestPrefs(base.guest),
     face: normalizeFacePrefs(base.face),
+    ndiOut: normalizeNdiOut(base.ndiOut),
   };
   // The guest's screen is the station's now (routes/station.ts); a design a studio still carries is not handed out.
   delete out.screen;
@@ -89,6 +97,7 @@ export function mergeSettings(base: PcrSettings, patch: SettingsPatch | undefine
     if (patch.returnKbps !== undefined) out.returnKbps = patch.returnKbps;
     if (patch.guest !== undefined) out.guest = normalizeGuestPrefs(patch.guest);
     if (patch.face !== undefined) out.face = normalizeFacePrefs(patch.face);
+    if (patch.ndiOut !== undefined) out.ndiOut = normalizeNdiOut(patch.ndiOut);
   }
   out.outputNames = Array.from({ length: out.slots }, (_, i) => out.outputNames[i]?.trim() || `Guest ${i + 1}`);
   return out;

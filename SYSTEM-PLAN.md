@@ -177,6 +177,25 @@ page's state shows on the slate, and for three seconds when the mouse moves (or 
 The Kurdish and Arabic texts (the guest's page and the cues) were written by the assistant and
 need a native speaker's eye.
 
+**Decided 2026-11-12: NDI out.** Every slot of a studio goes out as an NDI source on the station's
+network, made by the gateway and named after the studio and the slot ("CONNECT (PCR 1 Guest 1)").
+The admin sets it per studio (`settings.ndiOut`, on by default): the **picture** is either as the
+guest sends it or fixed (1080p, 720p, 540p, 16:9), the **frame rate** either as the guest sends it or
+fixed: 25 progressive, 50 progressive, or 50 interlaced (50i: 25 frames a second of two fields
+each). A new studio starts with 1080i50. A fixed format keeps the vision mixer's input the same
+whatever a phone sends.
+
+How it is made (`apps/gateway/src/out-feed.ts`, one process per slot): the output sits in the room
+under its own identity (`out:slot-N:ndi`, beside the output page's `out:slot-N`, so both can be
+there), and the server sends it exactly the guest on that slot. The picture is turned upright and,
+when a size is fixed, fitted into it without stretching (black beside an upright phone picture);
+one that already has the size goes out untouched. A fixed rate is paced by NDI's own clock, the
+newest picture each time; for 50i two pictures are woven into one frame when the guest sends 50 a
+second, and one picture fills both fields when they send 25. The guest's sound goes with it. While
+nobody sits on a slot the source sends black once a second, so it stays in the mixer. A guest
+whose line stalls keeps their last picture for 15 seconds. The admin page shows each source's
+name, format, state and how many receivers are connected.
+
 The same day: the guest's link has **no join button**. Opening it connects at once with the front
 camera and the phone's microphone; the device check appears only when that fails. The page goes
 full screen on the guest's first touch or when the phone is turned (no browser lets a page do it by

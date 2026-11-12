@@ -1,5 +1,5 @@
 // Calls to the waar Connect API (same origin, /api/v1). Sessions are cookies, sent automatically.
-import type { Cue, FacePrefs, GatewayStatus, GuestPrefs, GuestScreen, GuestState, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
+import type { Cue, FacePrefs, GatewayStatus, GuestPrefs, GuestScreen, GuestState, NdiOutSettings, OutputState, PublishedTrack, StaffState } from '@waar-connect/shared';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -90,6 +90,8 @@ export interface PcrSettings {
   guest: GuestPrefs;
   /** The producer's face camera as it is sent. */
   face: FacePrefs;
+  /** Every slot out as an NDI source, and its format. */
+  ndiOut?: NdiOutSettings;
 }
 /** The gateway as the API knows it: set up at all, and its last report if one came recently. */
 export interface GatewayView {

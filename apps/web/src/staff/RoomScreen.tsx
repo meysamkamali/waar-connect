@@ -261,13 +261,17 @@ export function RoomScreen({ id }: { id: string; user: User }) {
           </h2>
           {Array.from({ length: settings.slots }, (_, i) => i + 1).map((n) => {
             const g = all.find((x) => x.slot === n && x.place === 'studio');
-            const out = snap?.outputs.find((o) => o.slot === n);
+            // the slot's ways out to the studio: the gateway's NDI source, and the output page on the studio PC
+            const outs = (snap?.outputs ?? []).filter((o) => o.slot === n);
+            const ndi = outs.some((o) => o.identity.endsWith(':ndi'));
+            const page = outs.some((o) => !o.identity.endsWith(':ndi'));
+            const outTip = ndi && page ? 'This slot goes out as an NDI source, and its output page is open on the studio PC.' : ndi ? 'This slot goes out as an NDI source.' : page ? 'The output page for this slot is open on the studio PC.' : 'Nothing takes this slot: no NDI source and no output page. The studio does not get this guest.';
             return (
               <div class={`room-slot ${g ? g.tally : 'empty'}`} key={n}>
                 <div class="room-slot-head">
                   <span class="room-slot-n">{n}</span>
                   <span>{settings.outputNames[n - 1]}</span>
-                  <i class={`adm-dot ${out ? 'ok' : ''} tip tip-end`} data-tip={out ? 'The output page for this slot is open on the studio PC.' : 'No output page is open for this slot: the studio does not get this guest.'} />
+                  <i class={`adm-dot ${ndi || page ? 'ok' : ''} tip tip-end`} data-tip={outTip} />
                 </div>
                 {g && card(g)}
               </div>

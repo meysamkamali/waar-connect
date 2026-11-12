@@ -1,7 +1,8 @@
-// The gateway's side of the API: which PCRs want a return feed, and the status report back.
+// The gateway's side of the API: which PCRs want a return feed, which slots go out as NDI, and the status report back.
 // Copyright (C) 2026 WAAR Media. AGPL-3.0-only; see LICENSE.
 
 import type { GatewayReport } from '@waar-connect/shared';
+import type { OutTarget } from './out-feed.ts';
 import type { ReturnTarget } from './return-feed.ts';
 
 export const GATEWAY_HEADER = 'x-wc-gateway';
@@ -15,10 +16,10 @@ export class ApiClient {
     this.#token = token;
   }
 
-  /** Which PCRs want a return feed, and the admin's list of NDI sender addresses on other networks. */
-  async poll(): Promise<{ targets: ReturnTarget[]; extraIps: string[] }> {
-    const data = await this.#call<{ returns: ReturnTarget[]; extraIps?: string[] }>('GET', '/api/v1/gateway/returns');
-    return { targets: data.returns, extraIps: data.extraIps ?? [] };
+  /** Which PCRs want a return feed, which studio slots go out as NDI sources, and the admin's list of NDI sender addresses on other networks. */
+  async poll(): Promise<{ targets: ReturnTarget[]; outputs: OutTarget[]; extraIps: string[] }> {
+    const data = await this.#call<{ returns: ReturnTarget[]; outputs?: OutTarget[]; extraIps?: string[] }>('GET', '/api/v1/gateway/returns');
+    return { targets: data.returns, outputs: data.outputs ?? [], extraIps: data.extraIps ?? [] };
   }
 
   async report(report: GatewayReport): Promise<void> {
