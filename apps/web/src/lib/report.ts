@@ -63,6 +63,10 @@ export interface GuestReport {
   width?: number | undefined;
   height?: number | undefined;
   fps?: number | undefined;
+  /** Picture height asked of this phone; `width` and `height` are what the camera really gives. */
+  resAsked?: number | undefined;
+  /** Said by the phone when its camera does not give the size asked in 16:9, and what it sends instead. */
+  note?: string | undefined;
   /** Frame rate asked of this phone (25 or 50); `fps` is what the camera really gives. */
   fpsAsked?: number | undefined;
   /** The highest frame rate this camera says it can do, at any size. Phones are usually 30 or 60. */

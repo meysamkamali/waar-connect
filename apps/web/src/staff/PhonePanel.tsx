@@ -204,6 +204,7 @@ export function PhonePanel({ tile, report: r, cmd }: { tile: StaffTile | undefin
         </div>
       )}
       {r?.error && <div class="pp-alert bad">{r.error}</div>}
+      {r?.note && <div class="pp-alert">{r.note}</div>}
 
       {facts.length > 0 && (
         <div class="pp-facts">
@@ -294,7 +295,7 @@ export function PhonePanel({ tile, report: r, cmd }: { tile: StaffTile | undefin
       <section class="pp-group">
         <h4>Picture</h4>
         <Row label="Size">
-          <Seg choices={SIZES.map((h) => ({ key: h, label: `${h}p` }))} value={r?.height} onPick={(h) => cmd({ res: h })} />
+          <Seg choices={SIZES.map((h) => ({ key: h, label: `${h}p` }))} value={r?.resAsked ?? r?.height} onPick={(h) => cmd({ res: h })} />
         </Row>
         <Row label="Frame rate">
           <Seg

@@ -62,7 +62,7 @@ export function createRoom(profile: PublishProfile): Room {
     adaptiveStream: false,
     dynacast: true,
     videoCaptureDefaults: {
-      resolution: { width, height: profile.height, frameRate: profile.fps },
+      resolution: { width, height: profile.height, frameRate: profile.fps, aspectRatio: 16 / 9 },
       facingMode: 'user',
     },
     audioCaptureDefaults: {

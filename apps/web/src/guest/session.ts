@@ -44,6 +44,7 @@ import { TrackStats, type StatsSummary } from '../lib/stats.ts';
 import { BUILD } from '../lib/version.ts';
 
 import { cameraConstraints, mergeCameraRequest, parseCameraRequest, readCamera, type CameraRequest } from '../lib/camera.ts';
+import { captureSize, keepWide, type CameraTrack, type CaptureConstraints } from '../lib/capture.ts';
 
 // Settings the producer pushed to this phone; they survive a reload of the same tab.
 const OVERRIDE_KEY = 'wc.guest.override';
@@ -163,6 +164,12 @@ export class GuestSession {
   #mismatch = 0;
   #connectedAt = 0;
   #over = 0;
+  /** The size and shape constraints that hold on the camera now; lens settings are applied together with them. */
+  #capture: CaptureConstraints | undefined;
+  /** For the producer, when the camera does not give the size asked in 16:9. */
+  #cameraNote: string | undefined;
+  /** The camera chosen on the device check, when one was. */
+  #videoDeviceId: string | undefined;
 
   constructor() {
     const params = new URLSearchParams(location.search);
@@ -255,7 +262,7 @@ export class GuestSession {
     await lp.setCameraEnabled(
       true,
       {
-        resolution: { width: Math.round((pr.height * 16) / 9), height: pr.height, frameRate: pr.fps },
+        resolution: captureSize(pr.height, pr.fps),
         ...(devices.videoDeviceId && !o.facing ? { deviceId: devices.videoDeviceId } : {}),
         ...(o.facing ? { facingMode: o.facing } : {}),
       },
@@ -264,7 +271,9 @@ export class GuestSession {
     const a = o.audio ?? { ec: true, ns: true, agc: true };
     await lp.setMicrophoneEnabled(true, { ...(devices.audioDeviceId ? { deviceId: devices.audioDeviceId } : {}), echoCancellation: a.ec, noiseSuppression: a.ns, autoGainControl: a.agc });
     const cam = lp.getTrackPublication(Track.Source.Camera)?.videoTrack ?? null;
+    this.#videoDeviceId = devices.videoDeviceId;
     this.localVideo.value = cam;
+    await this.#keepWide();
     this.#upStats = cam ? new TrackStats(cam, 'send') : undefined;
     await this.#setMaxBitrate(pr.maxKbps).catch(() => undefined); // also gives the small copies their share at a low cap
     if (o.small === false) await this.#setSmallCopies(false).catch(() => undefined);
@@ -376,7 +385,8 @@ export class GuestSession {
         const rate = fps !== undefined && RATES.includes(fps) ? fps : this.#profile.fps;
         this.#profile = { ...this.#profile, height, fps: rate };
         this.#override = saveOverride({ res: height, fps: rate });
-        await this.localVideo.value?.restartTrack({ resolution: { width: Math.round((height * 16) / 9), height, frameRate: rate } });
+        await this.localVideo.value?.restartTrack({ resolution: captureSize(height, rate), ...this.#whichCamera() });
+        await this.#keepWide();
         await this.#setMaxFramerate(rate);
         await this.#reapplyCamera();
       }
@@ -409,7 +419,9 @@ export class GuestSession {
       }
       if (cmd['facing'] === 'user' || cmd['facing'] === 'environment') {
         this.#override = saveOverride({ facing: cmd['facing'] });
-        await this.localVideo.value?.restartTrack({ facingMode: cmd['facing'] });
+        // the size goes with it: a restart without one opens the camera at its own default size
+        await this.localVideo.value?.restartTrack({ facingMode: cmd['facing'], resolution: captureSize(this.#profile.height, this.#profile.fps) });
+        await this.#keepWide();
         await this.#reapplyCamera();
       }
       const camera = parseCameraRequest(cmd['cam']);
@@ -458,7 +470,26 @@ export class GuestSession {
     if (!info) return;
     const advanced = cameraConstraints(req, info.can);
     if (advanced.length === 0) return;
-    await track.applyConstraints({ advanced: advanced as unknown as MediaTrackConstraintSet[] });
+    // New constraints replace the ones before: the picture's size and shape ride along, or the camera
+    // would fall back to its own default size.
+    const held = this.#capture ?? captureSize(this.#profile.height, this.#profile.fps);
+    await track.applyConstraints({ ...held, advanced: [...(held.advanced ?? []), ...advanced] as unknown as MediaTrackConstraintSet[] });
+  }
+
+  /** The camera a restart opens: the one the producer turned to, else the one chosen on the device check, else the front one. */
+  #whichCamera(): { facingMode?: 'user' | 'environment'; deviceId?: string } {
+    if (this.#override.facing) return { facingMode: this.#override.facing };
+    if (this.#videoDeviceId) return { deviceId: this.#videoDeviceId };
+    return { facingMode: 'user' };
+  }
+
+  /** After the camera (re)started: a picture that is not 16:9 is put right (lib/capture.ts), and the producer is told. */
+  async #keepWide(): Promise<void> {
+    const track = this.localVideo.value?.mediaStreamTrack;
+    if (!track) return;
+    const kept = await keepWide(track as unknown as CameraTrack, this.#profile.height, this.#profile.fps);
+    this.#capture = kept.constraints;
+    this.#cameraNote = kept.note;
   }
 
   /** A restarted camera track starts from the camera's own defaults; put the producer's settings back. */
@@ -592,6 +623,8 @@ export class GuestSession {
       width: settings?.width,
       height: settings?.height,
       fps: settings?.frameRate,
+      resAsked: this.#profile.height,
+      note: this.#cameraNote,
       fpsAsked: this.#profile.fps,
       fpsMax: cam?.mediaStreamTrack.getCapabilities?.().frameRate?.max,
       codec: this.#profile.codec,
