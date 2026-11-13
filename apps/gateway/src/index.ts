@@ -60,13 +60,24 @@ async function setDiscovery(next: string[]): Promise<void> {
 const api = new ApiClient(cfg.API_URL, cfg.GATEWAY_TOKEN);
 let reconciling = false;
 let apiDown = false;
+/** The last fault in bringing feeds and outputs in line, and when it was logged: said when it changes, and once a minute while it lasts. */
+let lastFault: string | undefined;
+let lastFaultAt = 0;
 
 /** Starts, stops or re-targets feeds so they match what the admin set in the API. */
 async function reconcile(): Promise<void> {
   if (reconciling) return;
   reconciling = true;
   try {
-    const { targets, outputs, extraIps } = await api.poll();
+    let polled: Awaited<ReturnType<ApiClient['poll']>>;
+    try {
+      polled = await api.poll();
+    } catch (err) {
+      if (!apiDown) log('warn', 'API not reachable; feeds keep running', { err });
+      apiDown = true;
+      return;
+    }
+    const { targets, outputs, extraIps } = polled;
     if (apiDown) log('info', 'API reachable again');
     apiDown = false;
     await setDiscovery([...new Set([...cfg.extraIps, ...extraIps])]);
@@ -113,9 +124,17 @@ async function reconcile(): Promise<void> {
       out.start();
       log('info', 'NDI output starting', { pcr: t.pcrName, slot: t.slot, name: t.name, size: t.height ?? 'as it arrives', rate: t.rate ?? 'as it arrives' });
     }
+    if (lastFault !== undefined) log('info', 'feeds and outputs are in line with the API again');
+    lastFault = undefined;
   } catch (err) {
-    if (!apiDown) log('warn', 'API not reachable; feeds keep running', { err });
-    apiDown = true;
+    // The API answered; something in starting, stopping or discovery failed. What runs keeps running.
+    const what = err instanceof Error ? err.message : String(err);
+    const now = Date.now();
+    if (what !== lastFault || now - lastFaultAt > 60_000) {
+      log('error', 'feeds and outputs could not be brought in line with the API; trying again', { err });
+      lastFaultAt = now;
+    }
+    lastFault = what;
   } finally {
     reconciling = false;
   }

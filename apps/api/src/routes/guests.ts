@@ -8,6 +8,7 @@ import { DEFAULT_LANGUAGE, identityFor } from '@waar-connect/shared';
 import { z } from 'zod';
 import { contacts, events, guests, invites, pcrs } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
+import { ActionError } from '../rooms/controller.ts';
 
 const Id = z.object({ id: z.uuid() });
 const SeatBody = z
@@ -63,17 +64,30 @@ export async function guestRoutes(app: FastifyInstance): Promise<void> {
     return { guest: { ...guest, identity: identityFor('guest', guest.id) } };
   });
 
-  /** Removes the seat and its links; a connected guest is shown out of the room as well. */
+  /**
+   * Removes the seat and its links; a connected guest is shown out of the room first. When the room
+   * does not answer, nothing is removed (503): a guest still connected must stay in the list, or
+   * nobody could reach them any more.
+   */
   app.delete('/guests/:id', { preHandler: staff }, async (req, reply) => {
     const params = parseOr400(Id, req.params, reply);
     if (!params) return;
-    const [guest] = await db.delete(guests).where(eq(guests.id, params.id)).returning();
+    const [guest] = await db.select().from(guests).where(eq(guests.id, params.id)).limit(1);
     if (!guest) return notFound(reply, 'Guest');
-    const [pcr] = await db.select({ livekitRoom: pcrs.livekitRoom }).from(pcrs).where(eq(pcrs.id, guest.pcrId)).limit(1);
-    if (pcr) {
-      const controller = await rooms.get(pcr.livekitRoom).catch(() => null);
-      await controller?.act({ type: 'kick', guest: identityFor('guest', guest.id) }, req.user!.id).catch(() => undefined);
+    const [pcr] = await db.select({ livekitRoom: pcrs.livekitRoom, archivedAt: pcrs.archivedAt }).from(pcrs).where(eq(pcrs.id, guest.pcrId)).limit(1);
+    if (pcr && !pcr.archivedAt) {
+      try {
+        const controller = await rooms.get(pcr.livekitRoom);
+        await controller?.act({ type: 'kick', guest: identityFor('guest', guest.id) }, req.user!.id);
+      } catch (err) {
+        // "not in the room" is fine: there is nobody to show out
+        if (!(err instanceof ActionError)) {
+          req.log.warn({ err, guest: guest.id }, 'guest not removed: the room did not answer');
+          return reply.code(503).send({ error: 'The room did not answer, so the guest was not removed. Try again.' });
+        }
+      }
     }
+    await db.delete(guests).where(eq(guests.id, params.id));
     await db.insert(events).values({ pcrId: guest.pcrId, actor: req.user!.id, type: 'guest.removed', payload: { guestId: guest.id } });
     return { ok: true };
   });

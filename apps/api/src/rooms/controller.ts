@@ -67,6 +67,8 @@ export interface RoomSnapshot {
 }
 
 export class ActionError extends Error {}
+/** The room (LiveKit) did not answer a call that the action needs; nothing was changed, and it can be tried again. */
+export class RoomUnreachableError extends Error {}
 
 /** How long a guest who dropped keeps their place, slot and tally for a reconnect. */
 const DEPARTED_GRACE_MS = 15 * 60_000;
@@ -349,9 +351,15 @@ export class RoomController {
         // A guest who already dropped out of the room: forget the place kept for their return.
         if (!this.#guests.has(action.guest) && this.#departed.delete(action.guest)) return;
         const g = this.#guest(action.guest);
+        // Out of the room first. A guest the room could not show out stays as they were, so it can be tried again
+        // (before, they were forgotten here while still connected there).
+        try {
+          await this.control.removeParticipant(this.room, g.identity);
+        } catch (err) {
+          throw new RoomUnreachableError('The room did not answer, so the guest is still in. Try again.', { cause: err });
+        }
         g.place = 'left';
         this.#departed.delete(g.identity);
-        await this.control.removeParticipant(this.room, g.identity).catch(() => undefined);
         this.#guests.delete(g.identity);
         this.#ifb.delete(g.identity);
         return;

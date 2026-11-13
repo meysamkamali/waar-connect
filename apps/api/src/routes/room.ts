@@ -7,7 +7,7 @@ import { identityFor, normalizeFacePrefs } from '@waar-connect/shared';
 import { z } from 'zod';
 import { pcrs } from '../db/schema.ts';
 import { notFound, parseOr400 } from '../http.ts';
-import { ActionError, type RoomAction } from '../rooms/controller.ts';
+import { ActionError, RoomUnreachableError, type RoomAction } from '../rooms/controller.ts';
 
 const Id = z.object({ id: z.uuid() });
 const Identity = z.string().min(3).max(120);
@@ -70,6 +70,7 @@ export async function roomRoutes(app: FastifyInstance): Promise<void> {
       return { snapshot };
     } catch (err) {
       if (err instanceof ActionError) return reply.code(409).send({ error: err.message });
+      if (err instanceof RoomUnreachableError) return reply.code(503).send({ error: err.message });
       throw err;
     }
   });

@@ -259,21 +259,31 @@ export class GuestSession {
     this.#codecs = await probe;
     this.#profile = this.#resolveProfile();
     const pr = this.#profile;
-    await lp.setCameraEnabled(
-      true,
-      {
-        resolution: captureSize(pr.height, pr.fps),
-        ...(devices.videoDeviceId && !o.facing ? { deviceId: devices.videoDeviceId } : {}),
-        ...(o.facing ? { facingMode: o.facing } : {}),
-      },
-      videoPublishOptions(pr),
-    );
+    this.#videoDeviceId = devices.videoDeviceId;
+    // The camera is opened, its picture checked and put right (16:9), and only then published: the
+    // sizes the server and the viewers are told are the ones that really go out.
+    let opened: LocalVideoTrack | undefined;
+    try {
+      const made = await lp.createTracks({
+        video: {
+          resolution: captureSize(pr.height, pr.fps),
+          ...(devices.videoDeviceId && !o.facing ? { deviceId: devices.videoDeviceId } : {}),
+          ...(o.facing ? { facingMode: o.facing } : {}),
+        },
+      });
+      opened = made.find((t): t is LocalVideoTrack => t.kind === Track.Kind.Video);
+    } catch (err) {
+      this.error.value = err instanceof Error ? err.message : String(err);
+      throw err;
+    }
+    if (opened) {
+      await this.#keepWide(opened.mediaStreamTrack);
+      await lp.publishTrack(opened, videoPublishOptions(pr));
+    }
     const a = o.audio ?? { ec: true, ns: true, agc: true };
     await lp.setMicrophoneEnabled(true, { ...(devices.audioDeviceId ? { deviceId: devices.audioDeviceId } : {}), echoCancellation: a.ec, noiseSuppression: a.ns, autoGainControl: a.agc });
     const cam = lp.getTrackPublication(Track.Source.Camera)?.videoTrack ?? null;
-    this.#videoDeviceId = devices.videoDeviceId;
     this.localVideo.value = cam;
-    await this.#keepWide();
     this.#upStats = cam ? new TrackStats(cam, 'send') : undefined;
     await this.#setMaxBitrate(pr.maxKbps).catch(() => undefined); // also gives the small copies their share at a low cap
     if (o.small === false) await this.#setSmallCopies(false).catch(() => undefined);
@@ -484,8 +494,7 @@ export class GuestSession {
   }
 
   /** After the camera (re)started: a picture that is not 16:9 is put right (lib/capture.ts), and the producer is told. */
-  async #keepWide(): Promise<void> {
-    const track = this.localVideo.value?.mediaStreamTrack;
+  async #keepWide(track: MediaStreamTrack | undefined = this.localVideo.value?.mediaStreamTrack): Promise<void> {
     if (!track) return;
     const kept = await keepWide(track as unknown as CameraTrack, this.#profile.height, this.#profile.fps);
     this.#capture = kept.constraints;

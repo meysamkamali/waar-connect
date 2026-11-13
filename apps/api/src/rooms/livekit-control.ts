@@ -54,7 +54,14 @@ export class LiveKitRoomControl implements LiveKitControl {
     await this.svc.sendData(room, data, DataPacket_Kind.RELIABLE, identities ? { destinationIdentities: identities, topic } : { topic });
   }
 
+  /** Takes a participant out of the room. One who is no longer there (they left, the room closed) is out already. */
   async removeParticipant(room: string, identity: string): Promise<void> {
-    await this.svc.removeParticipant(room, identity);
+    try {
+      await this.svc.removeParticipant(room, identity);
+    } catch (err) {
+      const e = err as { status?: number; code?: string } | null;
+      if (e?.status === 404 || e?.code === 'not_found') return;
+      throw err;
+    }
   }
 }

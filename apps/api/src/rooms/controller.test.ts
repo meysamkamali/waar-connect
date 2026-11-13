@@ -28,7 +28,10 @@ class FakeControl implements LiveKitControl {
   async sendData(_room: string, to: string[] | null, topic: string, payload: unknown): Promise<void> {
     this.data.push({ to, topic, payload });
   }
+  /** Set: the room does not answer when a participant is to be taken out. */
+  failRemove = false;
   async removeParticipant(_room: string, identity: string): Promise<void> {
+    if (this.failRemove) throw new Error('no answer');
     this.removed.push(identity);
   }
   subsOf(identity: string): string[] {
@@ -299,6 +302,21 @@ describe('room controller', () => {
     await c.act({ type: 'handoff', guest: 'guest:c' }, PROD);
     assert.equal(c.snapshot().guests.find((g) => g.identity === 'guest:c')?.slot, 1);
     await assert.rejects(c.act({ type: 'handoff', guest: A }, PROD), /slots are taken/);
+  });
+});
+
+describe('showing a guest out', () => {
+  it('a guest the room could not show out stays as they were, and can be shown out again', async () => {
+    const { fake, c } = await roomWithEveryone();
+    await c.act({ type: 'admit', guest: A }, PROD);
+    fake.failRemove = true;
+    await assert.rejects(c.act({ type: 'kick', guest: A }, PROD), /did not answer/);
+    assert.equal(c.snapshot().guests.find((g) => g.identity === A)?.place, 'green', 'still in the green room');
+    assert.deepEqual(c.outputSlots(), [1], 'and their source stays');
+    fake.failRemove = false;
+    await c.act({ type: 'kick', guest: A }, PROD);
+    assert.equal(c.snapshot().guests.some((g) => g.identity === A), false);
+    assert.deepEqual(fake.removed, [A]);
   });
 });
 
