@@ -30,7 +30,7 @@ export async function livekitRoutes(app: FastifyInstance): Promise<void> {
         participant: event.participant?.identity ?? null,
         track: event.track ? { sid: event.track.sid, type: event.track.type, source: event.track.source, name: event.track.name } : null,
       },
-    });
+    }).catch((err: unknown) => req.log.error({ err, event: event.event, room: roomName }, 'webhook event not recorded; the room still gets it'));
 
     // Answer LiveKit at once; the controller work continues in the background.
     void reply.send({ ok: true });

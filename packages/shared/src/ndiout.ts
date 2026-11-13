@@ -103,14 +103,18 @@ export const NDI_OUT_LINGER_MS = 120_000;
  */
 export function ndiOutSlots(slots: number, guests: readonly { place: string; slot: number | null }[]): number[] {
   const up = new Set<number>();
+  // a slot given ahead to a guest still at the door is taken for the hand-off, though it needs no source yet
+  const taken = new Set<number>();
   let waiting = 0;
   for (const g of guests) {
+    const holds = g.slot !== null && g.slot >= 1 && g.slot <= slots;
+    if (holds) taken.add(g.slot as number);
     if (g.place !== 'green' && g.place !== 'studio') continue;
-    if (g.slot !== null && g.slot >= 1 && g.slot <= slots) up.add(g.slot);
+    if (holds) up.add(g.slot as number);
     else waiting++;
   }
   for (let n = 1; n <= slots && waiting > 0; n++) {
-    if (up.has(n)) continue;
+    if (taken.has(n)) continue;
     up.add(n);
     waiting--;
   }

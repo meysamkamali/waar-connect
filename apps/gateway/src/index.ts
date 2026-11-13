@@ -92,6 +92,8 @@ async function reconcile(): Promise<void> {
 
     // The NDI outputs: one per studio slot the admin switched on.
     const wantedOut = new Map(outputs.map((t) => [outKey(t), t]));
+    // stopped together (each may take seconds), and all of them before a start: a new output may want a stopped one's NDI name
+    const stops: Promise<void>[] = [];
     for (const [key, out] of outs) {
       const t = wantedOut.get(key);
       if (t && outShape(t) === outShape(out.target)) {
@@ -100,8 +102,9 @@ async function reconcile(): Promise<void> {
       }
       log('info', 'NDI output stopping', { pcr: out.target.pcrName, slot: out.target.slot, name: out.target.name, why: t ? 'name or format changed' : 'no longer wanted' });
       outs.delete(key);
-      await out.stop().catch((err: unknown) => log('warn', 'output stop failed', { err }));
+      stops.push(out.stop().catch((err: unknown) => log('warn', 'output stop failed', { err })));
     }
+    await Promise.all(stops);
     for (const t of outputs) {
       const key = outKey(t);
       if (outs.has(key)) continue;

@@ -121,7 +121,9 @@ export class RoomController {
     return this.#serial(async () => {
       const guest = this.#guests.get(identity);
       if (guest) {
-        this.#departed.set(identity, { state: guest, ifb: this.#ifb.has(identity), at: Date.now() });
+        const now = Date.now();
+        for (const [id, d] of this.#departed) if (now - d.at >= DEPARTED_GRACE_MS) this.#departed.delete(id);
+        this.#departed.set(identity, { state: guest, ifb: this.#ifb.has(identity), at: now });
         this.#guests.delete(identity);
         this.#ifb.delete(identity);
       }
