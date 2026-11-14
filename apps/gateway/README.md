@@ -165,10 +165,23 @@ The report carries one entry per output: state (starting, slate, sending, error)
 arrives, what goes out (`1080i50`), and how many receivers are connected.
 
 **Firewall.** A receiver connects to the VM: TCP 5960 (the list of sources) and one TCP port per
-source from 5961 up, plus UDP ports NDI picks itself. The VM's firewall must let the station's NDI
-network in (`ufw allow from 10.100.1.0/24`, which `install-gateway.sh` sets); without it a mixer
-lists the sources and gets no picture (seen 2026-11-12: the ports did not answer from another
-machine).
+source from 5961 up; without those a mixer lists the sources and gets no picture (seen 2026-11-12:
+the ports did not answer from another machine). NDI's fast delivery (reliable UDP) arrives on the
+receiving side's UDP port, 5960 and up: on the VM that is a sender delivering to a return feed, and
+where the firewall drops it NDI falls back to TCP (seen 2026-11-14 with the PCR2 ingest machine).
+`install-gateway.sh` lets TCP and UDP 5960 to 5999 in from each station network that sends or takes
+NDI (`NDI_NETWORKS`):
+
+| Network | What is there |
+|---|---|
+| 10.0.0.0/24 | the server LAN (the VM's `ens34`) |
+| 10.1.1.0/24 | the ENG network |
+| 10.100.1.0/24 | the PCR1 NDI network (the VM's `ens37`) |
+| 10.100.2.0/24 | the PCR2 network |
+
+mDNS does not cross the router: a receiver on the VM's own two networks finds the sources by itself,
+one on another network adds the VM's address (10.0.0.41) in its NDI Access Manager, as the gateway
+does the other way round with `NDI_EXTRA_IPS`.
 
 **Cost**, measured on the station's server (2026-11-12, a 720p guest at 25 a second): 0.7 of a core
 per slot fitted into 1080i50, 0.4 passed on as 720p; an empty slot next to nothing.

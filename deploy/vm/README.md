@@ -36,7 +36,7 @@ redirect to port 8443, so a link without the port still works.
 | Nginx | `/etc/nginx/sites-available/waar-connect.conf` (from `nginx-connect.conf`) | systemd |
 | Certificates | `/etc/waar-connect/certs/<name>/{fullchain,privkey}.pem`, owner `certsync` | aaPanel job |
 | Certificate reload | `waar-certs.path` → `waar-certs.service` → `/usr/local/sbin/waar-certs-apply` | systemd |
-| Firewall | ufw: 22/tcp, 8443/tcp, 7881/tcp, 7882/udp, 3478/udp | ufw |
+| Firewall | ufw: 22/tcp, 8443/tcp, 7881/tcp, 7882/udp, 3478/udp; for NDI, 5353/udp from the VM's two networks and 5960 to 5999 (TCP and UDP) from the station networks that send or take NDI (`NDI_NETWORKS` in `install-gateway.sh`) | ufw |
 | Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
 | Gateway (NDI return into the rooms) | `waar-connect-gateway.service`, user `waarconnect`, no port; `/opt/waar-connect/apps/gateway/.env` holds the token shared with the API | systemd, `install-gateway.sh` |
 | NDI runtime | `/usr/local/lib/libndi.so.6` from the NDI SDK for Linux; licence texts in `/usr/local/share/doc/ndi/` | `install-gateway.sh --accept-ndi-license` |
