@@ -147,5 +147,10 @@ export interface OutputFeedStatus {
   out: { width: number; height: number; format: string } | null;
   /** How many NDI receivers are connected to this source. */
   receivers: number;
+  /**
+   * Whether discovery on the gateway's machine lists this source. False: it runs but no receiver can
+   * find it (the machine's mDNS daemon is stuck). Null or absent: too new to tell, or not reported.
+   */
+  announced?: boolean | null | undefined;
   since: number;
 }

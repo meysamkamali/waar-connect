@@ -183,6 +183,17 @@ mDNS does not cross the router: a receiver on the VM's own two networks finds th
 one on another network adds the VM's address (10.0.0.41) in its NDI Access Manager, as the gateway
 does the other way round with `NDI_EXTRA_IPS`.
 
+**Discovery.** NDI announces each source through the machine's mDNS daemon (Avahi). When that daemon
+is stuck, every source runs and reports "sending" while no receiver can find it: on 2026-11-14 an
+unattended upgrade restarted the daemon in the middle of a network change and it stayed in
+"registering" for six hours. Two guards since then: the gateway looks for each of its own sources in
+its own discovery list and reports `announced: false` after 30 seconds without it (the admin page
+shows "not on the network", the log says so once); and `waar-mdns-watch.timer` on the VM restarts a
+daemon that has not finished starting, every minute. Senders and finders pick the restarted daemon
+up by themselves within seconds. By hand: `busctl --system call org.freedesktop.Avahi /
+org.freedesktop.Avahi.Server GetState` answers `i 2` when it runs; `avahi-browse -t -r _ndi._tcp`
+lists what is announced.
+
 **Cost**, measured on the station's server (2026-11-12, a 720p guest at 25 a second): 0.7 of a core
 per slot fitted into 1080i50, 0.4 passed on as 720p; an empty slot next to nothing.
 

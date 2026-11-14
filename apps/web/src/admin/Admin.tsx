@@ -367,6 +367,7 @@ function StudioCard({
 function outputPill(o: OutputFeedStatus | undefined, gateway: GatewayView | null): { tone: Tone; text: string; tip: string } {
   if (!gateway?.status) return { tone: gateway && !gateway.configured ? 'none' : 'bad', text: gateway && !gateway.configured ? 'no gateway' : 'gateway offline', tip: 'The gateway makes the NDI sources. It is not reporting.' };
   if (!o) return { tone: 'none', text: 'waits for a guest', tip: 'This source comes up when a guest enters the green room, and goes two minutes after its guest has left.' };
+  if (o.announced === false) return { tone: 'bad', text: 'not on the network', tip: 'The source runs, but discovery on the server does not list it, so no receiver can find it. The server restarts its discovery service by itself within two minutes; if this stays, the service (avahi-daemon) needs a look.' };
   const format = o.out?.format ?? '';
   const seen = o.receivers === 1 ? '1 receiver' : `${o.receivers} receivers`;
   if (o.state === 'sending') return { tone: 'ok', text: `guest out · ${format}`, tip: `A guest goes out${o.in ? `, arriving as ${o.in.width}×${o.in.height} at ${o.in.fps} frames a second` : ''}. ${seen} connected.` };

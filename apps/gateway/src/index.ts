@@ -13,7 +13,7 @@ import { loadConfig } from './config.ts';
 import { FeedProcess, OutProcess } from './feed-process.ts';
 import { log } from './log.ts';
 import { Ndi } from './ndi.ts';
-import { describeSource } from './network.ts';
+import { describeSource, isAnnounced } from './network.ts';
 import type { OutTarget } from './out-feed.ts';
 import type { ReturnTarget } from './return-feed.ts';
 
@@ -43,6 +43,22 @@ const feeds = new Map<string, Feed>();
 /** Every studio slot that goes out as an NDI source, by studio and slot. */
 const outs = new Map<string, OutProcess>();
 const outKey = (t: OutTarget) => `${t.pcrId}:${t.slot}`;
+/** When each output's source was last in discovery's list (its start, until it has been). */
+const outSeen = new Map<string, number>();
+/** Outputs whose missing announcement was logged: said once, and once more when it is back. */
+const outMissing = new Set<string>();
+/** Whether an output's source is announced (see isAnnounced); keeps the two maps above and the log. */
+function announced(key: string, name: string, seen: readonly { name: string }[], now: number = Date.now()): boolean | null {
+  const a = isAnnounced(name, outSeen.get(key) ?? now, seen, undefined, now);
+  if (a === true) {
+    outSeen.set(key, now);
+    if (outMissing.delete(key)) log('info', 'NDI output is announced on the network again', { name });
+  } else if (a === false && !outMissing.has(key)) {
+    outMissing.add(key);
+    log('error', 'NDI output is not announced on the network: discovery does not list it, so no receiver can find it; the mDNS daemon (avahi-daemon) may be stuck', { name });
+  }
+  return a;
+}
 /** What needs a new sender when it changes: the name on the network and the format. */
 const outShape = (t: OutTarget) => `${t.name}|${t.height}|${t.rate}|${t.room}`;
 
@@ -113,6 +129,8 @@ async function reconcile(): Promise<void> {
       }
       log('info', 'NDI output stopping', { pcr: out.target.pcrName, slot: out.target.slot, name: out.target.name, why: t ? 'name or format changed' : 'no longer wanted' });
       outs.delete(key);
+      outSeen.delete(key);
+      outMissing.delete(key);
       stops.push(out.stop().catch((err: unknown) => log('warn', 'output stop failed', { err })));
     }
     await Promise.all(stops);
@@ -121,6 +139,7 @@ async function reconcile(): Promise<void> {
       if (outs.has(key)) continue;
       const out = new OutProcess(t);
       outs.set(key, out);
+      outSeen.set(key, Date.now());
       out.start();
       log('info', 'NDI output starting', { pcr: t.pcrName, slot: t.slot, name: t.name, size: t.height ?? 'as it arrives', rate: t.rate ?? 'as it arrives' });
     }
@@ -142,14 +161,18 @@ async function reconcile(): Promise<void> {
 
 async function report(): Promise<void> {
   try {
+    const seen = ndi.sources();
     await api.report({
       version,
       host: cfg.GATEWAY_NAME,
-      sources: ndi.sources().map((s) => describeSource(s)),
+      sources: seen.map((s) => describeSource(s)),
       extraIps: discoveryIps,
       defaults: { height: cfg.RETURN_HEIGHT || null, kbps: cfg.RETURN_MAX_KBPS, fps: cfg.RETURN_MAX_FPS },
       returns: [...feeds.values()].map((f) => f.status()),
-      outputs: [...outs.values()].map((o) => o.status()),
+      outputs: [...outs].map(([key, o]) => {
+        const status = o.status();
+        return { ...status, announced: announced(key, status.name, seen) };
+      }),
     });
   } catch (err) {
     if (!apiDown) log('warn', 'report failed', { err });

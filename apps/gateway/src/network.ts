@@ -68,6 +68,21 @@ export function isOwnSource(name: string, hostname: string = os.hostname()): boo
   return short.length > 0 && name.toUpperCase().startsWith(`${short.toUpperCase()} (`);
 }
 
+/** How long one of our sources may be missing from discovery's list before it counts as not announced. */
+export const ANNOUNCE_GRACE_MS = 30_000;
+
+/**
+ * Whether one of this machine's NDI sources is in the list discovery gives back. NDI announces a
+ * source through the machine's mDNS daemon; when that daemon is stuck the source runs, looks fine
+ * and no receiver can find it (seen 2026-11-14, for six hours). `lastSeen` is when the source was
+ * last in the list (its start, until it has been).
+ * True: listed now. False: missing for longer than the grace time. Null: too soon to tell.
+ */
+export function isAnnounced(name: string, lastSeen: number, seen: readonly { name: string }[], hostname: string = os.hostname(), now: number = Date.now()): boolean | null {
+  if (seen.some((s) => isOwnSource(s.name, hostname) && s.name.endsWith(`(${name})`))) return true;
+  return now - lastSeen < ANNOUNCE_GRACE_MS ? null : false;
+}
+
 export function describeSource(src: { name: string; url: string | null }, nets: LocalNet[] = localNets(), hostname: string = os.hostname()): NdiSourceInfo {
   return { name: src.name, url: src.url, network: networkOf(src.url, nets), own: isOwnSource(src.name, hostname) };
 }

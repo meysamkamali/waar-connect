@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Restarts the mDNS daemon (Avahi) when it has not finished starting. Installed as
+# /usr/local/sbin/waar-mdns-watch by install-gateway.sh and run every minute by waar-mdns-watch.timer.
+#
+# NDI announces the gateway's sources through this daemon, and finds the station's senders through
+# it. A daemon that stays in "registering" announces nothing: every source runs, the pages show it
+# sending, and no receiver can find it. Seen 2026-11-14: an unattended upgrade restarted the daemon
+# while the network was being set up again; it stayed that way for six hours, until restarted by hand.
+# NDI's senders and finders pick a restarted daemon up by themselves within seconds.
+set -u
+
+# 2 = running; 1 = registering (still, or stuck); anything else or no answer = not usable
+state() { busctl --system call org.freedesktop.Avahi / org.freedesktop.Avahi.Server GetState 2>/dev/null | awk '{print $2}'; }
+
+systemctl is-enabled --quiet avahi-daemon 2>/dev/null || exit 0
+[ "$(state)" = 2 ] && exit 0
+sleep 20 # a daemon that is only just starting gets its time
+now=$(state)
+[ "$now" = 2 ] && exit 0
+logger -t waar-mdns-watch "avahi-daemon has not finished starting (state ${now:-no answer}); restarting it"
+systemctl restart avahi-daemon

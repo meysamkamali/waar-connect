@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { describeSource, hostOf, isOwnSource, localNets, networkOf } from './network.ts';
+import { ANNOUNCE_GRACE_MS, describeSource, hostOf, isAnnounced, isOwnSource, localNets, networkOf } from './network.ts';
 
 const nets = [
   { iface: 'ens34', address: '10.0.0.41', netmask: '255.255.255.0' },
@@ -31,6 +31,17 @@ test('isOwnSource matches the NDI machine name of this host', () => {
   assert.equal(isOwnSource('ENG07 (WAAR PGM on ENG07)', 'connect'), false);
   assert.equal(isOwnSource('CONNECTOR (x)', 'connect'), false);
   assert.equal(isOwnSource('X (y)', ''), false);
+});
+
+test('isAnnounced: one of our sources must be in the list discovery gives back', () => {
+  const t0 = 1_000_000;
+  const listed = [{ name: 'CONNECT (PCR 1 Guest 1)' }, { name: 'ENG07 (TEST)' }];
+  assert.equal(isAnnounced('PCR 1 Guest 1', t0, listed, 'connect', t0 + 5 * 60_000), true, 'listed: announced, however long ago it was last seen');
+  assert.equal(isAnnounced('PCR 1 Guest 2', t0, listed, 'connect', t0 + 5_000), null, 'new and not listed yet: too soon to tell');
+  assert.equal(isAnnounced('PCR 1 Guest 2', t0, listed, 'connect', t0 + ANNOUNCE_GRACE_MS + 1), false, 'missing for longer than the grace time');
+  assert.equal(isAnnounced('TEST', t0, listed, 'connect', t0 + ANNOUNCE_GRACE_MS + 1), false, "another machine's source of that name is not ours");
+  assert.equal(isAnnounced('Guest 1', t0, listed, 'connect', t0 + ANNOUNCE_GRACE_MS + 1), false, 'the whole name in the brackets must match');
+  assert.equal(isAnnounced('PCR 1 Guest 1', t0, [], 'connect', t0 + ANNOUNCE_GRACE_MS + 1), false, 'an empty list (the daemon stuck) announces nothing');
 });
 
 test('localNets lists IPv4 addresses without loopback', () => {

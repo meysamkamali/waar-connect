@@ -1,0 +1,6 @@
+[Unit]
+Description=waar Connect: restart the mDNS daemon when it is stuck (NDI discovery)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/waar-mdns-watch

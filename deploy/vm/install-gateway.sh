@@ -86,6 +86,12 @@ else
   echo "avahi present"
 fi
 systemctl enable --now avahi-daemon >/dev/null 2>&1 || true
+# A daemon that never finishes starting announces no NDI source, silently; a timer restarts it.
+install -m 755 "$REPO/deploy/vm/waar-mdns-watch" /usr/local/sbin/waar-mdns-watch
+install -m 644 "$REPO/deploy/vm/waar-mdns-watch.service" "$REPO/deploy/vm/waar-mdns-watch.timer" /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now waar-mdns-watch.timer >/dev/null 2>&1 || true
+echo "mDNS watch timer: $(systemctl is-active waar-mdns-watch.timer)"
 # libyuv fits a guest's picture into the NDI output's size; without it the gateway does that in
 # JavaScript, too slowly for 1080p at 25 a second.
 if ! dpkg -s libyuv0 >/dev/null 2>&1; then

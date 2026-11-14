@@ -62,6 +62,7 @@ export const Report = z.object({
         in: z.object({ width: z.int().min(0), height: z.int().min(0), fps: z.number().min(0) }).nullable(),
         out: z.object({ width: z.int().min(0), height: z.int().min(0), format: z.string().max(40) }).nullable(),
         receivers: z.int().min(0),
+        announced: z.boolean().nullable().optional(),
         since: z.number(),
       }),
     )
