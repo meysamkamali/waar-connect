@@ -17,7 +17,7 @@ guests but never themselves, sees the program return, and can be talked to priva
 | Language | **TypeScript front to back** (Node backend, browser apps) | One stack, first-party LiveKit SDKs, shared types between guest, producer and gateway. PHP stays out of the realtime path. |
 | Scope | One station, several studios and programs | No multi-tenant machinery; simpler code. |
 | Product shape | Virtual places: Lobby → Green Room → Studio → back (see SYSTEM-PLAN.md) | Matches how a real station works; producer and engineer handle the guest off air, the studio only sees guests who were handed off. |
-| Hosting | A dedicated VM in the station (10.0.0.41): Nginx on 8443 for `connect.waar.work` and `media.connect.waar.work`, LiveKit in Docker, TURN on UDP 3478; certificates issued by the aaPanel server and copied over | Separate from the station's other sites; 443 and 80 stay with aaPanel, so links carry :8443 (see SYSTEM-PLAN.md, Hosting). |
+| Hosting | A dedicated VM in the station (10.0.0.41): Nginx on 8443 for `connect.waar.work` and `media.connect.waar.work`, LiveKit in Docker, TURN on UDP 3478; certificates issued by the aaPanel server and copied over | Separate from the station's other sites; 443 and 80 stay with aaPanel from the internet, so links carry :8443; inside the station the VM answers 443 and 80 itself, so the address needs no port there (see SYSTEM-PLAN.md, Hosting). |
 
 ## What phase 1 must do
 

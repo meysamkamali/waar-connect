@@ -4,8 +4,8 @@
 #   sudo bash /opt/waar-connect/deploy/vm/install.sh
 #
 # Installs Docker, Node 24, Nginx and ufw; builds the app; starts LiveKit (deploy/media) and the app
-# as systemd services; installs the Nginx site on 8443 for connect.waar.work and
-# media.connect.waar.work. Certificates are not issued here: they arrive from the aaPanel server
+# as systemd services; installs the Nginx site for connect.waar.work and media.connect.waar.work
+# (8443 from the internet; 443 and 80 inside the station, so the address needs no port there). Certificates are not issued here: they arrive from the aaPanel server
 # into /etc/waar-connect/certs (see certsync-to-vm.sh) and a path unit reloads Nginx when they change.
 # Safe to run again.
 
@@ -52,11 +52,15 @@ ufw --force default deny incoming >/dev/null
 ufw --force default allow outgoing >/dev/null
 ufw allow 22/tcp >/dev/null
 ufw allow "$WEB_PORT"/tcp comment 'waar Connect web + signaling' >/dev/null
+# Inside the station the names point straight at this VM, so the address works without the port.
+# The router forwards neither port here from the internet.
+ufw allow 443/tcp comment 'waar Connect web without the port, station only' >/dev/null
+ufw allow 80/tcp comment 'waar Connect: redirect to HTTPS' >/dev/null
 ufw allow 7881/tcp comment 'waar Connect WebRTC TCP' >/dev/null
 ufw allow 7882/udp comment 'waar Connect WebRTC UDP' >/dev/null
 ufw allow 3478/udp comment 'waar Connect TURN' >/dev/null
 ufw --force enable >/dev/null
-ufw status | grep -E "^(Status|$WEB_PORT|7881|7882|3478|22)" | head -8
+ufw status | grep -E "^(Status|$WEB_PORT|443|80|7881|7882|3478|22)" | head -10
 
 echo "== public IP on loopback (TURN relay hairpin)"
 install -m 755 "$REPO/deploy/vm/waar-hairpin.sh" /usr/local/sbin/waar-hairpin

@@ -21,7 +21,7 @@ has been on air yet.
 ```
 packages/shared/ domain model (places, roles, identities, attributes) and the routing engine, with tests
 apps/phase0/     proof app: token server (Node, Express) and six bare pages (Vite, TypeScript)
-deploy/vm/       the waar Connect VM: installer, Nginx on 8443, services, certificate sync
+deploy/vm/       the waar Connect VM: installer, Nginx (8443 from the internet, 443 inside the station), services, certificate sync
 deploy/media/    LiveKit + embedded TURN + Redis, docker compose (used by deploy/vm)
 deploy/web/      the aaPanel server: certificate issuing and the redirect to the VM, panel API helper
 docs/            working documents

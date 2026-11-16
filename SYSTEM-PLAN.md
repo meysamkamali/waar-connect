@@ -396,7 +396,9 @@ The engineer's screen is the producer's screen plus a detail panel per guest:
   aaPanel server for one afternoon and was moved off it). The VM `connect` at 10.0.0.41 runs Nginx on
   TCP 8443 for `connect.waar.work` and `media.connect.waar.work`, the Node app, and LiveKit in Docker.
   Links carry the port (`https://connect.waar.work:8443/…`); the aaPanel sites answer plain 443 with a
-  redirect to 8443, so a link without the port still works. See `deploy/vm/README.md`.
+  redirect to 8443, so a link without the port still works. Inside the station the LAN DNS points the
+  names at the VM and Nginx there answers on 443 too (80 redirects), so staff open
+  `https://connect.waar.work` with no port (2026-11-16). See `deploy/vm/README.md`.
 - **Certificates come from aaPanel.** Public ports 80 and 443 belong to the aaPanel server and
   waar.work's DNS is at GoDaddy without API access, so Let's Encrypt can only be done there. aaPanel
   issues and renews, an hourly job copies the files to the VM, and a systemd path unit reloads Nginx.

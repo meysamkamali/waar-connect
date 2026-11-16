@@ -10,6 +10,7 @@ server, with port forwarding for its own ports.
  internet ──UDP 7882 / UDP 3478 / TCP 7881 ──► router ──► VM  LiveKit media and TURN
                                    (checked 2026-11-08: UDP 7882 is forwarded; UDP 3478 is not yet)
  aaPanel 10.0.0.40 ──rsync hourly──► VM /etc/waar-connect/certs   (Let's Encrypt certificates)
+ station PCs ──TCP 443 (80 redirects)──► VM 10.0.0.41  Nginx      (LAN DNS; no port in the address)
 ```
 
 ## Why 8443 and why the certificates come from aaPanel
@@ -25,6 +26,13 @@ keeps the two sites `connect.waar.work` and `media.connect.waar.work` only to is
 certificates, and an hourly job copies them to the VM. The aaPanel sites themselves answer with a
 redirect to port 8443, so a link without the port still works.
 
+**Inside the station the address needs no port** (since 2026-11-16): the LAN DNS points the two names
+straight at the VM, and Nginx there answers on **443** as well, with the same certificates; port 80
+redirects to HTTPS. So `https://connect.waar.work` (or just `connect.waar.work`) opens the pages from
+any station PC. Nothing changes from the internet: the router forwards 8443 only, guest links still
+carry the port (`PUBLIC_URL`), and the pages still reach the media server on 8443 (`LIVEKIT_URL`),
+inside and outside alike.
+
 ## Pieces on the VM
 
 | Piece | Where | Managed by |
@@ -36,7 +44,7 @@ redirect to port 8443, so a link without the port still works.
 | Nginx | `/etc/nginx/sites-available/waar-connect.conf` (from `nginx-connect.conf`) | systemd |
 | Certificates | `/etc/waar-connect/certs/<name>/{fullchain,privkey}.pem`, owner `certsync` | aaPanel job |
 | Certificate reload | `waar-certs.path` → `waar-certs.service` → `/usr/local/sbin/waar-certs-apply` | systemd |
-| Firewall | ufw: 22/tcp, 8443/tcp, 7881/tcp, 7882/udp, 3478/udp; for NDI, 5353/udp from the VM's two networks and 5960 to 5999 (TCP and UDP) from the station networks that send or take NDI (`NDI_NETWORKS` in `install-gateway.sh`) | ufw |
+| Firewall | ufw: 22/tcp, 8443/tcp, 443/tcp and 80/tcp (used inside the station only), 7881/tcp, 7882/udp, 3478/udp; for NDI, 5353/udp from the VM's two networks and 5960 to 5999 (TCP and UDP) from the station networks that send or take NDI (`NDI_NETWORKS` in `install-gateway.sh`) | ufw |
 | Public IP on lo (TURN hairpin) | `waar-hairpin.service` → `/usr/local/sbin/waar-hairpin`, IP kept in `/etc/waar-connect/public-ip` | systemd |
 | Gateway (NDI return into the rooms) | `waar-connect-gateway.service`, user `waarconnect`, no port; `/opt/waar-connect/apps/gateway/.env` holds the token shared with the API | systemd, `install-gateway.sh` |
 | NDI runtime | `/usr/local/lib/libndi.so.6` from the NDI SDK for Linux; licence texts in `/usr/local/share/doc/ndi/` | `install-gateway.sh --accept-ndi-license` |
@@ -66,7 +74,8 @@ starts serving as soon as both certificates are present.
 
 ## Router and LAN DNS
 
-- **Port forwarding** to 10.0.0.41: TCP 8443, TCP 7881, UDP 7882, UDP 3478. Nothing else.
+- **Port forwarding** to 10.0.0.41: TCP 8443, TCP 7881, UDP 7882, UDP 3478. Nothing else (443 and 80
+  stay with the aaPanel server; the VM answers them for the station's own machines only).
 - **DHCP reservation** for 10.0.0.41 (the VM takes its address from the router).
 - **LAN DNS**: the router answers `*.waar.work` with 10.0.0.40 for devices inside the station. Add
   overrides so `connect.waar.work` and `media.connect.waar.work` resolve to 10.0.0.41 inside; outside,
@@ -84,7 +93,9 @@ starts serving as soon as both certificates are present.
 ## Checks
 
 - On the VM: `curl -s 127.0.0.1:8787/api/health` and `curl -s 127.0.0.1:7880` (answers `OK`).
-- From the LAN: `curl -sk --resolve connect.waar.work:8443:10.0.0.41 https://connect.waar.work:8443/api/health`.
+- From the LAN: `curl -sk --resolve connect.waar.work:8443:10.0.0.41 https://connect.waar.work:8443/api/health`;
+  without the port: `curl -s https://connect.waar.work/api/v1/health` and `curl -sI http://connect.waar.work/`
+  (301 to HTTPS).
 - From outside, after the router rules: `https://connect.waar.work:8443/` opens the launcher; a phone
   on mobile data shows `direct` in its status pill.
 
