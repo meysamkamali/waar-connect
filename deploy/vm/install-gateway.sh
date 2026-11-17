@@ -10,8 +10,9 @@
 # /usr/local/share/doc/ndi/. Without the runtime the gateway service is installed but not started.
 # Safe to run again: keeps existing .env files and tokens.
 #
-# The firewall lets NDI in from the station networks in NDI_NETWORKS (below). Another list:
+# The firewall (firewall.sh) lets NDI in from the station networks in NDI_NETWORKS (below). Another list:
 #   sudo NDI_NETWORKS="10.0.0.0/24 10.100.1.0/24" bash /opt/waar-connect/deploy/vm/install-gateway.sh
+# SKIP_FIREWALL=1 leaves the firewall alone.
 set -euo pipefail
 
 REPO=/opt/waar-connect
@@ -100,21 +101,10 @@ if ! dpkg -s libyuv0 >/dev/null 2>&1; then
 else
   echo "libyuv present"
 fi
-if command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
-  # mDNS reaches only the VM's own two networks: the server LAN (ens34) and the station's NDI network (ens37).
-  for net in 10.0.0.0/24 10.100.1.0/24; do
-    ufw allow from "$net" to any port 5353 proto udp comment 'mDNS for NDI discovery' >/dev/null 2>&1 || true
-  done
-  # NDI itself, in and out, from every station network that sends or takes it.
-  # TCP: a receiver of the gateway's sources connects to 5960 (the list of sources) and to one port per
-  # source from 5961 up; without this a mixer sees the sources and gets no picture.
-  # UDP: NDI's fast delivery (reliable UDP) arrives on the receiving side's port, 5960 and up; here
-  # that is a sender delivering to one of the gateway's return feeds. Blocked, NDI falls back to TCP.
-  for net in $NDI_NETWORKS; do
-    for proto in tcp udp; do
-      ufw allow from "$net" to any port 5960:5999 proto "$proto" comment 'NDI in and out' >/dev/null 2>&1 || true
-    done
-  done
+# mDNS and the NDI ports are let in by firewall.sh. Run again here for a server whose firewall is
+# already on, so a changed NDI_NETWORKS takes effect; SKIP_FIREWALL=1 leaves the firewall alone.
+if [ "${SKIP_FIREWALL:-0}" != 1 ] && command -v ufw >/dev/null && ufw status 2>/dev/null | grep -q '^Status: active'; then
+  NDI_NETWORKS="$NDI_NETWORKS" bash "$REPO/deploy/vm/firewall.sh" >/dev/null
 fi
 
 echo "== ndi runtime"

@@ -14,6 +14,10 @@ DIR=/opt/waar-connect-media
 TURN_DOMAIN=${TURN_DOMAIN:-turn.connect.waar.work}
 API_KEY=${API_KEY:-waarconnect}
 HERE=$(cd "$(dirname "$0")" && pwd)
+# The interface LiveKit offers to clients: the one the default route leaves by (the server LAN).
+# MEDIA_IFACE overrides. The template carries the first VM's name, ens34.
+IFACE=${MEDIA_IFACE:-$(ip -4 route show default 2>/dev/null | awk '{print $5; exit}')}
+IFACE=${IFACE:-ens34}
 
 if [ "$(id -u)" -ne 0 ]; then
   echo "run as root" >&2
@@ -42,6 +46,7 @@ if [ ! -f "$DIR/livekit.yaml" ]; then
   sed -e "s|REPLACE_WITH_A_LONG_RANDOM_SECRET|$SECRET|" \
       -e "s|waarconnect:|$API_KEY:|" \
       -e "s|turn.connect.waar.work|$TURN_DOMAIN|" \
+      -e "s|- ens34|- $IFACE|" \
       "$HERE/livekit.yaml.example" > "$DIR/livekit.yaml"
   chmod 600 "$DIR/livekit.yaml"
   {
@@ -50,13 +55,15 @@ if [ ! -f "$DIR/livekit.yaml" ]; then
     echo "LIVEKIT_API_SECRET=$SECRET"
   } > "$DIR/credentials.env"
   chmod 600 "$DIR/credentials.env"
-  echo "new livekit.yaml written; credentials for the web .env are in $DIR/credentials.env"
+  echo "new livekit.yaml written (media on $IFACE); credentials for the web .env are in $DIR/credentials.env"
 else
   echo "keeping existing livekit.yaml"
 fi
 
 echo "== firewall"
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
+if [ "${SKIP_FIREWALL:-0}" = 1 ]; then
+  echo "left alone (SKIP_FIREWALL=1)"
+elif command -v ufw >/dev/null 2>&1 && ufw status | grep -q '^Status: active'; then
   ufw allow 3478/udp comment 'waar Connect TURN'
   ufw allow 7881/tcp comment 'waar Connect WebRTC TCP'
   ufw allow 7882/udp comment 'waar Connect WebRTC UDP'

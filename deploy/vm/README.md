@@ -60,6 +60,11 @@ On the VM, as a sudo user, with the repository at `/opt/waar-connect`:
 sudo bash /opt/waar-connect/deploy/vm/install.sh
 ```
 
+The firewall rules live in `firewall.sh`, which the installers call. `SKIP_FIREWALL=1` in front of an
+installer leaves the machine's firewall alone; `sudo bash /opt/waar-connect/deploy/vm/firewall.sh`
+then turns it on by hand when the machine is ready. The media installer writes the machine's own
+network interface (the one the default route leaves by) into `livekit.yaml`; `MEDIA_IFACE` overrides.
+
 On the aaPanel server, as root, once:
 
 ```bash

@@ -50,6 +50,9 @@ room:
     - mime: audio/red
     - mime: video/h264
     - mime: video/vp8
+    - mime: video/vp9
+    - mime: video/av1
+    - mime: video/h265
 
 audio:
   # Redundant audio frames: survives single packet loss on the guest's uplink.
