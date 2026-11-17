@@ -141,6 +141,58 @@ into 10.0.0.0/24 (RouterOS 7.16+, `/ip/dns set mdns-repeat-ifaces=…`), or run 
 (`ndi-discovery-server` ships in the SDK tarball, `bin/x86_64-linux-gnu/`) on the VM and point every NDI
 sender in the station at it, which turns mDNS off on those senders. Neither is set up yet.
 
+## Moving to another server
+
+Prepared 2026-11-17 for a physical server (Supermicro X8DTU, two Xeon E5620, at 10.0.0.43) that takes
+over from the VM. The idea: the new server is installed and tested beside the old one, then takes the
+old one's **address**, so nothing around it changes: the router's port forwards, the LAN DNS, the
+addresses station NDI receivers have typed in. The old server is powered off and never changed, which
+makes it the way back.
+
+**Install beside the old server** (on the new one, firewall left for later):
+
+```bash
+sudo SKIP_FIREWALL=1 bash /opt/waar-connect/deploy/vm/install.sh
+sudo SKIP_FIREWALL=1 bash /opt/waar-connect/deploy/vm/install-api.sh
+sudo SKIP_FIREWALL=1 bash /opt/waar-connect/deploy/vm/install-gateway.sh --accept-ndi-license
+```
+
+Between the first and the second: copy the two certificate folders from the old server's
+`/etc/waar-connect/certs` (tar over SSH, owner `certsync`), and pin the names
+(`127.0.0.1 connect.waar.work media.connect.waar.work` in `/etc/hosts`), because the LAN DNS still
+points them at the old server. Each server has its own media-server key, database password and
+gateway token; none of them is copied. Then, by hand: `sudo bash /opt/waar-connect/deploy/vm/firewall.sh`.
+
+**The NDI network port.** `netplan-ens37.yaml` with the new server's port name and `optional: true`
+(so an unplugged port does not hold up the boot), as `/etc/netplan/60-<port>.yaml`. It takes its
+address by DHCP as soon as the cable is in.
+
+**The scripts** (`deploy/vm/move/`, run from the development PC):
+
+| Script | What it does |
+|---|---|
+| `copy-data.sh <from> <to>` | Copies the database (`pg_dump` into `pg_restore --clean --single-transaction`), restarts the target's API and gateway, compares the rows of every table. About ten seconds. Safe to run as a rehearsal: the source is only read. |
+| `switch.sh` | The move: refuses while a guest is connected; stops the old server's API and gateway; copies the data; powers the old server off; gives the new one the address as a static netplan file (`/etc/netplan/90-waar-connect-address.yaml`) under a four-minute safety timer that puts its DHCP address back if it cannot be reached; sends a gratuitous ARP; restarts the mDNS daemon, the media server, the API and the gateway; checks through the public names. `REHEARSE=1` does only the address part, with the server's own address, and puts it back. |
+| `back.sh` | The way back: the new server stops serving and returns to its DHCP address; the old server is powered on by hand and comes up as it was. Changes made on the new server meanwhile are carried back with `copy-data.sh`. |
+
+The new server's SSH host key is filed under a name of its own (`ssh -o HostKeyAlias=waar-connect-pc`),
+because after the switch it answers at the address the old server's key is filed under.
+
+**Afterwards**
+
+- The old server stays off: the router's DHCP reservation gives it the same address. Take it out of
+  the hypervisor's autostart.
+- Certificate renewal: the aaPanel job copies to `certsync@10.0.0.41`, which is now the new server.
+  On the new server, put aaPanel's public key in place (`/home/certsync/.ssh/authorized_keys`, the
+  same line as on the old server, restricted with `from="10.0.0.40"`); on the aaPanel server,
+  `ssh-keygen -R 10.0.0.41` as root, then run `/usr/local/sbin/waar-certsync` once. Until then the
+  hourly job fails without harm; it matters only when the certificates renew (they end 2027-02-03).
+- Outside check: a phone on mobile data opens `https://connect.waar.work:8443/`.
+
+Measured before the move (2026-11-17, a 720p test guest fitted into 1080i50, a receiver connected):
+one slot costs 0.83 of a core on the E5620 server and 0.87 on the VM (E5-2680 v2), although
+benchmark tables put the E5620 about 40% behind per core.
+
 ## Updating the app
 
 From the development PC (the API, web and gateway build together; `.env` files stay on the VM):
