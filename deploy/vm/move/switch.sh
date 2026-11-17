@@ -44,7 +44,14 @@ new_at() { # new_at <address> <command>: the new server, wherever it is
   shift
   ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=6 -o HostKeyAlias="$NEW_ALIAS" "$SSH_USER@$host" "$@"
 }
-answers() { timeout 3 bash -c "</dev/tcp/$1/22" 2>/dev/null; }
+# Whether a machine still holds an address: ping, so a server that is shutting down (its SSH already
+# closed, its network still up) counts as there. Windows' ping (Git Bash) and Linux' differ.
+answers() {
+  case "$(uname -s)" in
+    MINGW* | MSYS* | CYGWIN*) ping -n 1 -w 1000 "$1" 2>/dev/null | grep -q 'TTL=' ;;
+    *) ping -c 1 -W 1 "$1" >/dev/null 2>&1 ;;
+  esac
+}
 
 # ---- 1. checks ---------------------------------------------------------------------------------------------
 say "checking the new server ($NEW)"
